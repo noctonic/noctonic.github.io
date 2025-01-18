@@ -1,7 +1,7 @@
 (function (window) {
   const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   let masterGain = audioCtx.createGain();
-  masterGain.gain.value = 0.5; 
+  masterGain.gain.value = 0.25; 
   masterGain.connect(audioCtx.destination);
   let activeOscillators = [];
   let repeatTimer = null;
