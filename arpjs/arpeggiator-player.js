@@ -1,6 +1,8 @@
 (function (window) {
   const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-
+  let masterGain = audioCtx.createGain();
+  masterGain.gain.value = 0.5; 
+  masterGain.connect(audioCtx.destination);
   let activeOscillators = [];
   let repeatTimer = null;
   let isRepeating = false;
@@ -9,6 +11,11 @@
   let attackTime    = 0.01;
   let releaseTime   = 0.05;
   let insertDeadSpace = false;
+
+  function setVolume(volume) {
+    console.log(volume)
+    masterGain.gain.value = volume;
+  } 
   function setNoteDuration(newDuration) {
     noteDuration = newDuration;
   }
@@ -46,7 +53,7 @@
     gain.gain.linearRampToValueAtTime(0, holdEnd + releaseTime);
 
     osc.connect(gain);
-    gain.connect(audioCtx.destination);
+    gain.connect(masterGain);
     osc.start(startTime);
     const fullEnd = holdEnd + releaseTime;
     osc.stop(fullEnd);
@@ -104,6 +111,7 @@
     setOscType,
     setAttackTime,
     setReleaseTime,
-    setInsertDeadSpace
+    setInsertDeadSpace,
+    setVolume
   };
 })(window);
