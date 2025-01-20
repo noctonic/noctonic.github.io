@@ -22,8 +22,8 @@ const tilemapCtx = tilemapCanvas.getContext("2d");
 let addressingMode = "$8000";
 const addressingModeSelect = document.getElementById("addressingModeSelect");
 
-const gameBoyShades = ["#9bbc0f", "#8bac0f", "#306230", "#0f380f"];
-let palette = ["#9bbc0f", "#8bac0f", "#306230", "#0f380f"];
+const gameBoyShades = ["#e8fccc", "#acd490", "#548c71", "#152C38"];
+let palette = ["#e8fccc", "#acd490", "#548c71", "#152C38"];
 let selectedPaletteIndex = 0;
 const colorBoxElements = [
   document.getElementById("colorBox0"),
@@ -37,7 +37,13 @@ function updateColorBoxes() {
     box.style.backgroundColor = palette[i];
   });
 }
-
+function updateShadeBoxes() {
+  shadeBoxElements.forEach((shadeBox, i) => {
+    const currentColor = palette[i];
+    shadeBox.style.backgroundColor = currentColor;
+    shadeBox.dataset.shade = currentColor;
+  });
+}
 function highlightSelectedBox() {
   colorBoxElements.forEach((box, i) => {
     if (i === selectedPaletteIndex) {
@@ -74,6 +80,7 @@ shadeBoxElements.forEach((shadeBox) => {
     const newShade = shadeBox.dataset.shade;
     palette[selectedPaletteIndex] = newShade;
     updateColorBoxes();
+
     highlightAssignedShade();
     renderTileset();
     renderTilemap();
@@ -81,8 +88,34 @@ shadeBoxElements.forEach((shadeBox) => {
 });
 
 updateColorBoxes();
+updateShadeBoxes(); 
 highlightSelectedBox();
 highlightAssignedShade();
+
+const colorSchemes = {
+  NiceGameboy: ["#e8fccc", "#acd490", "#548c71", "#152C38"],
+  OGGameboy: ["#9bbc0f", "#8bac0f", "#306230", "#0f380f"],
+  Grayscale: ["#ffffff", "#aaaaaa", "#555555", "#000000"],
+  Red: ["#ffcccc", "#ff9999", "#ff6666", "#ff0000"],
+  Blue: ["#ccccff", "#9999ff", "#6666ff", "#0000ff"]
+};
+
+const colorSchemeSelect = document.getElementById("colorSchemeSelect");
+
+colorSchemeSelect.addEventListener("change", (event) => {
+  const selectedScheme = event.target.value;
+  palette = [...colorSchemes[selectedScheme]];
+
+  updateColorBoxes();
+  updateShadeBoxes();
+  highlightSelectedBox();   
+  highlightAssignedShade();
+  initializeDrawColorPicker();
+  renderTileEditor(0);
+  renderTileset();
+  renderTilemap();
+});
+
 
 chrFileInput.addEventListener("change", () => {
   if (chrFileInput.files.length === 0) return;
