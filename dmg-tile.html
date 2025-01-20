@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>GB Tilemap & Tileset Editor</title>
+  <link rel="stylesheet" href="dmg-tile-style.css" />
+</head>
+<body>
+  <header>
+    <h1>Game Boy Tile & Tilemap Editor</h1>
+  </header>
+<center>
+  <div id="mainContainer">
+      <section id="palette-column" class="column">
+      <h2>Palette</h2>
+          <div id="paletteContainer">
+        <div class="color-box" id="colorBox0" data-color-index="0"></div>
+        <div class="color-box" id="colorBox1" data-color-index="1"></div>
+        <div class="color-box" id="colorBox2" data-color-index="2"></div>
+        <div class="color-box" id="colorBox3" data-color-index="3"></div>
+      </div>
+          <div id="shadeSelectionContainer">
+        <div class="shade-box" data-shade="#9bbc0f"></div>
+        <div class="shade-box" data-shade="#8bac0f"></div>
+        <div class="shade-box" data-shade="#306230"></div>
+        <div class="shade-box" data-shade="#0f380f"></div>
+      </div>
+      <h2>Tile Editor</h2>
+      <canvas id="tileEditorCanvas" width="8" height="8"></canvas>
+          <div id="drawColorPickerContainer">
+        <div class="draw-color-box" data-colorindex="0"></div>
+        <div class="draw-color-box" data-colorindex="1"></div>
+        <div class="draw-color-box" data-colorindex="2"></div>
+        <div class="draw-color-box" data-colorindex="3"></div>
+      </div>
+    </section>
+      <section id="tileset-column" class="column">
+      <div class="row">
+        <h2>Tileset</h2>
+        <input type="file" id="chrFileInput" accept=".chr" />
+        <button id="downloadTilesetBtn">Download Tileset</button>
+      </div>
+      <canvas id="tilesetCanvas" width="256" height="384"></canvas>
+    </section>
+      <section id="tilemap-column" class="column">
+      <div class="row">
+        <h2>Tilemap</h2>
+        <label for="addressingModeSelect">Mode: </label>
+        <select id="addressingModeSelect">
+          <option value="$8000" selected>$8000</option>
+          <option value="$8800">$8800</option>
+        </select>
+        <input type="file" id="tlmFileInput" accept=".tlm" />
+        <button id="downloadTilemapBtn">Download Tilemap</button>
+      </div>
+      <canvas id="tilemapCanvas" width="512" height="512"></canvas>
+    </section>
+  </div>
+  <script src="dmg-tile.js"></script>
+</body>
+</html>
