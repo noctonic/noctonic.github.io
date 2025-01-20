@@ -125,6 +125,7 @@ chrFileInput.addEventListener("change", () => {
     const buffer = e.target.result;
     parseCHR(buffer);
     renderTileset();
+    renderTilemap();
   };
   reader.readAsArrayBuffer(file);
 });
