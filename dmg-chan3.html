@@ -175,7 +175,27 @@
       }
     }
 
-    function startWave() {
+    function createBitcrusher(audioContext, reductionFactor = 48000/32000, bitDepth = 4) {
+      const scriptNode = audioContext.createScriptProcessor(256, 1, 1);
+      let sampleCount = 0;
+      let lastSample = 0;
+      const step = Math.pow(2, bitDepth);
+      scriptNode.onaudioprocess = function(e) {
+        const input = e.inputBuffer.getChannelData(0);
+        const output = e.outputBuffer.getChannelData(0);
+        for (let i = 0; i < input.length; i++) {
+          if (sampleCount % reductionFactor < 1) {
+            lastSample = Math.floor(input[i] * step) / step;
+          }
+          output[i] = lastSample;
+          sampleCount++;
+        }
+      };
+      return scriptNode;
+    }
+
+
+    function startWave(timeout) {
       initAudioContext();
       buildWaveTable();
       sourceNode = audioContext.createBufferSource();
@@ -184,8 +204,14 @@
       gainNode = audioContext.createGain();
       gainNode.gain.value = parseFloat(volumeSlider.value);
       sourceNode.connect(gainNode).connect(audioContext.destination);
+      gainNode.connect(createBitcrusher(audioContext, 48000/32000, 4)).connect(audioContext.destination);
       updateNoteFrequency();
       sourceNode.start(0);
+      if (typeof timeout === 'number') {
+        setTimeout(() => {
+          sourceNode.stop();
+        }, timeout);
+  }
     }
 
     function stopWave() {
@@ -349,20 +375,7 @@
     }
 
     function beep() {
-      initAudioContext();
-      const beepSource = audioContext.createBufferSource();
-      beepSource.buffer = waveBuffer;
-      beepSource.loop = true;
-      const beepGain = audioContext.createGain();
-      beepGain.gain.value = parseFloat(volumeSlider.value);
-      beepSource.connect(beepGain).connect(audioContext.destination);
-      const regVal = parseInt(regSlider.value, 10);
-      const freq = 65536 / (2048 - regVal);
-      beepSource.playbackRate.value = freq * (32 / audioContext.sampleRate);
-      beepSource.start();
-      setTimeout(() => {
-        beepSource.stop();
-      }, 500);
+      startWave(500)
     }
 
     document.getElementById('beepBtn').addEventListener('click', beep);
