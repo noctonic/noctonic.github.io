@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -130,11 +131,14 @@
             <option value="multiple-choice" selected>Multiple Choice</option>
             <option value="test">Test</option>
         </select>
+        <input type="checkbox" id="random-order" checked>
+        <label for="random-order">Randomize Order</label>
         <h3>Timer</h3>
         <select id="timer">
             <option value="3000">3 seconds</option>
             <option value="5000" selected>5 seconds</option>
             <option value="15000">15 seconds</option>
+            <option value="30000">30 seconds</option>
         </select>
         <button onclick="startPractice()">Start</button>
         <h3>Score</h3>
@@ -196,7 +200,9 @@
                     questions.push({ num1: num, num2: i });
                 }
             }
-            questions = questions.sort(() => Math.random() - 0.5);
+            if (document.getElementById("random-order").checked) {
+                questions = questions.sort(() => Math.random() - 0.5);
+            }
         }
 
         function displayQuestion(mode) {
