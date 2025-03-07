@@ -221,7 +221,7 @@
         document.getElementById("gcdEquation").classList.remove("green");
         return;
       }
-      const expression = gcdFactors.join(" X ");
+      const expression = gcdFactors.join(" x ");
       const product = gcdFactors.reduce((acc, val) => acc * val, 1);
       document.getElementById("gcdEquation").textContent = expression + " = " + product;
       const inputA = document.getElementById("numA").value;
