@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Approximate Pi</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 20px;
+      background: linear-gradient(90deg, #f9f9f9, #e3e3e3);
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 10px;
+    }
+    .inputGroup {
+      text-align: center;
+      margin-bottom: 10px;
+    }
+    #container {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      justify-content: center;
+      margin-bottom: 10px;
+    }
+    #canvasContainer, #chartContainer {
+      flex: 0 0 auto;
+    }
+    #myCanvas, #chartCanvas {
+      border: 2px solid #444;
+      display: block;
+      margin: 0 auto;
+      width: 300px;
+      height: 300px;
+    }
+    input {
+      border: 2px solid #444;
+      border-radius: 4px;
+      padding: 3px;
+    }
+    #info {
+      background: #fff;
+      border: 2px solid #444;
+      padding: 10px;
+      border-radius: 4px;
+      max-width: 620px;
+      margin: 0 auto;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Approximate &pi; Using Regular Polygons</h1>
+
+<div class="inputGroup">
+  <label for="numNodes"><strong>Number of nodes (n):</strong></label>
+  <input type="number" id="numNodes" value="2" min="2" max="1000"style="width:60px">
+  &nbsp;&nbsp;
+  <label for="edgeWeight"><strong>Side Length:</strong></label>
+  <input type="number" id="edgeWeight" value="1" step="0.1" style="width:60px">
+</div>
+
+<div id="container">
+  <div id="canvasContainer">
+    <canvas id="myCanvas" width="300" height="300"></canvas>
+  </div>
+  <div id="chartContainer">
+    <canvas id="chartCanvas" width="300" height="300"></canvas>
+  </div>
+</div>
+
+<p id="info"></p>
+
+<script>
+let canvas, ctx, centerX, centerY;
+let chartCanvas, chartCtx;
+let numberOfNodes = 2, edgeWeight = 1;
+const fixedRadius = 100;
+let polygonPoints = [];
+
+window.onload = function() {
+  canvas = document.getElementById("myCanvas");
+  ctx = canvas.getContext("2d");
+  centerX = canvas.width / 2;
+  centerY = canvas.height / 2;
+
+  chartCanvas = document.getElementById("chartCanvas");
+  chartCtx = chartCanvas.getContext("2d");
+
+  document.getElementById("numNodes").addEventListener("change", onInputChange);
+  document.getElementById("edgeWeight").addEventListener("change", onInputChange);
+
+  onInputChange();
+};
+
+function onInputChange() {
+  numberOfNodes = parseInt(document.getElementById("numNodes").value);
+  edgeWeight = parseFloat(document.getElementById("edgeWeight").value);
+  if (numberOfNodes < 2) numberOfNodes = 2;
+
+  drawPolygon();
+  computeAndDisplayPi();
+  drawPiChart();
+}
+
+function drawPolygon() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  polygonPoints = [];
+
+  for (let i = 0; i < numberOfNodes; i++) {
+    let angle = (2 * Math.PI * i) / numberOfNodes - Math.PI / 2;
+    let x = centerX + fixedRadius * Math.cos(angle);
+    let y = centerY + fixedRadius * Math.sin(angle);
+    polygonPoints.push({ x, y });
+  }
+
+  ctx.beginPath();
+  for (let i = 0; i < numberOfNodes; i++) {
+    let next = (i + 1) % numberOfNodes;
+    ctx.moveTo(polygonPoints[i].x, polygonPoints[i].y);
+    ctx.lineTo(polygonPoints[next].x, polygonPoints[next].y);
+  }
+  ctx.strokeStyle = "#000";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  drawPoints(ctx, polygonPoints);
+}
+
+function drawPoints(context, points) {
+  context.fillStyle = "blue";
+  points.forEach(pt => {
+    context.beginPath();
+    context.arc(pt.x, pt.y, 5, 0, 2 * Math.PI);
+    context.fill();
+  });
+}
+
+function computeAndDisplayPi() {
+  const n = numberOfNodes;
+  const approx = approximatePiByPolygon(n, edgeWeight);
+
+  document.getElementById("info").innerHTML =
+    `<strong>Number of Nodes (n):</strong> ${n}<br>
+     <strong>Side Length:</strong> ${edgeWeight.toFixed(10)}<br>
+     <strong>Circumference:</strong> ${(n * edgeWeight).toFixed(10)}<br>
+     <strong>Approx. Diameter:</strong> ${approx.diameter.toFixed(10)}<br>
+     <strong>Circumference / Diameter (Approx. &pi;):</strong> ${approx.pi.toFixed(10)}`;
+
+  ctx.beginPath();
+  ctx.moveTo(approx.topNode.x, approx.topNode.y);
+  ctx.lineTo(approx.farthestNode.x, approx.farthestNode.y);
+  ctx.strokeStyle = "red";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+
+function approximatePiByPolygon(n, edgeW) {
+  const tempPoints = [];
+  for (let i = 0; i < n; i++) {
+    let angle = (2 * Math.PI * i) / n - Math.PI / 2;
+    let x = fixedRadius * Math.cos(angle);
+    let y = fixedRadius * Math.sin(angle);
+    tempPoints.push({ x, y });
+  }
+
+  const topNode = tempPoints[0];
+
+  let maxDist = 0;
+  let farIndex = 0;
+  for (let i = 1; i < tempPoints.length; i++) {
+    const d = euclideanDist(tempPoints[i], topNode);
+    if (d > maxDist) {
+      maxDist = d;
+      farIndex = i;
+    }
+  }
+  const farthestNode = tempPoints[farIndex];
+
+  let sidePixelDist = 0;
+  if (tempPoints.length > 1) {
+    sidePixelDist = euclideanDist(tempPoints[0], tempPoints[1]);
+  }
+  const conversionFactor = sidePixelDist > 0 ? edgeW / sidePixelDist : 0;
+
+  const diameter = maxDist * conversionFactor;
+  const circumference = n * edgeW;
+  const approxPi = diameter ? (circumference / diameter) : 0;
+
+  return {
+    pi: approxPi,
+    diameter: diameter,
+    topNode: { x: topNode.x + centerX, y: topNode.y + centerY },
+    farthestNode: { x: farthestNode.x + centerX, y: farthestNode.y + centerY }
+  };
+}
+
+function euclideanDist(a, b) {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+function drawPiChart() {
+  chartCtx.clearRect(0, 0, chartCanvas.width, chartCanvas.height);
+
+  const minN = 2;
+  const maxN = Math.max(2, numberOfNodes);
+
+  const dataPoints = [];
+  let minY = Infinity;
+  let maxY = -Infinity;
+
+  for (let n = minN; n <= maxN; n++) {
+    const approx = approximatePiByPolygon(n, edgeWeight);
+    const piApproxValue = approx.pi;
+    dataPoints.push({ x: n, y: piApproxValue });
+
+    if (piApproxValue < minY) minY = piApproxValue;
+    if (piApproxValue > maxY) maxY = piApproxValue;
+  }
+
+  const realPi = Math.PI;
+  if (realPi < minY) minY = realPi;
+  if (realPi > maxY) maxY = realPi;
+
+  if (minY === maxY) {
+    minY = 0;
+    maxY = 1;
+  }
+
+  const marginLeft = 50;
+  const marginRight = 20;
+  const marginTop = 20;
+  const marginBottom = 40;
+
+  const chartWidth = chartCanvas.width - marginLeft - marginRight;
+  const chartHeight = chartCanvas.height - marginTop - marginBottom;
+
+  function xToCanvas(x) {
+    return marginLeft + ((x - minN) / (maxN - minN)) * chartWidth;
+  }
+  function yToCanvas(y) {
+    return marginTop + chartHeight - ((y - minY) / (maxY - minY)) * chartHeight;
+  }
+
+  chartCtx.strokeStyle = "#000";
+  chartCtx.lineWidth = 1;
+  chartCtx.beginPath();
+  chartCtx.moveTo(marginLeft, marginTop + chartHeight);
+  chartCtx.lineTo(marginLeft + chartWidth, marginTop + chartHeight);
+  chartCtx.moveTo(marginLeft, marginTop);
+  chartCtx.lineTo(marginLeft, marginTop + chartHeight);
+  chartCtx.stroke();
+  chartCtx.fillStyle = "#000";
+  chartCtx.font = "14px sans-serif";
+  chartCtx.fillText("n (number of nodes)", marginLeft + chartWidth / 2 - 50, marginTop + chartHeight + 30);
+  chartCtx.save();
+  chartCtx.translate(marginLeft - 35, marginTop + chartHeight / 2);
+  chartCtx.rotate(-Math.PI / 2);
+  chartCtx.fillText("Measured π (from polygon)", -50, 0);
+  chartCtx.restore();
+  chartCtx.strokeStyle = "blue";
+  chartCtx.lineWidth = 2;
+  chartCtx.beginPath();
+  dataPoints.forEach((dp, i) => {
+    const px = xToCanvas(dp.x);
+    const py = yToCanvas(dp.y);
+    if (i === 0) {
+      chartCtx.moveTo(px, py);
+    } else {
+      chartCtx.lineTo(px, py);
+    }
+  });
+  chartCtx.stroke();
+  chartCtx.fillStyle = "blue";
+  dataPoints.forEach(dp => {
+    const px = xToCanvas(dp.x);
+    const py = yToCanvas(dp.y);
+    chartCtx.beginPath();
+    chartCtx.arc(px, py, 3, 0, 2 * Math.PI);
+    chartCtx.fill();
+  });
+  const piY = yToCanvas(realPi);
+  chartCtx.strokeStyle = "red";
+  chartCtx.lineWidth = 1;
+  chartCtx.beginPath();
+  chartCtx.moveTo(marginLeft, piY);
+  chartCtx.lineTo(marginLeft + chartWidth, piY);
+  chartCtx.stroke();
+  chartCtx.fillStyle = "red";
+  chartCtx.fillText(`π ≈ ${realPi.toFixed(10)}`, marginLeft + 10, piY - 5);
+}
+</script>
+
+</body>
+</html>
