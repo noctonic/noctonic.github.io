@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Binary & Hexadecimal</title>
+  <style>
+    html {
+      height: 100%;
+      background: linear-gradient(135deg, #1e1e2f, #2a2a3e);
+    }
+    body {
+      font-family: system-ui, sans-serif;
+      text-align: center;
+      margin: 0;
+      padding: 20px;
+      background: transparent;
+      color: #f0f0f0;
+      min-height: 100%;
+    }
+    h1 {
+      margin-bottom: 20px;
+      font-size: 2.5rem;
+      color: #00ccff;
+    }
+    #decimalInput {
+      font-size: 1.5rem;
+      width: 120px;
+      padding: 5px;
+      border: 2px solid #00ccff;
+      border-radius: 5px;
+      background-color: #2a2a3e;
+      color: #f0f0f0;
+      text-align: center;
+    }
+    #hexContainer {
+      display: flex;
+      justify-content: center;
+      gap: 40px;
+      margin: 30px 0;
+    }
+    .nibble {
+      width: 415px;
+      display: inline-block;
+      text-align: center;
+    }
+    .hexLabel {
+      font-size: 2rem;
+      font-weight: bold;
+      color: #00ccff;
+    }
+    .nibbleLine {
+      width: 100%;
+      border: none;
+      border-top: 3px solid #00ccff;
+      margin-top: 10px;
+    }
+    #bitColumns {
+      display: flex;
+      justify-content: center;
+      margin-top: 20px;
+    }
+    .bitColumn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 0 15px;
+      width: 80px;
+    }
+    .bit-box {
+      width: 80px;
+      height: 80px;
+      line-height: 80px;
+      border: 3px solid #00ccff;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 2rem;
+      font-weight: bold;
+      background-color: #44475a;
+      user-select: none;
+      text-align: center;
+      transition: background-color 0.2s ease;
+    }
+    .bit-box:hover {
+      background-color: #6272a4;
+    }
+    .power {
+      margin-top: 10px;
+      font-weight: bold;
+      width: 80px;
+      text-align: center;
+      font-size: 1.5rem;
+      color: #f0f0f0;
+    }
+    #calcRow {
+      margin-top: 30px;
+    }
+    .calc-grid {
+      display: grid;
+      grid-template-columns: 80px 20px 80px 20px 80px 20px 80px 40px 80px 20px 80px 20px 80px 20px 80px;
+      grid-gap: 6px;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto;
+    }
+    .calc-cell {
+      text-align: center;
+      font-size: 1.5rem;
+      font-weight: bold;
+      color: #f0f0f0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Binary & Hexadecimal</h1>
+  <div>
+    <label for="decimalInput">Enter a number (0-255):</label><br />
+    <input id="decimalInput" type="number" min="0" max="255" value="0">
+  </div>
+  <div id="hexContainer">
+    <div class="nibble">
+      <div class="hexLabel" id="upperHex">0</div>
+      <hr class="nibbleLine">
+    </div>
+    <div class="nibble">
+      <div class="hexLabel" id="lowerHex">0</div>
+      <hr class="nibbleLine">
+    </div>
+  </div>
+  <div id="bitColumns"></div>
+  <div id="calcRow"></div>
+  <script>
+    const numBits = 8;
+    function createUI() {
+      const bitColumnsContainer = document.getElementById('bitColumns');
+      bitColumnsContainer.innerHTML = '';
+      for (let i = 0; i < numBits; i++) {
+        const exponent = numBits - 1 - i;
+        const colDiv = document.createElement('div');
+        colDiv.classList.add('bitColumn');
+        if (i === 3) {
+          colDiv.style.marginRight = "40px";
+        }
+        const bitBox = document.createElement('div');
+        bitBox.classList.add('bit-box');
+        bitBox.setAttribute('data-bit-index', i);
+        bitBox.innerText = '0';
+        bitBox.addEventListener('click', onBitClick);
+        colDiv.appendChild(bitBox);
+        const powerLabel = document.createElement('div');
+        powerLabel.classList.add('power');
+        powerLabel.innerHTML = `2<sup>${exponent}</sup>`;
+        colDiv.appendChild(powerLabel);
+        bitColumnsContainer.appendChild(colDiv);
+      }
+      createCalcGrid();
+    }
+    function createCalcGrid() {
+      const calcRowContainer = document.getElementById('calcRow');
+      calcRowContainer.innerHTML = '';
+      const grid = document.createElement('div');
+      grid.classList.add('calc-grid');
+      calcRowContainer.appendChild(grid);
+      for (let i = 0; i < 15; i++) {
+        const cell = document.createElement('div');
+        cell.classList.add('calc-cell');
+        grid.appendChild(cell);
+      }
+    }
+    function updateBitsFromDecimal() {
+      let decimalValue = parseInt(document.getElementById('decimalInput').value, 10);
+      if (isNaN(decimalValue) || decimalValue < 0) decimalValue = 0;
+      if (decimalValue > 255) decimalValue = 255;
+      document.getElementById('decimalInput').value = decimalValue;
+      const binaryStr = decimalValue.toString(2).padStart(numBits, '0');
+      const bitBoxes = document.querySelectorAll('.bit-box');
+      bitBoxes.forEach((box, i) => {
+        box.innerText = binaryStr[i];
+      });
+      updateCalculationGrid();
+    }
+    function onBitClick(event) {
+      const box = event.target;
+      box.innerText = (box.innerText === '0') ? '1' : '0';
+      updateDecimalFromBits();
+    }
+    function updateDecimalFromBits() {
+      const bitBoxes = document.querySelectorAll('.bit-box');
+      let bitString = '';
+      bitBoxes.forEach(box => {
+        bitString += box.innerText;
+      });
+      const newDecimalValue = parseInt(bitString, 2);
+      document.getElementById('decimalInput').value = newDecimalValue;
+      updateCalculationGrid();
+    }
+    function updateCalculationGrid() {
+      const bitBoxes = document.querySelectorAll('.bit-box');
+      const gridCells = document.querySelectorAll('.calc-cell');
+      bitBoxes.forEach((box, i) => {
+        const bit = parseInt(box.innerText, 10);
+        const exponent = numBits - 1 - i;
+        const contribution = bit === 1 ? Math.pow(2, exponent) : 0;
+        gridCells[i * 2].innerText = contribution;
+      });
+      for (let j = 0; j < gridCells.length; j++) {
+        if (j % 2 === 1) {
+          gridCells[j].innerText = '+';
+        }
+      }
+      updateHexDisplay();
+    }
+    function updateHexDisplay() {
+      let decimalValue = parseInt(document.getElementById('decimalInput').value, 10);
+      let upperNibble = (decimalValue >> 4).toString(16).toUpperCase();
+      let lowerNibble = (decimalValue & 0xF).toString(16).toUpperCase();
+      document.getElementById('upperHex').innerText = upperNibble;
+      document.getElementById('lowerHex').innerText = lowerNibble;
+    }
+    createUI();
+    document.getElementById('decimalInput').addEventListener('input', updateBitsFromDecimal);
+    updateBitsFromDecimal();
+  </script>
+</body>
+</html>

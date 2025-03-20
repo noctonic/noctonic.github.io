@@ -1,0 +1,179 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  font-family: monospace;
+}
+
+body {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #000000;
+  background-image: 
+    linear-gradient(rgba(0, 20, 0, 0.8), rgba(0, 0, 0, 0.8)),
+    repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0, 255, 0, 0.05) 2px, rgba(0, 255, 0, 0.05) 4px);
+}
+
+select {
+  width: 280px;
+  max-width: 100%;
+  padding: 0.4rem;
+  margin: 0.2rem 0;
+  font-family: monospace;
+  border: 1px solid #00cc00;
+  border-radius: 4px;
+  box-sizing: border-box;
+  background-color: rgba(0, 20, 0, 0.7);
+  color: #00ff00;
+  box-shadow: inset 0 0 5px rgba(0, 255, 0, 0.2);
+  appearance: none; 
+  -webkit-appearance: none;
+}
+
+select::-ms-expand {
+  display: none;
+}
+
+option {
+  background-color: rgba(0, 20, 0, 0.9);
+  color: #00ff00;
+  font-family: monospace;
+}
+
+
+
+#appContainer {
+  background-color: rgba(0, 20, 0, 0.85);
+  border: 1px solid #00ff00;
+  border-radius: 10px;
+  box-shadow: 0 0 20px rgba(0, 255, 0, 0.4), inset 0 0 10px rgba(0, 255, 0, 0.1);
+  padding: 2rem;
+  max-width: 800px;
+  width: 90%;
+  box-sizing: border-box;
+  text-align: center;
+}
+
+h1 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  font-size: 1.8rem;
+  color: #00ff00;
+  text-shadow: 0 0 5px rgba(0, 255, 0, 0.7);
+  letter-spacing: 2px;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+label {
+  font-weight: bold;
+  margin-right: 0.5rem;
+  min-width: 150px;
+  text-align: right;
+  color: #00cc00;
+}
+
+input[type="text"],
+input[type="number"] {
+  width: 280px;
+  max-width: 100%;
+  padding: 0.4rem;
+  margin: 0.2rem 0;
+  font-family: monospace;
+  border: 1px solid #00cc00;
+  border-radius: 4px;
+  box-sizing: border-box;
+  background-color: rgba(0, 20, 0, 0.7);
+  color: #00ff00;
+  box-shadow: inset 0 0 5px rgba(0, 255, 0, 0.2);
+}
+
+button {
+  padding: 0.6rem 1.2rem;
+  font-size: 1rem;
+  font-family: monospace;
+  cursor: pointer;
+  background-color: rgba(0, 90, 0, 0.8);
+  color: #00ff00;
+  border: 1px solid #00ff00;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+  text-shadow: 0 0 5px rgba(0, 255, 0, 0.7);
+  box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
+}
+
+button:hover {
+  background-color: rgba(0, 100, 0, 0.9);
+  box-shadow: 0 0 15px rgba(0, 255, 0, 0.5);
+}
+
+#stopBtn:disabled,
+#startBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+#stopBtn {
+  background-color: rgba(0, 90, 0, 0.8);
+  border-color: #00ff00;
+  color: #00ff00;
+  text-shadow: 0 0 5px rgba(0, 255, 0, 0.7);
+  box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
+}
+
+#stopBtn:hover {
+  background-color: rgba(0, 100, 0, 0.9);
+  box-shadow: 0 0 15px rgba(0, 255, 0, 0.5);
+}
+
+#logArea {
+  width: 100%;
+  height: 300px;
+  margin: 1rem auto 0 auto;
+  font-family: monospace;
+  border: 1px solid #00cc00;
+  border-radius: 4px;
+  box-sizing: border-box;
+  display: block;
+  white-space: pre;
+  overflow-x: auto;
+  background-color: rgba(0, 10, 0, 0.8);
+  color: #00ff00;
+  padding: 10px;
+  box-shadow: inset 0 0 10px rgba(0, 255, 0, 0.2);
+  resize: none;
+  
+  /* Firefox scrollbar */
+  scrollbar-width: thin;
+  scrollbar-color: #00cc00 rgba(0, 20, 0, 0.5);
+}
+
+/* WebKit/Blink Browsers (Chrome, Safari, Edge) scrollbar styling */
+#logArea::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+#logArea::-webkit-scrollbar-track {
+  background: rgba(0, 20, 0, 0.5);
+  border-radius: 4px;
+}
+
+#logArea::-webkit-scrollbar-thumb {
+  background: #00cc00;
+  border-radius: 4px;
+  border: 1px solid #00ff00;
+  box-shadow: 0 0 5px rgba(0, 255, 0, 0.3);
+}
+
+#logArea::-webkit-scrollbar-thumb:hover {
+  background: #00ff00;
+}

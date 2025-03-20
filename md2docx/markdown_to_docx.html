@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Markdown to DOCX</title>
+  <style>
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  margin: 0;
+  font-family: sans-serif;
+  transition: background 0.3s, color 0.3s;
+  background-color: #1e1e1e;
+  color: #e2e2e2;
+}
+
+body:not(.dark) {
+  background-color: #ffffff;
+  color: #000000;
+}
+
+h1 {
+  margin: 10px;
+  text-align: center;
+}
+
+#buttonBar {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 10px;
+  gap: 1em;
+}
+
+#downloadBtn,
+#themeToggleBtn {
+  padding: 8px 16px;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+#container {
+  display: flex;
+  height: calc(100vh - 60px);
+  border-top: 1px solid #444;
+}
+
+#markdownInput {
+  width: 50%;
+  padding: 10px;
+  border: none;
+  outline: none;
+  resize: none;
+  font-size: 1rem;
+  overflow-y: auto;
+  line-height: 1.4;
+  background-color: #222;
+  color: #ddd;
+  border-color: #444;
+}
+
+#preview {
+  width: 50%;
+  border-left: 1px solid #444;
+  overflow-y: auto;
+  font-size: 12pt;
+  padding: 1in;
+  font-family: "Times New Roman", serif;
+  line-height: 1.15;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+#preview p,
+#preview h1,
+#preview h2,
+#preview h3,
+#preview h4,
+#preview h5,
+#preview h6 {
+  margin-top: 20px;
+  margin-bottom: 20px;
+}
+
+#preview ul,
+#preview ol {
+  margin-top: 20px;
+  margin-bottom: 20px;
+  padding-left: 40px;
+}
+
+#preview a {
+  color: blue;
+  text-decoration: underline;
+}
+
+/* Light mode overrides */
+body:not(.dark) #markdownInput {
+  background-color: #fff;
+  color: #000;
+  border-color: #ccc;
+}
+
+body:not(.dark) #preview {
+  border-left-color: #ccc;
+}
+
+body:not(.dark) #container {
+  border-top-color: #ccc;
+}
+
+  </style>
+</head>
+<body class="dark">
+
+  <div id="buttonBar">
+    <button id="downloadBtn">Export to DOCX</button>
+    <button id="themeToggleBtn">Light Mode</button>
+  </div>
+
+  <div id="container">
+    <textarea id="markdownInput">
+# h1 Heading
+## h2 Heading
+### h3 Heading
+#### h4 Heading
+##### h5 Heading
+###### h6 Heading
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Mauris vel diam sollicitudin, blandit nulla sed, aliquam mi. Proin vehicula pretium ipsum in tincidunt. Donec lobortis accumsan ullamcorper. Vivamus interdum eu dui sed ultricies. Fusce fringilla, nisl quis porttitor sollicitudin, *ipsum* arcu auctor mi, non blandit nibh lorem eu leo. Duis vehicula neque massa, nec congue urna tempus ut. Donec nec **pretium risus**. Mauris non neque at neque pharetra tempor. Etiam tempor erat in libero laoreet, non mattis mi luctus. Cras at odio leo. In in interdum elit. Sed at lorem mattis, euismod risus placerat, molestie elit. Fusce maximus sapien a libero pulvinar, id convallis tortor lobortis.
+___
+
+---
+
+***
+
+
+## Emphasis
+
+**This is bold text**
+
+__This is bold text__
+
+*This is italic text*
+
+_This is italic text_
+
+~~Strikethrough~~
+
+
+## Blockquotes
+
+> Blockquotes are a thing
+
+
+
+## Lists
+
+Unordered
+
+- one
+- two
+- three
+
+Ordered
+
+1. Lorem ipsum dolor sit amet
+2. Consectetur adipiscing elit
+3. Integer molestie lorem at massa
+
+
+
+## Code
+
+Inline `code`
+
+#### Indented code
+
+    line 1 of code
+    line 2 of code
+    line 3 of code
+
+#### Block code
+```
+this is
+a code block
+```
+
+## Tables
+
+| Options   | Description | Number |
+| ------  | ----------- | ------ |
+| data    | test        | 1      |
+| engine  | vroom       | 2      |
+| ext     | extension   | 3      |
+
+</textarea>
+    <div id="preview"></div>
+  </div>
+
+  <script src="./jszip.js"></script>
+  <script type="module">
+    import { marked } from './marked.esm.js';
+    import { getDocxFileSetFromHtml } from './htmlToDocxCore.js'; 
+
+    const markdownInput = document.getElementById("markdownInput");
+    const preview = document.getElementById("preview");
+    const downloadBtn = document.getElementById("downloadBtn");
+    const themeToggleBtn = document.getElementById("themeToggleBtn");
+
+    let isDark = true; 
+    document.body.classList.add("dark");
+
+    function updatePreview() {
+      const markdownText = markdownInput.value;
+      const htmlOutput = marked(markdownText, { breaks: true });
+      preview.innerHTML = htmlOutput;
+    }
+
+    async function exportToDocx() {
+      const htmlContent = preview.innerHTML;
+      const docxFiles = getDocxFileSetFromHtml(htmlContent);
+
+      const zip = new JSZip();
+      const fixedDate = new Date();
+      for (const f of docxFiles) {
+        zip.file(f.name, f.data, { date: fixedDate });
+      }
+
+      const zipBlob = await zip.generateAsync({
+        type: "blob",
+        compression: "DEFLATE",
+        compressionOptions: { level: 9 },
+      });
+
+      const docxBlob = new Blob([zipBlob], {
+        type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      });
+
+      const url = URL.createObjectURL(docxBlob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "document.docx";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
+
+    function toggleTheme() {
+      isDark = !isDark;
+      document.body.classList.toggle("dark", isDark);
+      themeToggleBtn.textContent = isDark ? "Light Mode" : "Dark Mode";
+    }
+
+    markdownInput.addEventListener("input", updatePreview);
+    downloadBtn.addEventListener("click", exportToDocx);
+    themeToggleBtn.addEventListener("click", toggleTheme);
+
+    updatePreview();
+  </script>
+</body>
+</html>

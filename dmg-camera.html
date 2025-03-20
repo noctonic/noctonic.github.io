@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>GameBoy Camera</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #f0f0f0;
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+    }
+    .container {
+      min-height: 100vh;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      padding: 20px 30px;
+      max-width: 800px;
+      width: 90%;
+      text-align: center;
+    }
+    h1 {
+      margin-top: 0;
+    }
+    .controls {
+      margin: 20px 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 15px;
+    }
+    label {
+      display: inline-block;
+      margin-right: 10px;
+      font-weight: bold;
+    }
+    input[type="range"] {
+      width: 150px;
+      margin-left: 10px;
+      vertical-align: middle;
+    }
+    select, input[type="checkbox"] {
+      margin-left: 10px;
+    }
+    canvas {
+      border: 1px solid #ccc;
+      image-rendering: pixelated;
+      margin-top: 20px;
+    }
+    span {
+      font-weight: normal;
+      margin-left: 8px;
+      display: inline-block;
+      width: 40px;
+      text-align: left;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>GameBoy Camera</h1>
+    
+    <div class="controls">
+      <div>
+        <label for="imageUploader">Upload Image:</label>
+        <input type="file" id="imageUploader" accept="image/*">
+      </div>
+      <div>
+        <label for="grayFactor">Gray Factor:</label>
+        <input type="range" id="grayFactor" min="1" max="64" value="4" step="1">
+        <span id="grayFactorValue">4</span>
+      </div>
+      <div>
+        <label for="ditherFactor">Dither Factor:</label>
+        <input type="range" id="ditherFactor" min="1" max="64" value="4" step="1">
+        <span id="ditherFactorValue">4</span>
+      </div>
+      <div>
+        <label for="colorSchemeSelect">Color Scheme:</label>
+        <select id="colorSchemeSelect">
+          <option value="NiceGameboy">NiceGameboy</option>
+          <option value="OGGameboy">OGGameboy</option>
+          <option value="Grayscale">Grayscale</option>
+          <option value="Red">Red</option>
+          <option value="Blue">Blue</option>
+        </select>
+      </div>
+      <div>
+        <label for="scaleSelect">Scale:</label>
+        <select id="scaleSelect">
+          <option value="1">1×</option>
+          <option value="2">2×</option>
+          <option value="3">3×</option>
+          <option value="4" selected>4×</option>
+        </select>
+      </div>
+      <div>
+        <label for="invertColors">Invert Colors:</label>
+        <input type="checkbox" id="invertColors">
+      </div>
+    </div>
+    <canvas id="tileCanvas" width="160" height="144" style="display:none;"></canvas>
+    <canvas id="displayCanvas"></canvas>
+  </div>
+  
+  <script>
+    const BAYER_8 = [
+      [ 0, 48, 12, 60,  3, 51, 15, 63],
+      [32, 16, 44, 28, 35, 19, 47, 31],
+      [ 8, 56,  4, 52, 11, 59,  7, 55],
+      [40, 24, 36, 20, 43, 27, 39, 23],
+      [ 2, 50, 14, 62,  1, 49, 13, 61],
+      [34, 18, 46, 30, 33, 17, 45, 29],
+      [10, 58,  6, 54,  9, 57,  5, 53],
+      [42, 26, 38, 22, 41, 25, 37, 21]
+    ];
+
+    const colorSchemes = {
+      NiceGameboy: ["#e8fccc", "#acd490", "#548c71", "#152C38"],
+      OGGameboy:   ["#9bbc0f", "#8bac0f", "#306230", "#0f380f"],
+      Grayscale:   ["#ffffff", "#aaaaaa", "#555555", "#000000"],
+      Red:         ["#ffcccc", "#ff9999", "#ff6666", "#ff0000"],
+      Blue:        ["#ccccff", "#9999ff", "#6666ff", "#0000ff"]
+    };
+
+    function parseHexColor(hex) {
+      const r = parseInt(hex.substr(1,2), 16);
+      const g = parseInt(hex.substr(3,2), 16);
+      const b = parseInt(hex.substr(5,2), 16);
+      return [r, g, b];
+    }
+
+    function getDitheredColorIndex(grayVal, x, y, grayFactor, ditherFactor) {
+      const bx = x % 8;
+      const by = y % 8;
+      const threshold = BAYER_8[by][bx];
+      const val = grayFactor * grayVal + ditherFactor * threshold;
+      let colorIdx = Math.floor(val / 256);
+      if (colorIdx > 3) colorIdx = 3;
+      return colorIdx;
+    }
+
+    function ditherImage(
+      originalImageData,
+      w,
+      h,
+      schemeColors,
+      grayFactor,
+      ditherFactor,
+      invertColors
+    ) {
+      const tileCanvas = document.getElementById('tileCanvas');
+      const tileCtx = tileCanvas.getContext('2d');
+      const ditheredData = tileCtx.createImageData(w, h);
+
+      const src = originalImageData.data;
+      const dst = ditheredData.data;
+
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const i = 4 * (y * w + x);
+          const r = src[i];
+          const g = src[i + 1];
+          const b = src[i + 2];
+          let grayVal = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+          if (!invertColors) {
+            grayVal = 255 - grayVal;
+          }
+
+          const colorIndex = getDitheredColorIndex(grayVal, x, y, grayFactor, ditherFactor);
+          const [rr, gg, bb] = schemeColors[colorIndex];
+
+          dst[i]     = rr;
+          dst[i + 1] = gg;
+          dst[i + 2] = bb;
+          dst[i + 3] = 255;
+        }
+      }
+      tileCtx.putImageData(ditheredData, 0, 0);
+    }
+
+    let originalImageData = null;
+
+    function draw() {
+      const grayFactor = parseInt(document.getElementById('grayFactor').value, 10);
+      const ditherFactor = parseInt(document.getElementById('ditherFactor').value, 10);
+      const scale = parseInt(document.getElementById('scaleSelect').value, 10);
+      const colorSchemeName = document.getElementById('colorSchemeSelect').value;
+      const invertColors = document.getElementById('invertColors').checked;
+
+      document.getElementById('grayFactorValue').textContent = grayFactor.toString();
+      document.getElementById('ditherFactorValue').textContent = ditherFactor.toString();
+
+      if (!originalImageData) return;
+
+      const schemeColors = colorSchemes[colorSchemeName].map(parseHexColor);
+      const tileCanvas = document.getElementById('tileCanvas');
+      ditherImage(
+        originalImageData,
+        tileCanvas.width,
+        tileCanvas.height,
+        schemeColors,
+        grayFactor,
+        ditherFactor,
+        invertColors
+      );
+
+      const displayCanvas = document.getElementById('displayCanvas');
+      const displayCtx = displayCanvas.getContext('2d');
+      displayCanvas.width = tileCanvas.width * scale;
+      displayCanvas.height = tileCanvas.height * scale;
+      displayCtx.imageSmoothingEnabled = false;
+      displayCtx.drawImage(tileCanvas, 0, 0,
+        tileCanvas.width, tileCanvas.height,
+        0, 0,
+        displayCanvas.width, displayCanvas.height
+      );
+    }
+
+    document.getElementById('imageUploader').addEventListener('change', function(e) {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const img = new Image();
+        img.onload = function() {
+          const tileCanvas = document.getElementById('tileCanvas');
+          const ctx = tileCanvas.getContext('2d');
+          const targetW = tileCanvas.width;   
+          const targetH = tileCanvas.height;  
+          ctx.clearRect(0, 0, targetW, targetH);
+
+          const ratio = Math.max(targetW / img.width, targetH / img.height);
+          const newWidth  = img.width * ratio;
+          const newHeight = img.height * ratio;
+
+          const offsetX = (targetW - newWidth) / 2;
+          const offsetY = (targetH - newHeight) / 2;
+
+          ctx.drawImage(img, offsetX, offsetY, newWidth, newHeight);
+
+          originalImageData = ctx.getImageData(0, 0, targetW, targetH);
+
+          draw();
+        };
+        img.src = evt.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    document.getElementById('grayFactor').addEventListener('input', draw);
+    document.getElementById('ditherFactor').addEventListener('input', draw);
+    document.getElementById('colorSchemeSelect').addEventListener('change', draw);
+    document.getElementById('scaleSelect').addEventListener('change', draw);
+    document.getElementById('invertColors').addEventListener('change', draw);
+
+  </script>
+</body>
+</html>

@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>WebGPUcat</title>
+  <link rel="stylesheet" href="webgpucat.css" />
+</head>
+<body>
+<div id="appContainer">
+  <h1>WebGPUcat</h1>
+
+  <div class="row">
+    <label>Hash Algorithm:</label>
+    <select id="shaderSelect">
+      <option value="./shaders/ntlm.wgsl">NTLM (27 char max)</option>
+      <option value="./shaders/md4.wgsl">MD4</option>
+      <option value="./shaders/md5.wgsl" selected>MD5</option>
+<!--  <option value="./shaders/sha1.wgsl">SHA1</option> -->
+      <option value="./shaders/sha256.wgsl">SHA256</option> 
+    </select>
+  </div>
+
+  <div class="row">
+    <label>Hash (hex):</label>
+    <input id="hashInput" type="text" value="fe4c4f8ab7064495458f9480eb4af629" />
+  </div>
+
+  <div class="row">
+    <label>Character Set:</label>
+    <input id="charSetInput" type="text" value="abcdefghijklmnopqrstuvwxyz0123456789" />
+  </div>
+
+  <div class="row">
+    <div style="margin-right: 20px;">
+      <label style="width: 100px;">Min Length:</label>
+      <input id="minLenInput" type="number" value="1" style="width: 80px;" />
+    </div>
+    <div>
+      <label style="width: 100px;">Max Length(55):</label>
+      <input id="maxLenInput" type="number" value="22" max="55" style="width: 80px;" />
+    </div>
+  </div>
+
+  <div class="row">
+    <label>Prefix:</label>
+    <input id="userPrefixInput" type="text" value="superstrongpass" />
+  </div>
+
+  <div class="row">
+    <button id="startBtn">Start</button>
+    <button id="stopBtn" disabled style="margin-left: 10px;">Stop</button>
+  </div>
+
+  <textarea id="logArea" readonly></textarea>
+</div>
+
+<script type="module">
+let shaderCode = null;
+let device = null;
+let pipeline = null;
+let queue = null;
+let stopRequested = false;
+
+function logMsg(msg) {
+  console.log(msg);
+  const area = document.getElementById("logArea");
+  area.value += msg + "\n";
+  area.scrollTop = area.scrollHeight;
+}
+
+function checkWebGPU() {
+  if (!('gpu' in navigator)) {
+    throw new Error("WebGPU is not supported in this browser.");
+  }
+}
+
+async function initPipeline() {
+  checkWebGPU();
+  const adapter = await navigator.gpu.requestAdapter();
+  if (!adapter) throw new Error("No WebGPU adapter found.");
+  device = await adapter.requestDevice();
+  queue = device.queue;
+
+  const module = device.createShaderModule({ code: shaderCode });
+  pipeline = device.createComputePipeline({
+    layout: "auto",
+    compute: { module, entryPoint: "main" },
+  });
+}
+
+async function loadShaderFile(shaderPath) {
+  const response = await fetch(shaderPath);
+  if (!response.ok) {
+    throw new Error(`Failed to load shader: ${response.status} ${response.statusText}`);
+  }
+  shaderCode = await response.text();
+  await initPipeline();
+}
+
+function hexToBytes(hexStr) {
+  if (hexStr.length % 2 !== 0) {
+    throw new Error("Hex string length must be even.");
+  }
+  const byteArray = new Uint8Array(hexStr.length / 2);
+  for (let i = 0; i < byteArray.length; i++) {
+    byteArray[i] = parseInt(hexStr.substring(i * 2, i * 2 + 2), 16);
+  }
+  return byteArray;
+}
+
+async function crack_prefixMask(hashHex, charSet, maxLen, minLen = 1, userPrefix = "") {
+  if (!device || !pipeline) {
+    logMsg("Initializing pipeline since not found...");
+    await loadShaderFile(document.getElementById("shaderSelect").value);
+  }
+
+  const dispatchWidth = 256;
+  const threadsPerGroup = 256;
+  const maxRowsPerDispatch = 65535;
+  const singlePassThreshold = BigInt(4294967296);
+  const hashBytes = hexToBytes(hashHex);
+
+  const expectedBufferSize = Math.max(hashBytes.byteLength, 32);
+  const expectedBuffer = device.createBuffer({
+    size: expectedBufferSize,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+  });
+  queue.writeBuffer(expectedBuffer, 0, hashBytes);
+
+  const charCodes = new Uint32Array(charSet.length);
+  for (let i = 0; i < charSet.length; i++) {
+    charCodes[i] = charSet.charCodeAt(i) & 0xff;
+  }
+  const charSetBuffer = device.createBuffer({
+    size: charCodes.byteLength,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+  });
+  queue.writeBuffer(charSetBuffer, 0, charCodes);
+
+  const maxPrefixBytes = 64;
+  const prefixBuffer = device.createBuffer({
+    size: maxPrefixBytes * 4,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+  });
+
+  const configSize = 8 * 4;
+  const configBuffer = device.createBuffer({
+    size: configSize,
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+  });
+
+  const foundBuffer = device.createBuffer({
+    size: 4,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
+  });
+
+  const bindGroup = device.createBindGroup({
+    layout: pipeline.getBindGroupLayout(0),
+    entries: [
+      { binding: 0, resource: { buffer: charSetBuffer } },
+      { binding: 1, resource: { buffer: prefixBuffer } },
+      { binding: 2, resource: { buffer: expectedBuffer } },
+      { binding: 3, resource: { buffer: configBuffer } },
+      { binding: 4, resource: { buffer: foundBuffer } },
+    ],
+  });
+
+  const ROW_START_OFFSET = 20;
+
+  function writeAllStaticConfig({
+    prefixLength, totalLength, suffixRange, charSetLength, dispatchWidth, rowStart
+  }) {
+    const data = new ArrayBuffer(configSize);
+    const dv = new DataView(data);
+    dv.setUint32(0, prefixLength, true);
+    dv.setUint32(4, totalLength, true);
+    dv.setUint32(8, suffixRange, true);
+    dv.setUint32(12, charSetLength, true);
+    dv.setUint32(16, dispatchWidth, true);
+    dv.setUint32(20, rowStart, true);
+    dv.setUint32(24, 0, true);
+    dv.setUint32(28, 0, true);
+    queue.writeBuffer(configBuffer, 0, data);
+  }
+
+  function updateRowStart(value) {
+    const data = new ArrayBuffer(4);
+    new DataView(data).setUint32(0, value, true);
+    queue.writeBuffer(configBuffer, ROW_START_OFFSET, data);
+  }
+
+  function resetFoundIndex() {
+    queue.writeBuffer(foundBuffer, 0, new Uint32Array([0xffffffff]));
+  }
+
+  async function readFoundIndex() {
+    const readback = device.createBuffer({
+      size: 4,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    const enc = device.createCommandEncoder();
+    enc.copyBufferToBuffer(foundBuffer, 0, readback, 0, 4);
+    device.queue.submit([enc.finish()]);
+    await readback.mapAsync(GPUMapMode.READ);
+    const val = new DataView(readback.getMappedRange()).getUint32(0, true);
+    readback.unmap();
+    return val === 0xffffffff ? -1 : val;
+  }
+
+  function writePrefix(prefixBytes) {
+    const tmp = new Uint32Array(prefixBytes.length);
+    for (let i = 0; i < prefixBytes.length; i++) {
+      tmp[i] = prefixBytes[i] & 0xff;
+    }
+    queue.writeBuffer(prefixBuffer, 0, tmp);
+  }
+
+  function indexToString(idx, length, charSet) {
+    let result = "";
+    const base = BigInt(charSet.length);
+    let bigIdx = BigInt(idx);
+    for (let i = 0; i < length; i++) {
+      const digit = Number(bigIdx % base);
+      bigIdx = bigIdx / base;
+      result += charSet[digit];
+    }
+    return result;
+  }
+
+  async function runOnePrefix(prefixBytes, prefixLen, totalLen) {
+    if (stopRequested) return -1;
+    writePrefix(prefixBytes);
+
+    const suffixLen = totalLen - prefixLen;
+    const suffixRange = Math.pow(charSet.length, suffixLen);
+
+    resetFoundIndex();
+    writeAllStaticConfig({
+      prefixLength: prefixLen,
+      totalLength: totalLen,
+      suffixRange,
+      charSetLength: charSet.length,
+      dispatchWidth,
+      rowStart: 0
+    });
+
+    const rowWidth = dispatchWidth * threadsPerGroup;
+    let rowsNeeded = Math.ceil(suffixRange / rowWidth);
+
+    const cmd = device.createCommandEncoder();
+    const pass = cmd.beginComputePass();
+    pass.setPipeline(pipeline);
+    pass.setBindGroup(0, bindGroup);
+
+    while (rowsNeeded > 0) {
+      const subRows = Math.min(rowsNeeded, maxRowsPerDispatch);
+      const rowStart = Math.ceil(suffixRange / rowWidth) - rowsNeeded;
+      updateRowStart(rowStart);
+      pass.dispatchWorkgroups(dispatchWidth, subRows, 1);
+      rowsNeeded -= subRows;
+    }
+
+    pass.end();
+    queue.submit([cmd.finish()]);
+    await queue.onSubmittedWorkDone();
+
+    return await readFoundIndex();
+  }
+
+  function getMaxSuffixLen(charSetLength) {
+    const maxRange = 0xffffffffn;
+    let sLen = 0;
+    let combos = 1n;
+    while (true) {
+      let nextCombos = combos * BigInt(charSetLength);
+      if (nextCombos > maxRange) break;
+      combos = nextCombos;
+      sLen++;
+      if (sLen > 64) break;
+    }
+    return sLen;
+  }
+
+  const maxPossibleSuffixLen = getMaxSuffixLen(charSet.length);
+
+  const userPrefixBytes = new TextEncoder().encode(userPrefix);
+  const userPrefixLen = userPrefixBytes.length;
+
+  for (let length = minLen; length <= maxLen; length++) {
+    if (stopRequested) {
+      logMsg("Operation stopped by user.");
+      return null;
+    }
+    if (userPrefixLen > length) {
+      continue;
+    }
+
+    const totalCombos = BigInt(charSet.length) ** BigInt(length - userPrefixLen);
+    logMsg(`Length ${length} (including userPrefixLen=${userPrefixLen}): total combos = ${totalCombos}`);
+
+    if (totalCombos <= singlePassThreshold) {
+      logMsg(`  Single GPU pass (<= threshold).`);
+      const foundIndex = await runOnePrefix(userPrefixBytes, userPrefixLen, length);
+      if (foundIndex >= 0) {
+        const suffixStr = indexToString(foundIndex, length - userPrefixLen, charSet);
+        const pwd = userPrefix + suffixStr;
+        logMsg(`FOUND match @ index=${foundIndex}, password="${pwd}"`);
+        return pwd;
+      }
+    } else {
+      const suffixLen = Math.min(length - userPrefixLen, maxPossibleSuffixLen);
+      if (suffixLen < 1) {
+        logMsg(`  Cannot handle length=${length} with suffixLen < 1. Skipping...`);
+        continue;
+      }
+      const enumeratedPrefixLen = length - userPrefixLen - suffixLen;
+      const prefixSpace = Math.pow(charSet.length, enumeratedPrefixLen);
+      logMsg(`  Splitting: userPrefixLen=${userPrefixLen}, enumeratedPrefixLen=${enumeratedPrefixLen}, suffixLen=${suffixLen}`);
+      logMsg(`  prefixSpace = ${prefixSpace} (CPU enumeration)`);
+
+      for (let p = 0; p < prefixSpace; p++) {
+        if (stopRequested) {
+          logMsg("Operation stopped by user.");
+          return null;
+        }
+
+        const cpuPrefixStr = indexToString(p, enumeratedPrefixLen, charSet);
+        const prefixBytes = new Uint8Array(userPrefixLen + enumeratedPrefixLen);
+
+        prefixBytes.set(userPrefixBytes, 0);
+        for (let i = 0; i < enumeratedPrefixLen; i++) {
+          prefixBytes[userPrefixLen + i] = cpuPrefixStr.charCodeAt(i);
+        }
+
+        const startTime = performance.now();
+        const foundIndex = await runOnePrefix(prefixBytes, userPrefixLen + enumeratedPrefixLen, length);
+        const endTime = performance.now();
+        const elapsedMs = endTime - startTime;
+
+        const hashesProcessed = Math.pow(charSet.length, suffixLen);
+        const hashRate = hashesProcessed / (elapsedMs / 1000) / 1e6;
+        logMsg(
+          `    Prefix #${p} of ${prefixSpace}: "${cpuPrefixStr}"` +
+          ` => ${hashRate.toFixed(2)} MH/s, GPU time = ${elapsedMs.toFixed(2)} ms`
+        );
+
+        if (foundIndex >= 0) {
+          const suffixStr = indexToString(foundIndex, suffixLen, charSet);
+          const fullPwd = userPrefix + cpuPrefixStr + suffixStr;
+          logMsg(`FOUND match: prefixIdx=${p}, suffixIdx=${foundIndex}, password="${fullPwd}"`);
+          return fullPwd;
+        }
+      }
+    }
+  }
+  logMsg("No match up to maxLen.");
+  return null;
+}
+
+document.getElementById("startBtn").addEventListener("click", async () => {
+  const logArea = document.getElementById("logArea");
+  logArea.value = "";
+  stopRequested = false;
+  document.getElementById("startBtn").disabled = true;
+  document.getElementById("stopBtn").disabled = false;
+
+  try {
+    const shaderPath = document.getElementById("shaderSelect").value;
+    await loadShaderFile(shaderPath);
+
+    const hash = document.getElementById("hashInput").value.trim();
+    const cs = document.getElementById("charSetInput").value;
+    const ml = parseInt(document.getElementById("maxLenInput").value);
+    const minl = parseInt(document.getElementById("minLenInput").value);
+    const userPrefix = document.getElementById("userPrefixInput").value;
+
+    await crack_prefixMask(hash, cs, ml, minl, userPrefix);
+  } catch (err) {
+    logMsg("ERROR: " + err);
+    console.error(err);
+  } finally {
+    document.getElementById("startBtn").disabled = false;
+    document.getElementById("stopBtn").disabled = true;
+  }
+});
+
+document.getElementById("stopBtn").addEventListener("click", () => {
+  stopRequested = true;
+  logMsg("Stop requested. Finishing current batch...");
+  document.getElementById("stopBtn").disabled = true;
+});
+</script>
+</body>
+</html>

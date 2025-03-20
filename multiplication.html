@@ -1,0 +1,336 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multiplication Practice</title>
+    <style>
+        body { 
+            display: flex; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            min-height: 100vh;
+            background-color: #f0f2f5;
+        }
+        .sidebar { 
+            width: 250px; 
+            padding: 20px;
+            background-color: #ffffff;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+        }
+        .main { 
+            flex: 1; 
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .answer-btn { 
+            margin: 10px;
+            padding: 15px 30px;
+            font-size: 24px;
+            cursor: pointer;
+            border: none;
+            border-radius: 8px;
+            background-color: #495057;
+            color: white;
+            transition: all 0.2s ease;
+        }
+        .answer-btn:hover {
+            background-color: #343a40;
+            transform: translateY(-2px);
+        }
+        .correct { 
+            background-color: #28a745 !important; 
+            color: white; 
+        }
+        .incorrect { 
+            background-color: #dc3545 !important; 
+            color: white; 
+        }
+        .timer { 
+            font-size: 24px; 
+            color: #dc3545;
+            font-weight: bold;
+        }
+        #question {
+            font-size: 96px;
+            margin-bottom: 30px;
+            color: #2c3e50;
+        }
+        #user-answer {
+            font-size: 36px;
+            padding: 10px 20px;
+            width: 200px;
+            text-align: center;
+            border: 2px solid #ced4da;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        #user-answer:focus {
+            outline: none;
+            border-color: #4dabf7;
+            box-shadow: 0 0 0 3px rgba(77, 171, 247, 0.25);
+        }
+        select, button {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        button {
+            background-color: #4dabf7;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+        button:hover {
+            background-color: #339af0;
+        }
+        .sidebar h3 {
+            color: #495057;
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+        #number-selection {
+            display: grid;
+            grid-template-columns: auto auto auto;
+            gap: 5px;
+            align-items: center;
+        }
+        #number-selection input[type="checkbox"] {
+            margin-right: 5px;
+        }
+        #answers {
+            display: flex;
+            flex-direction: row;
+            flex-wrap: nowrap;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        #next {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h3>Select Numbers</h3>
+        <div id="number-selection"></div>
+        <h3>Mode</h3>
+        <select id="mode">
+            <option value="learn">Learn</option>
+            <option value="multiple-choice" selected>Multiple Choice</option>
+            <option value="test">Test</option>
+        </select>
+        <input type="checkbox" id="random-order" checked>
+        <label for="random-order">Randomize Order</label>
+        <h3>Timer</h3>
+        <select id="timer">
+            <option value="3000">3 seconds</option>
+            <option value="5000" selected>5 seconds</option>
+            <option value="15000">15 seconds</option>
+            <option value="30000">30 seconds</option>
+        </select>
+        <button onclick="startPractice()">Start</button>
+        <h3>Score</h3>
+        <p>Correct: <span id="correct-score">0</span></p>
+        <p>Incorrect: <span id="incorrect-score">0</span></p>
+        <p class="timer" id="timer-display"></p>
+    </div>
+    <div class="main">
+        <h2 id="question">Press Start to begin</h2>
+        <div id="answers"></div>
+        <button id="next" onclick="nextQuestion()" style="display:none;">Next</button>
+    </div>
+    <script>
+        let selectedNumbers = [];
+        let questions = [];
+        let currentQuestionIndex = 0;
+        let correctScore = 0;
+        let incorrectScore = 0;
+        let timer;
+        
+        document.addEventListener("DOMContentLoaded", function () {
+            const numSelection = document.getElementById("number-selection");
+            for (let i = 1; i <= 12; i++) {
+                let checkbox = document.createElement("input");
+                checkbox.type = "checkbox";
+                checkbox.value = i;
+                checkbox.id = "num" + i;
+                if (i === 5) {
+                    checkbox.checked = true;
+                }
+                let label = document.createElement("label");
+                label.htmlFor = "num" + i;
+                label.textContent = i;
+                numSelection.appendChild(checkbox);
+                numSelection.appendChild(label);
+                numSelection.appendChild(document.createElement("br"));
+            }
+        });
+
+        function startPractice() {
+            selectedNumbers = Array.from(document.querySelectorAll('#number-selection input:checked')).map(cb => parseInt(cb.value));
+            const mode = document.getElementById("mode").value;
+            if (selectedNumbers.length === 0) {
+                alert("Please select at least one number.");
+                return;
+            }
+            correctScore = 0;
+            incorrectScore = 0;
+            updateScore();
+            generateQuestions(selectedNumbers);
+            currentQuestionIndex = 0;
+            displayQuestion(mode);
+        }
+
+        function generateQuestions(numbers) {
+            questions = [];
+            for (let num of numbers) {
+                for (let i = 1; i <= 12; i++) {
+                    questions.push({ num1: num, num2: i });
+                }
+            }
+            if (document.getElementById("random-order").checked) {
+                questions = questions.sort(() => Math.random() - 0.5);
+            }
+        }
+
+        function displayQuestion(mode) {
+            clearTimeout(timer);
+            if (currentQuestionIndex >= questions.length) {
+                document.getElementById("question").textContent = "Practice complete!";
+                document.getElementById("answers").innerHTML = "";
+                document.getElementById("next").style.display = "none";
+                document.getElementById("timer-display").textContent = "";
+                return;
+            }
+            
+            let { num1, num2 } = questions[currentQuestionIndex];
+            document.getElementById("question").textContent = `${num1} × ${num2}`;
+            let answer = num1 * num2;
+            let answersDiv = document.getElementById("answers");
+            answersDiv.innerHTML = "";
+            let timeLimit = parseInt(document.getElementById("timer").value);
+            
+            let timeLeft = timeLimit / 1000;
+            const timerDisplay = document.getElementById("timer-display");
+            timerDisplay.textContent = `Time left: ${timeLeft}s`;
+            
+            const countdownInterval = setInterval(() => {
+                timeLeft--;
+                timerDisplay.textContent = `Time left: ${timeLeft}s`;
+                if (timeLeft <= 0) {
+                    clearInterval(countdownInterval);
+                }
+            }, 1000);
+            
+            if (mode === "learn") {
+                answersDiv.innerHTML = `<p style="font-size: 48px; margin: 0;">${answer}</p>`;
+                timer = setTimeout(() => {
+                    clearInterval(countdownInterval);
+                    nextQuestion();
+                }, timeLimit);
+            } else if (mode === "multiple-choice") {
+                let options = [answer];
+                while (options.length < 3) {
+                    let randomOffset = Math.floor(Math.random() * 10) + 1;
+                    let wrongAnswer = Math.random() < 0.5 ? answer + randomOffset : answer - randomOffset;
+                    if (!options.includes(wrongAnswer) && wrongAnswer > 0) {
+                        options.push(wrongAnswer);
+                    }
+                }
+                options.sort(() => Math.random() - 0.5);
+                options.forEach(opt => {
+                    let btn = document.createElement("button");
+                    btn.textContent = opt;
+                    btn.className = "answer-btn";
+                    btn.onclick = () => {
+                        clearInterval(countdownInterval);
+                        if (opt === answer) {
+                            btn.classList.add("correct");
+                            correctScore++;
+                        } else {
+                            btn.classList.add("incorrect");
+                            incorrectScore++;
+                        }
+                        updateScore();
+                        clearTimeout(timer);
+                        setTimeout(nextQuestion, 1000);
+                    };
+                    answersDiv.appendChild(btn);
+                });
+                
+                timer = setTimeout(() => {
+                    clearInterval(countdownInterval);
+                    incorrectScore++;
+                    updateScore();
+                    const buttons = answersDiv.getElementsByClassName("answer-btn");
+                    for (let btn of buttons) {
+                        if (parseInt(btn.textContent) === answer) {
+                            btn.classList.add("correct");
+                        } else {
+                            btn.classList.add("incorrect");
+                        }
+                    }
+                    setTimeout(nextQuestion, 1000);
+                }, timeLimit);
+            } else if (mode === "test") {
+                let input = document.createElement("input");
+                input.type = "text";
+                input.id = "user-answer";
+                input.addEventListener("keyup", function(event) {
+                    if (event.key === "Enter") {
+                        clearInterval(countdownInterval);
+                        let userAnswer = parseInt(input.value);
+                        if (userAnswer === answer) {
+                            correctScore++;
+                            input.style.backgroundColor = "green";
+                            input.style.color = "white";
+                        } else {
+                            incorrectScore++;
+                            input.style.backgroundColor = "red";
+                            input.style.color = "white";
+                            input.value = answer;
+                        }
+                        updateScore();
+                        clearTimeout(timer);
+                        setTimeout(nextQuestion, 1000);
+                    }
+                });
+                answersDiv.appendChild(input);
+                input.focus();
+                
+                timer = setTimeout(() => {
+                    clearInterval(countdownInterval);
+                    incorrectScore++;
+                    updateScore();
+                    input.style.backgroundColor = "red";
+                    input.style.color = "white";
+                    input.value = answer;
+                    setTimeout(nextQuestion, 1000);
+                }, timeLimit);
+            }
+        }
+
+        function nextQuestion() {
+            currentQuestionIndex++;
+            displayQuestion(document.getElementById("mode").value);
+        }
+
+        function updateScore() {
+            document.getElementById("correct-score").textContent = correctScore;
+            document.getElementById("incorrect-score").textContent = incorrectScore;
+        }
+    </script>
+</body>
+</html>

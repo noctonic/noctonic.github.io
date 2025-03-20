@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Byte Frequency Visualizer</title>
+  <script src="./chart.js"></script>
+  <style>
+    html, body {
+      margin: 0; padding: 0;
+      background-color: #111; color: #eee;
+      font-family: sans-serif;
+    }
+    header {
+      background-color: #222;
+      padding: 10px; text-align: center;
+    }
+    #chartContainer {
+      width: 90%; max-width: 1200px; height: 400px;
+      margin: 20px auto; background-color: #222;
+      padding: 10px; box-sizing: border-box;
+    }
+    #myChart { background-color: #222; }
+  </style>
+</head>
+<body>
+  <header>
+    <h2>Byte Frequency Visualizer</h2>
+    <p>
+    <input type="file" id="fileInput" accept="*/*">
+  </header>
+
+  <div id="chartContainer">
+    <canvas id="myChart"></canvas>
+  </div>
+
+  <script>
+    let chart;
+
+    function initializeChart() {
+      const ctx = document.getElementById('myChart').getContext('2d');
+      chart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: Array.from({ length: 256 }, (_, i) => i.toString()),
+          datasets: [{
+            label: 'Normalized Frequency',
+            data: new Array(256).fill(0),
+            barPercentage: 1.0,
+            categoryPercentage: 1.0,
+            backgroundColor: (context) => {
+              const { chart, parsed } = context;
+              const chartCtx = chart.ctx;
+              const scales = chart.scales;
+              if (!parsed || parsed.y == null) {
+                return '#fde725';
+              }
+
+              const yValue = parsed.y;
+              const topPx = scales.y.getPixelForValue(yValue);
+              const bottomPx = scales.y.getPixelForValue(0);
+              if (!Number.isFinite(topPx) || !Number.isFinite(bottomPx)) {
+                return '#fde725';
+              }
+              let gradientStart = Math.min(topPx, bottomPx);
+              let gradientEnd   = Math.max(topPx, bottomPx);
+              const gradient = chartCtx.createLinearGradient(0, gradientStart, 0, gradientEnd);
+              gradient.addColorStop(0,    "#fde725");
+              gradient.addColorStop(0.3,  "#5ec962");
+              gradient.addColorStop(0.6,  "#21918c");
+              gradient.addColorStop(0.85, "#3b528b");
+              gradient.addColorStop(0.95, "#440154");
+              return gradient;
+            }
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: { duration: 0 },
+          scales: {
+            x: {
+              offset: false,
+              title: { display: true, text: 'Byte Value (0–255)' },
+              ticks: { maxTicksLimit: 16 },
+              grid: { display: false }
+            },
+            y: {
+              title: { display: true, text: 'Distribution Value' },
+              beginAtZero: true,
+              grid: { color: "#444" }
+            }
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (context) => {
+                  const byteVal = context.label;
+                  const distVal = context.parsed.y?.toFixed(4) ?? '0.0000';
+                  return `Byte ${byteVal}: ${distVal}`;
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    document.getElementById('fileInput').addEventListener('change', async function() {
+      if (!this.files || !this.files[0]) return;
+      const file = this.files[0];
+      const arrayBuffer = await file.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuffer);
+      const total = bytes.length;
+      if (total === 0) {
+        alert('File is empty.');
+        return;
+      }
+
+      const increment = 256 / total;
+      const distArray = new Array(256).fill(0);
+      for (let i = 0; i < total; i++) {
+        distArray[bytes[i]] += increment;
+      }
+      chart.data.datasets[0].data = distArray;
+      chart.update('none');
+    });
+
+    window.addEventListener('load', initializeChart);
+    window.addEventListener('resize', () => {
+      chart.update('none');
+    });
+  </script>
+</body>
+</html>

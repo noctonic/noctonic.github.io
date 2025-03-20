@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Color Picker</title>
+  <style>
+    body {
+      font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
+      background: #ecf0f1;
+      color: #2c3e50;
+      margin: 20px;
+    }
+    body.light-mode .controls,
+    body.light-mode .extras-section {
+      background: #bdc3c7;
+      color: #2c3e50;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    }
+    body.night-mode {
+      background: #000;
+      color: #fff;
+    }
+    body.night-mode .controls,
+    body.night-mode .extras-section {
+      background: #222;
+      color: #fff;
+      box-shadow: 0 2px 6px rgba(255,255,255,0.1);
+    }
+    h1 {
+      text-align: center;
+      font-size: 2rem;
+      margin-bottom: 10px;
+    }
+    .theme-selector {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .theme-selector input {
+      margin: 0 5px;
+    }
+    .theme-selector label {
+      margin-right: 15px;
+      cursor: pointer;
+    }
+    .color-picker-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 30px;
+      justify-content: center;
+    }
+    .controls, .extras-section {
+      background: #34495e;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    }
+    .controls {
+      flex: 1 1 300px;
+      max-width: 350px;
+    }
+    .extras-section {
+      flex: 1 1 350px;
+      max-width: 600px;
+    }
+    .section {
+      margin-bottom: 20px;
+    }
+    .section h3 {
+      margin-bottom: 10px;
+      border-bottom: 1px solid #7f8c8d;
+      padding-bottom: 5px;
+    }
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 5px;
+    }
+    .slider-row input[type="range"] {
+      flex: 1;
+    }
+    label {
+      font-weight: bold;
+      margin-right: 10px;
+      width: 70px;
+    }
+    input[type="text"], input[type="number"], select {
+      background: #ecf0f1;
+      border: 1px solid #7f8c8d;
+      border-radius: 4px;
+      color: #2c3e50;
+      padding: 4px;
+      font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
+    }
+    button {
+      background: #e67e22;
+      border: none;
+      border-radius: 4px;
+      padding: 8px 12px;
+      color: #ecf0f1;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    button:hover {
+      background: #d35400;
+    }
+    .saved-colors-container {
+      display: grid;
+      grid-template-columns: repeat(8, 30px);
+      gap: 5px;
+      margin-top: 10px;
+    }
+    .saved-color {
+      width: 30px;
+      height: 30px;
+      border: 1px solid #7f8c8d;
+      cursor: pointer;
+      border-radius: 2px;
+    }
+    .saved-color.selected {
+      border: 2px solid #e67e22;
+    }
+    .button-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .scheme-heading, .distance-heading, .shadow-heading, .spotlight-heading, .rainbow-heading {
+      font-weight: bold;
+      margin-top: 15px;
+    }
+    .scheme-heading button,
+    .distance-heading button,
+    .shadow-heading button,
+    .spotlight-heading button,
+    .rainbow-heading button {
+      margin-left: 10px;
+      font-size: 0.8em;
+      padding: 4px 8px;
+      background: #2980b9;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    .scheme-heading button:hover,
+    .distance-heading button:hover,
+    .shadow-heading button:hover,
+    .spotlight-heading button:hover,
+    .rainbow-heading button:hover {
+      background: #1abc9c;
+    }
+    .scheme-container, .distance-container, .shadow-container, .spotlight-container, .rainbow-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin-top: 5px;
+    }
+    .scheme-swatch {
+      width: 30px;
+      height: 30px;
+      border: 1px solid #7f8c8d;
+      cursor: pointer;
+      border-radius: 2px;
+    }
+    .swatch {
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body class="light-mode">
+  <h1>Color Picker</h1>
+  <div class="theme-selector">
+    <input type="radio" id="theme-light" name="theme" value="light" checked>
+    <label for="theme-light">Light mode</label>
+    <input type="radio" id="theme-night" name="theme" value="night">
+    <label for="theme-night">Night Mode</label>
+  </div>
+  <div class="color-picker-container">
+    <div class="controls">
+      <div class="section">
+        <label for="namedColors">Colors:</label>
+        <select id="namedColors">
+          <option value="">Select a color...</option>
+        </select>
+      </div>
+      <div class="section">
+        <label for="hexInput">Hex Code:</label>
+        <input type="text" id="hexInput" value="ff00ff" maxlength="6" />
+      </div>
+      <div class="section">
+        <h3>RGB</h3>
+        <div class="slider-row">
+          <label for="rRange">Red:</label>
+          <input type="range" id="rRange" min="0" max="255" step="1" value="255">
+          <input type="number" id="rNumber" min="0" max="255" step="1" value="255">
+        </div>
+        <div class="slider-row">
+          <label for="gRange">Green:</label>
+          <input type="range" id="gRange" min="0" max="255" step="1" value="0">
+          <input type="number" id="gNumber" min="0" max="255" step="1" value="0">
+        </div>
+        <div class="slider-row">
+          <label for="bRange">Blue:</label>
+          <input type="range" id="bRange" min="0" max="255" step="1" value="0">
+          <input type="number" id="bNumber" min="0" max="255" step="1" value="0">
+        </div>
+      </div>
+      <div class="section">
+        <h3>HSB</h3>
+        <div class="slider-row">
+          <label for="hRange">Hue:</label>
+          <input type="range" id="hRange" min="0" max="360" step="1" value="0">
+          <input type="number" id="hNumber" min="0" max="360" step="1" value="0">
+        </div>
+        <div class="slider-row">
+          <label for="sRange">Sat:</label>
+          <input type="range" id="sRange" min="0" max="100" step="1" value="100">
+          <input type="number" id="sNumber" min="0" max="100" step="1" value="100">
+        </div>
+        <div class="slider-row">
+          <label for="vRange">Bri:</label>
+          <input type="range" id="vRange" min="0" max="100" step="1" value="100">
+          <input type="number" id="vNumber" min="0" max="100" step="1" value="100">
+        </div>
+      </div>
+      <div class="section">
+        <div class="button-row">
+          <button id="saveColorButton">Save Color</button>
+          <button id="deleteColorButton">Delete Color</button>
+          <button id="exportButton">Export</button>
+        </div>
+        <div id="savedColorsContainer" class="saved-colors-container"></div>
+      </div>
+    </div>
+    <div>
+      <div class="section extras-section" id="extrasSection">
+        <div class="scheme-heading">
+          Current Color
+          <button class="save-btn" onclick="saveScheme('currentColorContainer')">Save</button>
+        </div>
+        <div id="currentColorContainer" class="scheme-container"></div>
+        <div class="scheme-heading">
+          Complementary 
+          <button class="save-btn" onclick="saveScheme('compContainer')">Save</button>
+        </div>
+        <div id="compContainer" class="scheme-container"></div>
+        <div class="scheme-heading">
+          Analogous 
+          <button class="save-btn" onclick="saveScheme('analogContainer')">Save</button>
+        </div>
+        <div id="analogContainer" class="scheme-container"></div>
+        <div class="scheme-heading">
+          Triadic 
+          <button class="save-btn" onclick="saveScheme('triadContainer')">Save</button>
+        </div>
+        <div id="triadContainer" class="scheme-container"></div>
+        <div class="rainbow-heading">
+          Rainbow 
+          <button class="save-btn" onclick="saveScheme('rainbowContainer')">Save</button>
+        </div>
+        <div id="rainbowContainer" class="scheme-container"></div>
+        <div class="distance-heading">
+          Distance 
+          <button class="save-btn" onclick="saveScheme('distanceContainer')">Save</button>
+        </div>
+        <div id="distanceContainer" class="distance-container"></div>
+        <div class="shadow-heading">
+          Shadow 
+          <button class="save-btn" onclick="saveScheme('shadowContainer')">Save</button>
+        </div>
+        <div id="shadowContainer" class="shadow-container"></div>
+        <div class="spotlight-heading">
+          Spotlight 
+          <button class="save-btn" onclick="saveScheme('spotlightContainer')">Save</button>
+        </div>
+        <div id="spotlightContainer" class="spotlight-container"></div>
+      </div>
+    </div>
+  </div>
+  <script src="color-picker.js"></script>
+  <script>
+    document.querySelectorAll('input[name="theme"]').forEach(radio => {
+      radio.addEventListener('change', (e) => {
+        const theme = e.target.value;
+        document.body.classList.remove('light-mode', 'night-mode');
+        if (theme === 'light') {
+          document.body.classList.add('light-mode');
+        } else if (theme === 'night') {
+          document.body.classList.add('night-mode');
+        }
+      });
+    });
+  </script>
+</body>
+</html>

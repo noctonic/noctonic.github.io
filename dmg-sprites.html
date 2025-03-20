@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Game Boy Sprite Sheet Extractor</title>
+  <style>
+    body {
+      background-color: #000;
+      color: #fff;
+      font-family: sans-serif;
+      margin: 0;
+      padding: 20px;
+      text-align: center;
+    }
+    h1, h2, p {
+      margin: 0.5em auto;
+      max-width: 800px;
+    }
+    #controls {
+      margin: 1em auto;
+      max-width: 800px;
+    }
+    #output {
+      display: block;
+      margin: 20px auto;
+      border: 1px solid #ccc;
+      max-width: 90vw;
+      height: auto;
+    }
+    label {
+      margin-right: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Game Boy Sprite Sheet Extractor</h1>
+  <p>
+    Select a <code>.gb</code> or <code>.gbc</code> file. The script will scan the entire ROM for 2bpp tile data.<br/>
+  </p>
+
+  <div id="controls">
+    <input type="file" id="fileInput" />
+
+    <h2>Palette:</h2>
+    <select id="paletteSelect">
+      <option value="greenish">Greenish</option>
+      <option value="grayscale">Grayscale</option>
+      <option value="blueish">Blueish</option>
+      <option value="redish">Redish</option>
+    </select>
+
+    <h2>Scale:</h2>
+    <select id="scaleSelect">
+      <option value="1" selected >1×</option>
+      <option value="2">2×</option>
+      <option value="3">3×</option>
+      <option value="4">4×</option>
+      <option value="5">5×</option>
+      <option value="6">6×</option>
+      <option value="7">7×</option>
+    </select>
+
+    <h2>Invert Colors:</h2>
+    <label for="invertColorsCheck">
+      <input type="checkbox" id="invertColorsCheck" checked/>
+      Invert Lightest <-> Darkest
+    </label>
+  </div>
+
+  <img id="output" alt="Sprite Sheet PNG" />
+
+  <script>
+    let globalFileArrayBuffer = null;
+    let globalTileChunks = [];
+
+    document.getElementById('fileInput').addEventListener('change', async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      try {
+        globalFileArrayBuffer = await file.arrayBuffer();
+        parseAndRenderSelectedFile();
+      } catch (err) {
+        console.error(err);
+      }
+    });
+
+    document.getElementById('paletteSelect').addEventListener('change', () => {
+      if (globalTileChunks.length > 0) {
+        parseAndRenderSelectedFile();
+      }
+    });
+
+    document.getElementById('scaleSelect').addEventListener('change', () => {
+      if (globalTileChunks.length > 0) {
+        parseAndRenderSelectedFile();
+      }
+    });
+
+    document.getElementById('invertColorsCheck').addEventListener('change', () => {
+      if (globalTileChunks.length > 0) {
+        parseAndRenderSelectedFile();
+      }
+    });
+
+    function parseAndRenderSelectedFile() {
+      if (!globalFileArrayBuffer) return;
+
+      globalTileChunks = scanForGBTiles(globalFileArrayBuffer);
+
+      if (globalTileChunks.length === 0) {
+        document.getElementById('output').src = "";
+        return;
+      }
+
+      const combinedTiles = combineTileData(globalTileChunks);
+
+      const palette = document.getElementById('paletteSelect').value;
+      const scale = parseInt(document.getElementById('scaleSelect').value, 10);
+
+      const invertColors = document.getElementById('invertColorsCheck').checked;
+
+      renderTiles(combinedTiles, palette, scale, invertColors);
+    }
+
+    function scanForGBTiles(arrayBuffer) {
+      const bytes = new Uint8Array(arrayBuffer);
+      const tileSize = 16;
+      const foundTiles = [];
+
+      for (let i = 0; i + tileSize <= bytes.length; i += tileSize) {
+        const chunk = bytes.slice(i, i + tileSize);
+
+        if (looksLikeGBTile(chunk)) {
+          foundTiles.push(chunk);
+        }
+      }
+
+      return foundTiles;
+    }
+
+    function looksLikeGBTile(chunk) {
+      let nonZeroCount = 0;
+      for (let i = 0; i < chunk.length; i++) {
+        if (chunk[i] !== 0) nonZeroCount++;
+      }
+
+      const threshold = chunk.length * 0.1;
+      return (nonZeroCount >= threshold);
+    }
+
+    function combineTileData(tileDataList) {
+      const totalLength = tileDataList.reduce((acc, slice) => acc + slice.length, 0);
+      const combined = new Uint8Array(totalLength);
+      let offset = 0;
+      for (const slice of tileDataList) {
+        combined.set(slice, offset);
+        offset += slice.length;
+      }
+      return combined;
+    }
+
+    function decodeGBTiles(tilesData, paletteName, invertColors) {
+      const paletteMap = {
+        greenish: [
+          [ 15,  56,  15, 255],
+          [ 48,  98,  48, 255],
+          [139, 172,  15, 255],
+          [155, 188,  15, 255]
+        ],
+        grayscale: [
+          [  0,   0,   0, 255],
+          [ 85,  85,  85, 255],
+          [170, 170, 170, 255],
+          [255, 255, 255, 255]
+        ],
+        blueish: [
+          [  0,   0,   0, 255],
+          [  0,  30, 116, 255],
+          [  8,  76, 176, 255],
+          [192, 208, 232, 255]
+        ],
+        redish: [
+          [  0,   0,   0, 255],
+          [170,   0,   0, 255],
+          [255,  85,  85, 255],
+          [255, 170, 170, 255]
+        ]
+      };
+
+      const palette = paletteMap[paletteName] || paletteMap.greenish;
+
+      const tileSize = 16;
+      const tileCount = Math.floor(tilesData.length / tileSize);
+
+      const tilesAcross = 16;
+      const tilesDown = Math.ceil(tileCount / tilesAcross);
+
+      const imageWidth = tilesAcross * 8;
+      const imageHeight = tilesDown * 8;
+      const pixelData = new Uint8ClampedArray(imageWidth * imageHeight * 4);
+
+      for (let tileIndex = 0; tileIndex < tileCount; tileIndex++) {
+        const base = tileIndex * tileSize;
+        const tileX = (tileIndex % tilesAcross) * 8;
+        const tileY = Math.floor(tileIndex / tilesAcross) * 8;
+
+        for (let row = 0; row < 8; row++) {
+          const lowByte  = tilesData[base + (row * 2)];
+          const highByte = tilesData[base + (row * 2) + 1];
+
+          for (let col = 0; col < 8; col++) {
+            const bitLow  = (lowByte  >> (7 - col)) & 1;
+            const bitHigh = (highByte >> (7 - col)) & 1;
+            let colorIndex = (bitHigh << 1) | bitLow;
+
+            if (invertColors) {
+              colorIndex = 3 - colorIndex;
+            }
+
+            const [r, g, b, a] = palette[colorIndex];
+            const px = tileX + col;
+            const py = tileY + row;
+            const idx = (py * imageWidth + px) * 4;
+
+            pixelData[idx]   = r;
+            pixelData[idx+1] = g;
+            pixelData[idx+2] = b;
+            pixelData[idx+3] = a;
+          }
+        }
+      }
+
+      return { width: imageWidth, height: imageHeight, data: pixelData };
+    }
+
+    function drawTilesToCanvas({ width, height, data }) {
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+
+      const imageData = ctx.createImageData(width, height);
+      imageData.data.set(data);
+      ctx.putImageData(imageData, 0, 0);
+
+      return canvas;
+    }
+
+    function scaleCanvas(canvas, scale) {
+      const scaledCanvas = document.createElement('canvas');
+      scaledCanvas.width = canvas.width * scale;
+      scaledCanvas.height = canvas.height * scale;
+
+      const ctx = scaledCanvas.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      ctx.mozImageSmoothingEnabled = false;
+      ctx.webkitImageSmoothingEnabled = false;
+      ctx.msImageSmoothingEnabled = false;
+
+      ctx.drawImage(canvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
+      return scaledCanvas;
+    }
+
+    function renderTiles(tilesData, paletteName, scale, invertColors) {
+      const decoded = decodeGBTiles(tilesData, paletteName, invertColors);
+      const unscaledCanvas = drawTilesToCanvas(decoded);
+      const scaledCanvas = scaleCanvas(unscaledCanvas, scale);
+      document.getElementById('output').src = scaledCanvas.toDataURL("image/png");
+    }
+  </script>
+</body>
+</html>

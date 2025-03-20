@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Diatonic Chord Finder</title>
+  <style>
+    :root {
+      --bg-color: #2B2B2B;
+      --text-color: #F2F2F2;
+      --accent-color: #30BCED;
+      --secondary-color: #58D68D;
+      --border-color: #444;
+      --highlight-bg: #3E4652;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      margin: 20px;
+      line-height: 1.4;
+    }
+
+    h1, h2 {
+      color: var(--accent-color);
+      margin-bottom: 12px;
+    }
+
+    #results {
+      margin-top: 24px;
+      padding: 12px;
+      background-color: #1F1F1F;
+      border-radius: 4px;
+    }
+
+    table {
+      border-collapse: collapse;
+      margin-top: 20px;
+      width: 100%;
+      max-width: 100%;
+      overflow-x: auto;
+      color: var(--text-color);
+      background-color: #1F1F1F;
+      border: 1px solid var(--border-color);
+    }
+    th, td {
+      border: 1px solid var(--border-color);
+      padding: 10px;
+      text-align: center;
+    }
+    thead {
+      background-color: var(--accent-color);
+      color: #fff;
+    }
+    tr:nth-child(even) {
+      background-color: #2A2A2A;
+    }
+    tr:hover {
+      background-color: var(--highlight-bg);
+    }
+    .highlight {
+      background-color: var(--secondary-color);
+      color: #000;
+      font-weight: 600;
+    }
+
+    .keyboard-container {
+      margin: 0 auto;
+      position: relative;
+      width: 280px;
+      height: 120px;
+      margin-bottom: 20px;
+      user-select: none;
+    }
+
+    .key {
+      position: absolute;
+      bottom: 0;
+      border: 1px solid #333;
+      box-sizing: border-box;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    .key.white {
+      width: 40px;
+      height: 120px;
+      background-color: #fff;
+      z-index: 1;
+    }
+
+    .key.black {
+      transform: translateY(-50%);
+      width: 24px;
+      height: 80px;
+      background-color: #000;
+      z-index: 2;
+    }
+
+    .key[data-note="C"]   { left: 0; }
+    .key[data-note="D"]   { left: 40px; }
+    .key[data-note="E"]   { left: 80px; }
+    .key[data-note="F"]   { left: 120px; }
+    .key[data-note="G"]   { left: 160px; }
+    .key[data-note="A"]   { left: 200px; }
+    .key[data-note="B"]   { left: 240px; }
+    .key[data-note="C#"]  { left: 28px; }
+    .key[data-note="D#"]  { left: 68px; }
+    .key[data-note="F#"]  { left: 148px; }
+    .key[data-note="G#"]  { left: 188px; }
+    .key[data-note="A#"]  { left: 228px; }
+
+    .key.active {
+      background-color: var(--accent-color) !important;
+      box-shadow: 0 0 5px #fff;
+    }
+    .key.black.active {
+      background-color: var(--secondary-color) !important;
+    }
+  </style>
+</head>
+<body>
+<center>
+<h1>Diatonic Chord Finder</h1>
+
+<div class="keyboard-container">
+  <div class="key white" data-note="C"></div>
+  <div class="key white" data-note="D"></div>
+  <div class="key white" data-note="E"></div>
+  <div class="key white" data-note="F"></div>
+  <div class="key white" data-note="G"></div>
+  <div class="key white" data-note="A"></div>
+  <div class="key white" data-note="B"></div>
+  <div class="key black" data-note="C#"></div>
+  <div class="key black" data-note="D#"></div>
+  <div class="key black" data-note="F#"></div>
+  <div class="key black" data-note="G#"></div>
+  <div class="key black" data-note="A#"></div>
+</div>
+
+<div id="results"></div>
+
+<script>
+const NOTES_SHARP_ORDER = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+
+function noteToPC(note) {
+  const flatsMap = {
+    "Bb":"A#","Cb":"B","Db":"C#","Eb":"D#","Fb":"E","Gb":"F#","Ab":"G#",
+    "E#":"F","B#":"C"
+  };
+  const normalized = flatsMap[note] || note;
+  return NOTES_SHARP_ORDER.indexOf(normalized);
+}
+function pcToNote(pc) {
+  return NOTES_SHARP_ORDER[pc % 12];
+}
+
+const MAJOR_KEYS = {
+  "C":  {scale:["C","D","E","F","G","A","B"], pcs:[0,2,4,5,7,9,11]},
+  "G":  {scale:["G","A","B","C","D","E","F#"], pcs:[7,9,11,0,2,4,6]},
+  "D":  {scale:["D","E","F#","G","A","B","C#"], pcs:[2,4,6,7,9,11,1]},
+  "A":  {scale:["A","B","C#","D","E","F#","G#"], pcs:[9,11,1,2,4,6,8]},
+  "E":  {scale:["E","F#","G#","A","B","C#","D#"], pcs:[4,6,8,9,11,1,3]},
+  "B":  {scale:["B","C#","D#","E","F#","G#","A#"], pcs:[11,1,3,4,6,8,10]},
+  "F#": {scale:["F#","G#","A#","B","C#","D#","E#"], pcs:[6,8,10,11,1,3,5]},
+  "C#": {scale:["C#","D#","E#","F#","G#","A#","B#"], pcs:[1,3,5,6,8,10,0]},
+  "F":  {scale:["F","G","A","Bb","C","D","E"], pcs:[5,7,9,10,0,2,4]},
+  "Bb": {scale:["Bb","C","D","Eb","F","G","A"], pcs:[10,0,2,3,5,7,9]},
+  "Eb": {scale:["Eb","F","G","Ab","Bb","C","D"], pcs:[3,5,7,8,10,0,2]},
+  "Ab": {scale:["Ab","Bb","C","Db","Eb","F","G"], pcs:[8,10,0,1,3,5,7]}
+};
+const MAJOR_KEY_QUALITIES = ["Major","Minor","Minor","Major","Major","Minor","Diminished"];
+
+function getDiatonicTriads(keyRoot) {
+  const s = MAJOR_KEYS[keyRoot].scale;
+  return s.map((n, i) => n + " " + MAJOR_KEY_QUALITIES[i]);
+}
+
+const CHORD_DEFINITIONS = {
+  "5": [0,7],
+  "Major": [0,4,7],
+  "Minor": [0,3,7],
+  "Diminished": [0,3,6],
+  "Augmented": [0,4,8],
+  "Sus2": [0,2,7],
+  "Sus4": [0,5,7],
+  "Major6": [0,4,7,9],
+  "Minor6": [0,3,7,9],
+  "Major7": [0,4,7,11],
+  "Minor7": [0,3,7,10],
+  "Dominant7": [0,4,7,10],
+  "MinorMajor7": [0,3,7,11],
+  "Augmented7": [0,4,8,10],
+  "AugmentedMajor7": [0,4,8,11],
+  "HalfDiminished7": [0,3,6,10],
+  "Diminished7": [0,3,6,9],
+  "7sus4": [0,5,7,10],
+  "7sus2": [0,2,7,10],
+  "Add9": [0,2,4,7],
+  "MinorAdd9": [0,2,3,7],
+  "Add11": [0,4,5,7],
+  "6/9": [0,2,4,7,9],
+  "Minor6/9": [0,2,3,7,9],
+  "Major9": [0,2,4,7,11],
+  "Minor9": [0,2,3,7,10],
+  "Dominant9": [0,2,4,7,10],
+  "7b9": [0,1,4,7,10],
+  "7#9": [0,3,4,7,10],
+  "MinorMajor9": [0,2,3,7,11]
+};
+
+function arraysEqual(a,b){
+  if(a.length!==b.length) return false;
+  for(let i=0; i<a.length; i++){
+    if(a[i]!==b[i]) return false;
+  }
+  return true;
+}
+
+function getSelectedNotes() {
+  const activeKeys = document.querySelectorAll(".keyboard-container .key.active");
+  return Array.from(activeKeys).map(key => key.dataset.note);
+}
+
+
+function updateChart() {
+  const selectedNotes = getSelectedNotes();
+  const r = document.getElementById("results");
+  r.innerHTML = "";
+
+  if(selectedNotes.length === 0){
+    r.textContent = "Please select at least one note!";
+    return;
+  }
+
+  const possibleChords = findChordsFromNotes(selectedNotes);
+  const chordHeading = document.createElement("h2");
+  chordHeading.textContent = "Possible Chord(s):";
+  r.appendChild(chordHeading);
+
+  if(possibleChords.length === 0){
+    const none = document.createElement("p");
+    none.textContent = "No exact chord match found.";
+    r.appendChild(none);
+  } else {
+    const chordP = document.createElement("p");
+    chordP.textContent = possibleChords.join(", ");
+    r.appendChild(chordP);
+  }
+
+  const matchingKeys = [];
+  for(let k in MAJOR_KEYS){
+    const keyInfo = MAJOR_KEYS[k];
+    const selectedPCs = selectedNotes.map(noteToPC);
+    if(selectedPCs.every(pc => keyInfo.pcs.includes(pc))){
+      matchingKeys.push(k);
+    }
+  }
+
+  if(matchingKeys.length === 0){
+    const noneKey = document.createElement("p");
+    noneKey.textContent = "No major key contains all of those notes.";
+    r.appendChild(noneKey);
+    return;
+  }
+
+  const tableHeading = document.createElement("h2");
+  tableHeading.textContent = "Diatonic Triads:";
+  r.appendChild(tableHeading);
+
+  const table = document.createElement("table");
+  const thead = document.createElement("thead");
+  const headRow = document.createElement("tr");
+
+  let th = document.createElement("th");
+  th.textContent = "Key";
+  headRow.appendChild(th);
+
+  const deg = ["I","II","III","IV","V","VI","VII"];
+  deg.forEach(d => {
+    const t = document.createElement("th");
+    t.textContent = d;
+    headRow.appendChild(t);
+  });
+
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+
+  const tbody = document.createElement("tbody");
+  const chordsByRoot = groupChordsByRoot(possibleChords);
+
+  matchingKeys.forEach(k => {
+    const row = document.createElement("tr");
+    const keyTd = document.createElement("td");
+    keyTd.textContent = k;
+    row.appendChild(keyTd);
+
+    const triads = getDiatonicTriads(k);
+    const keyPCs = MAJOR_KEYS[k].pcs;
+
+    triads.forEach(tn => {
+      const td = document.createElement("td");
+      td.textContent = tn;
+      const rt = tn.split(" ")[0];
+      if(chordsByRoot[rt]){
+        const matched = [];
+        chordsByRoot[rt].forEach(ch => {
+          const chPCs = getChordPitchClasses(ch);
+          if(chordFitsKey(chPCs, keyPCs)){
+            matched.push(ch);
+          }
+        });
+        if(matched.length > 0){
+          td.classList.add("highlight");
+          td.textContent = matched.join(", ");
+        }
+      }
+      row.appendChild(td);
+    });
+
+    tbody.appendChild(row);
+  });
+
+  table.appendChild(tbody);
+  r.appendChild(table);
+}
+
+function findChordsFromNotes(selectedNotes){
+  const pcs = [...new Set(selectedNotes.map(noteToPC))].sort((a,b)=>a-b);
+  if(pcs.length < 2) return [];
+
+  const found = new Set();
+  for(let i=0; i<pcs.length; i++){
+    const r = pcs[i];
+    const intervals = pcs.map(x=> {
+      let d = x - r;
+      if(d < 0) d += 12;
+      return d;
+    }).sort((a,b)=>a-b);
+
+    for(let t in CHORD_DEFINITIONS){
+      if(arraysEqual(intervals, CHORD_DEFINITIONS[t])){
+        found.add(pcToNote(r) + " " + t);
+      }
+    }
+  }
+  return Array.from(found);
+}
+
+function getChordPitchClasses(chName){
+  const [root, ...rest] = chName.split(" ");
+  const type = rest.join(" ");
+  const r = noteToPC(root);
+  const ints = CHORD_DEFINITIONS[type];
+  if(!ints) return [];
+  return ints.map(i => (r + i) % 12).sort((a,b)=>a-b);
+}
+
+function chordFitsKey(chPCs, keyPCs){
+  return chPCs.every(pc => keyPCs.includes(pc));
+}
+
+function groupChordsByRoot(chNames){
+  const m = {};
+  chNames.forEach(n => {
+    const r = n.split(" ")[0];
+    if(!m[r]) m[r] = [];
+    m[r].push(n);
+  });
+  return m;
+}
+
+const allKeys = document.querySelectorAll(".keyboard-container .key");
+allKeys.forEach(key => {
+  key.addEventListener("click", () => {
+    key.classList.toggle("active");
+    updateChart();
+  });
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>3D Pixel Art</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background-color: #666666;
+      font-family: sans-serif;
+    }
+    #controls {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 250px;
+      height: 100%;
+      background: #FFFF;
+      padding: 10px;
+      box-sizing: border-box;
+      z-index: 10;
+      overflow-y: auto;
+      border-right: 2px solid #444;
+    }
+    #controls label {
+      display: block;
+      margin-top: 10px;
+    }
+    #controls select,
+    #controls input {
+      width: 100%;
+      margin-top: 5px;
+      margin-bottom: 10px;
+      box-sizing: border-box;
+    }
+    #canvasContainer {
+      margin-left: 270px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100%;
+    }
+    #pixelCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      opacity: 0;
+      pointer-events: none;
+    }
+    #displayCanvas {
+      position: relative;
+      cursor: grab;
+      image-rendering: pixelated;
+      -ms-interpolation-mode: nearest-neighbor;
+    }
+    #displayCanvas:active {
+      cursor: grabbing;
+    }
+  </style>
+</head>
+<body>
+  <div id="controls">
+    <label for="shapeType">Shape:</label>
+    <select id="shapeType">
+      <option value="cube">Cube</option>
+      <option value="sphere" selected>Sphere</option>
+    </select>
+    <label for="shapeColor">Shape Color:</label>
+    <input type="color" id="shapeColor" value="#7ac6ff" />
+    <label for="lightColor">Light Color:</label>
+    <input type="color" id="lightColor" value="#ffffff" />
+    <label for="lightIntensity">Intensity:</label>
+    <input type="range" id="lightIntensity" min="0" max="2" step="0.01" value="1" />
+    <label for="lightX">Light X:</label>
+    <input type="range" id="lightX" min="-10" max="10" step="0.1" value="5" />
+    <label for="lightY">Light Y:</label>
+    <input type="range" id="lightY" min="-10" max="10" step="0.1" value="5" />
+    <label for="lightZ">Light Z:</label>
+    <input type="range" id="lightZ" min="-10" max="10" step="0.1" value="5" />
+    <label for="cameraZ">Camera Distance:</label>
+    <input type="range" id="cameraZ" min="2" max="20" step="0.1" value="5" />
+    <label for="resolution">Resolution:</label>
+    <select id="resolution">
+      <option value="16">16×16</option>
+      <option value="32">32×32</option>
+      <option value="64" selected>64×64</option>
+      <option value="128">128×128</option>
+    </select>
+    <label for="scale">Scale:</label>
+    <input type="number" id="scale" value="10" min="1" max="100" />
+    <label for="bitDepth">Bit Depth:</label>
+    <select id="bitDepth">
+      <option value="16">16‑bit (65,536 colors)</option>
+      <option value="12">12‑bit (4,096 colors)</option>
+      <option value="8" selected>8‑bit (256 colors)</option>
+      <option value="4">4‑bit (16 colors)</option>
+      <option value="2">2‑bit (4 tinted shades)</option>
+      <option value="1">1‑bit (2 tinted colors)</option>
+    </select>
+    <label for="dither">Dithering:</label>
+    <select id="dither">
+      <option value="off">Off</option>
+      <option value="on" selected>On</option>
+    </select>
+    <label for="bgColor">Background Color (Body):</label>
+    <input type="range" id="bgColor" min="0" max="255" step="1" value="153" />
+  </div>
+  <div id="canvasContainer">
+    <canvas id="pixelCanvas"></canvas>
+    <canvas id="displayCanvas"></canvas>
+  </div>
+  <script src="./three.js"></script>
+  <script>
+    let scene, camera, renderer, mesh, light;
+    let isDragging = false;
+    let prevMouse = { x: 0, y: 0 };
+    const shapeTypeEl = document.getElementById('shapeType');
+    const shapeColorEl = document.getElementById('shapeColor');
+    const resolutionEl = document.getElementById('resolution');
+    const scaleEl = document.getElementById('scale');
+    const bitDepthEl = document.getElementById('bitDepth');
+    const ditherEl = document.getElementById('dither');
+    const lightColorEl = document.getElementById('lightColor');
+    const lightIntensityEl = document.getElementById('lightIntensity');
+    const lightXEl = document.getElementById('lightX');
+    const lightYEl = document.getElementById('lightY');
+    const lightZEl = document.getElementById('lightZ');
+    const cameraZEl = document.getElementById('cameraZ');
+    const bgColorEl = document.getElementById('bgColor');
+    const pixelCanvas = document.getElementById('pixelCanvas');
+    const displayCanvas = document.getElementById('displayCanvas');
+    const displayCtx = displayCanvas.getContext('2d');
+    const smallCanvas = document.createElement('canvas');
+    const smallCtx = smallCanvas.getContext('2d');
+    function hexToRGB(hex) {
+      hex = hex.replace('#', '');
+      return [parseInt(hex.substring(0, 2), 16), parseInt(hex.substring(2, 4), 16), parseInt(hex.substring(4, 6), 16)];
+    }
+    function generate2BitPalette(baseColor) {
+      let palette = [];
+      for (let i = 0; i < 4; i++) {
+        let t = i / 3;
+        palette.push([Math.round(baseColor[0] * t), Math.round(baseColor[1] * t), Math.round(baseColor[2] * t)]);
+      }
+      return palette;
+    }
+    function generate1BitPalette(baseColor) {
+      return [[0, 0, 0], baseColor];
+    }
+    function quantizePixel(r, g, b, bitDepth) {
+      if (bitDepth === "16") {
+        return [(r >> 3) << 3, (g >> 2) << 2, (b >> 3) << 3];
+      } else if (bitDepth === "12") {
+        return [(r >> 4) << 4, (g >> 4) << 4, (b >> 4) << 4];
+      } else if (bitDepth === "8") {
+        return [(r >> 5) << 5, (g >> 5) << 5, (b >> 6) << 6];
+      } else if (bitDepth === "4") {
+        return [(r >> 7) << 7, (g >> 7) << 7, (b >> 7) << 7];
+      }
+      return [r, g, b];
+    }
+    function clamp(value) {
+      return Math.max(0, Math.min(255, value));
+    }
+    function processSmallImage() {
+      const bitDepth = bitDepthEl.value;
+      const ditherOn = ditherEl.value === "on";
+      const width = smallCanvas.width;
+      const height = smallCanvas.height;
+      const imageData = smallCtx.getImageData(0, 0, width, height);
+      const data = imageData.data;
+      if (bitDepth === "2" || bitDepth === "1") {
+        const baseColor = hexToRGB(shapeColorEl.value);
+        let palette = (bitDepth === "2") ? generate2BitPalette(baseColor) : generate1BitPalette(baseColor);
+        if (ditherOn) {
+          if (bitDepth === "2") {
+            for (let y = 0; y < height; y++) {
+              for (let x = 0; x < width; x++) {
+                const idx = (y * width + x) * 4;
+                let L = 0.299 * data[idx] + 0.587 * data[idx+1] + 0.114 * data[idx+2];
+                let newBin = Math.round(L / 255 * 3);
+                let quantL = newBin * (255/3);
+                let err = L - quantL;
+                data[idx] = palette[newBin][0];
+                data[idx+1] = palette[newBin][1];
+                data[idx+2] = palette[newBin][2];
+                function addError(nx, ny, factor) {
+                  if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                    const nIdx = (ny * width + nx) * 4;
+                    data[nIdx] = clamp(data[nIdx] + err * factor);
+                    data[nIdx+1] = clamp(data[nIdx+1] + err * factor);
+                    data[nIdx+2] = clamp(data[nIdx+2] + err * factor);
+                  }
+                }
+                addError(x + 1, y, 7/16);
+                addError(x - 1, y + 1, 3/16);
+                addError(x, y + 1, 5/16);
+                addError(x + 1, y + 1, 1/16);
+              }
+            }
+          } else if (bitDepth === "1") {
+            for (let y = 0; y < height; y++) {
+              for (let x = 0; x < width; x++) {
+                const idx = (y * width + x) * 4;
+                let L = 0.299 * data[idx] + 0.587 * data[idx+1] + 0.114 * data[idx+2];
+                let newBin = L < 128 ? 0 : 1;
+                let quantL = newBin === 0 ? 0 : 255;
+                let err = L - quantL;
+                data[idx] = palette[newBin][0];
+                data[idx+1] = palette[newBin][1];
+                data[idx+2] = palette[newBin][2];
+                function addError(nx, ny, factor) {
+                  if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                    const nIdx = (ny * width + nx) * 4;
+                    data[nIdx] = clamp(data[nIdx] + err * factor);
+                    data[nIdx+1] = clamp(data[nIdx+1] + err * factor);
+                    data[nIdx+2] = clamp(data[nIdx+2] + err * factor);
+                  }
+                }
+                addError(x + 1, y, 7/16);
+                addError(x - 1, y + 1, 3/16);
+                addError(x, y + 1, 5/16);
+                addError(x + 1, y + 1, 1/16);
+              }
+            }
+          }
+        } else {
+          if (bitDepth === "2") {
+            for (let i = 0; i < data.length; i += 4) {
+              let L = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
+              let bin = Math.floor(L / 64);
+              if (bin > 3) bin = 3;
+              data[i] = palette[bin][0];
+              data[i+1] = palette[bin][1];
+              data[i+2] = palette[bin][2];
+            }
+          } else if (bitDepth === "1") {
+            for (let i = 0; i < data.length; i += 4) {
+              let L = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
+              let bin = L < 128 ? 0 : 1;
+              data[i] = palette[bin][0];
+              data[i+1] = palette[bin][1];
+              data[i+2] = palette[bin][2];
+            }
+          }
+        }
+      } else {
+        if (ditherOn) {
+          for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+              const idx = (y * width + x) * 4;
+              const oldR = data[idx], oldG = data[idx+1], oldB = data[idx+2];
+              const [newR, newG, newB] = quantizePixel(oldR, oldG, oldB, bitDepth);
+              data[idx] = newR;
+              data[idx+1] = newG;
+              data[idx+2] = newB;
+              const errR = oldR - newR;
+              const errG = oldG - newG;
+              const errB = oldB - newB;
+              function addError(nx, ny, factor) {
+                if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                  const nIdx = (ny * width + nx) * 4;
+                  data[nIdx] = clamp(data[nIdx] + errR * factor);
+                  data[nIdx+1] = clamp(data[nIdx+1] + errG * factor);
+                  data[nIdx+2] = clamp(data[nIdx+2] + errB * factor);
+                }
+              }
+              addError(x + 1, y, 7/16);
+              addError(x - 1, y + 1, 3/16);
+              addError(x, y + 1, 5/16);
+              addError(x + 1, y + 1, 1/16);
+            }
+          }
+        } else {
+          for (let i = 0; i < data.length; i += 4) {
+            const [qR, qG, qB] = quantizePixel(data[i], data[i+1], data[i+2], bitDepth);
+            data[i] = qR;
+            data[i+1] = qG;
+            data[i+2] = qB;
+          }
+        }
+      }
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i+3] !== 0) {
+          data[i+3] = 255;
+        }
+      }
+      smallCtx.putImageData(imageData, 0, 0);
+    }
+    function initScene() {
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
+      camera.position.set(0, 0, parseFloat(cameraZEl.value));
+      renderer = new THREE.WebGLRenderer({ canvas: pixelCanvas, alpha: true, antialias: true });
+      renderer.setClearColor(0x000000, 0);
+      light = new THREE.DirectionalLight(0xffffff, 1);
+      light.position.set(5, 5, 5);
+      scene.add(light);
+      mesh = createMesh(shapeTypeEl.value, parseInt(shapeColorEl.value.replace('#','0x')));
+      scene.add(mesh);
+      displayCanvas.addEventListener('mousedown', onMouseDown);
+      displayCanvas.addEventListener('mousemove', onMouseMove);
+      displayCanvas.addEventListener('mouseup', onMouseUp);
+      displayCanvas.addEventListener('mouseleave', onMouseUp);
+      animate();
+    }
+    function createMesh(shape, color) {
+      let geom;
+      const mat = new THREE.MeshPhongMaterial({ color: color, transparent: false, opacity: 1 });
+      if (shape === 'sphere') {
+        geom = new THREE.SphereGeometry(1, 32, 32);
+      } else {
+        geom = new THREE.BoxGeometry(1, 1, 1);
+      }
+      return new THREE.Mesh(geom, mat);
+    }
+    function onMouseDown(e) {
+      isDragging = true;
+      prevMouse.x = e.clientX;
+      prevMouse.y = e.clientY;
+    }
+    function onMouseMove(e) {
+      if (!isDragging) return;
+      const deltaX = e.clientX - prevMouse.x;
+      const deltaY = e.clientY - prevMouse.y;
+      const rotSpeed = 0.01;
+      mesh.rotation.y += deltaX * rotSpeed;
+      mesh.rotation.x += deltaY * rotSpeed;
+      prevMouse.x = e.clientX;
+      prevMouse.y = e.clientY;
+    }
+    function onMouseUp(e) {
+      isDragging = false;
+    }
+    function animate() {
+      requestAnimationFrame(animate);
+      renderer.render(scene, camera);
+      smallCanvas.width = pixelCanvas.width;
+      smallCanvas.height = pixelCanvas.height;
+      smallCtx.drawImage(pixelCanvas, 0, 0);
+      processSmallImage();
+      const scale = parseInt(scaleEl.value, 10);
+      const finalW = smallCanvas.width * scale;
+      const finalH = smallCanvas.height * scale;
+      displayCanvas.width = finalW;
+      displayCanvas.height = finalH;
+      displayCtx.imageSmoothingEnabled = false;
+      displayCtx.webkitImageSmoothingEnabled = false;
+      displayCtx.mozImageSmoothingEnabled = false;
+      displayCtx.drawImage(smallCanvas, 0, 0, smallCanvas.width, smallCanvas.height, 0, 0, finalW, finalH);
+    }
+    function updateScene() {
+      let currentRotation = new THREE.Euler();
+      if (mesh) {
+        currentRotation.copy(mesh.rotation);
+        scene.remove(mesh);
+      }
+      mesh = createMesh(shapeTypeEl.value, parseInt(shapeColorEl.value.replace('#','0x')));
+      mesh.rotation.copy(currentRotation);
+      scene.add(mesh);
+      const resolution = parseInt(resolutionEl.value, 10);
+      renderer.setSize(resolution, resolution, false);
+      camera.aspect = 1;
+      camera.updateProjectionMatrix();
+    }
+    function updateLight() {
+      const lightColorValue = parseInt(lightColorEl.value.replace('#','0x'));
+      light.color.setHex(lightColorValue);
+      light.intensity = parseFloat(lightIntensityEl.value);
+      light.position.set(parseFloat(lightXEl.value), parseFloat(lightYEl.value), parseFloat(lightZEl.value));
+    }
+    function updateCamera() {
+      camera.position.z = parseFloat(cameraZEl.value);
+      camera.updateProjectionMatrix();
+    }
+    function updateBackgroundColor() {
+      const sliderVal = parseInt(bgColorEl.value, 10);
+      const grayVal = 255 - sliderVal;
+      document.body.style.backgroundColor = `rgb(${grayVal}, ${grayVal}, ${grayVal})`;
+    }
+    shapeTypeEl.addEventListener('input', updateScene);
+    shapeColorEl.addEventListener('input', updateScene);
+    resolutionEl.addEventListener('input', updateScene);
+    scaleEl.addEventListener('input', updateScene);
+    bitDepthEl.addEventListener('input', updateScene);
+    ditherEl.addEventListener('input', updateScene);
+    lightColorEl.addEventListener('input', updateLight);
+    lightIntensityEl.addEventListener('input', updateLight);
+    lightXEl.addEventListener('input', updateLight);
+    lightYEl.addEventListener('input', updateLight);
+    lightZEl.addEventListener('input', updateLight);
+    cameraZEl.addEventListener('input', updateCamera);
+    bgColorEl.addEventListener('input', updateBackgroundColor);
+    initScene();
+    updateScene();
+    updateLight();
+    updateCamera();
+    updateBackgroundColor();
+  </script>
+</body>
+</html>

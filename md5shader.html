@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>WGSL MD5</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      width: 100%;
+      font-family: monospace;
+    }
+
+    #newVersionBanner {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      background-color: #004400;
+      color: #00ff00;
+      text-align: center;
+      padding: 0.5rem;
+      font-family: monospace;
+      z-index: 1000;
+    }
+
+    #appContainer {
+      background-color: rgba(0, 20, 0, 0.85);
+      border: 1px solid #00ff00;
+      border-radius: 10px;
+      box-shadow: 0 0 20px rgba(0, 255, 0, 0.4), inset 0 0 10px rgba(0, 255, 0, 0.1);
+      padding: 2rem;
+      max-width: 800px;
+      width: 90%;
+      box-sizing: border-box;
+      text-align: center;
+      margin-top: 60px;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: #000000;
+      background-image: 
+        linear-gradient(rgba(0, 20, 0, 0.8), rgba(0, 0, 0, 0.8)),
+        repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0, 255, 0, 0.05) 2px, rgba(0, 255, 0, 0.05) 4px);
+    }
+
+    h1 {
+      margin-top: 0;
+      margin-bottom: 1rem;
+      font-size: 1.8rem;
+      color: #00ff00;
+      text-shadow: 0 0 5px rgba(0, 255, 0, 0.7);
+      letter-spacing: 2px;
+    }
+
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+
+    label {
+      font-weight: bold;
+      margin-right: 0.5rem;
+      min-width: 150px;
+      text-align: right;
+      color: #00cc00;
+    }
+
+    input[type="text"],
+    input[type="number"] {
+      width: 280px;
+      max-width: 100%;
+      padding: 0.4rem;
+      margin: 0.2rem 0;
+      font-family: monospace;
+      border: 1px solid #00cc00;
+      border-radius: 4px;
+      box-sizing: border-box;
+      background-color: rgba(0, 20, 0, 0.7);
+      color: #00ff00;
+      box-shadow: inset 0 0 5px rgba(0, 255, 0, 0.2);
+    }
+
+    button {
+      padding: 0.6rem 1.2rem;
+      font-size: 1rem;
+      font-family: monospace;
+      cursor: pointer;
+      background-color: rgba(0, 90, 0, 0.8);
+      color: #00ff00;
+      border: 1px solid #00ff00;
+      border-radius: 4px;
+      transition: all 0.3s ease;
+      text-shadow: 0 0 5px rgba(0, 255, 0, 0.7);
+      box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
+    }
+
+    button:hover {
+      background-color: rgba(0, 100, 0, 0.9);
+      box-shadow: 0 0 15px rgba(0, 255, 0, 0.5);
+    }
+
+    #stopBtn:disabled,
+    #startBtn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    #stopBtn {
+      background-color: rgba(0, 90, 0, 0.8);
+      border-color: #00ff00;
+      color: #00ff00;
+      text-shadow: 0 0 5px rgba(0, 255, 0, 0.7);
+      box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
+    }
+
+    #stopBtn:hover {
+      background-color: rgba(0, 100, 0, 0.9);
+      box-shadow: 0 0 15px rgba(0, 255, 0, 0.5);
+    }
+
+    #logArea {
+      width: 100%;
+      height: 300px;
+      margin: 1rem auto 0 auto;
+      font-family: monospace;
+      border: 1px solid #00cc00;
+      border-radius: 4px;
+      box-sizing: border-box;
+      display: block;
+      white-space: pre;
+      overflow-x: auto;
+      background-color: rgba(0, 10, 0, 0.8);
+      color: #00ff00;
+      padding: 10px;
+      box-shadow: inset 0 0 10px rgba(0, 255, 0, 0.2);
+      resize: none;
+      
+      scrollbar-width: thin;
+      scrollbar-color: #00cc00 rgba(0, 20, 0, 0.5);
+    }
+
+    #logArea::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+
+    #logArea::-webkit-scrollbar-track {
+      background: rgba(0, 20, 0, 0.5);
+      border-radius: 4px;
+    }
+
+    #logArea::-webkit-scrollbar-thumb {
+      background: #00cc00;
+      border-radius: 4px;
+      border: 1px solid #00ff00;
+      box-shadow: 0 0 5px rgba(0, 255, 0, 0.3);
+    }
+
+    #logArea::-webkit-scrollbar-thumb:hover {
+      background: #00ff00;
+    }
+  </style>
+</head>
+<body>
+  <div id="newVersionBanner">
+    <a href="./webgpucat.html" target="_blank" style="color: #00ff00; text-decoration: none;">Try the new version!</a>
+  </div>
+
+  <div id="appContainer">
+    <h1>WGSL MD5</h1>
+
+    <div class="row">
+      <label>MD5 Hash (hex):</label>
+      <input id="hashInput" type="text" value="fe4c4f8ab7064495458f9480eb4af629" />
+    </div>
+
+    <div class="row">
+      <label>Character Set:</label>
+      <input id="charSetInput" type="text" value="abcdefghijklmnopqrstuvwxyz0123456789" />
+    </div>
+
+    <div class="row">
+      <div style="margin-right: 20px;">
+        <label style="width: 100px;">Min Length:</label>
+        <input id="minLenInput" type="number" value="1" style="width: 80px;" />
+      </div>
+      <div>
+        <label style="width: 100px;">Max Length:</label>
+        <input id="maxLenInput" type="number" value="22" style="width: 80px;" />
+      </div>
+    </div>
+
+    <div class="row">
+      <label>Prefix:</label>
+      <input id="userPrefixInput" type="text" value="superstrongpass" />
+    </div>
+
+    <div class="row">
+      <button id="startBtn">Start</button>
+      <button id="stopBtn" disabled style="margin-left: 10px;">Stop</button>
+    </div>
+
+    <textarea id="logArea" readonly></textarea>
+  </div>
+
+  <script type="module">
+    function logMsg(msg) {
+      console.log(msg);
+      const area = document.getElementById("logArea");
+      area.value += msg + "\n";
+      area.scrollTop = area.scrollHeight;
+    }
+
+    function checkWebGPU() {
+      if (!('gpu' in navigator)) {
+        throw new Error("WebGPU is not supported in this browser.");
+      }
+    }
+
+    let prefixMaskWGSL = null;
+    let stopRequested = false;
+
+    async function loadShader() {
+      const response = await fetch('md5shader.wgsl');
+      if (!response.ok) {
+        throw new Error(`Failed to load shader: ${response.status} ${response.statusText}`);
+      }
+      prefixMaskWGSL = await response.text();
+    }
+
+    function md5HexToWordsLE(hexStr) {
+      if (hexStr.length !== 32) {
+        throw new Error("MD5 must be 32 hex chars.");
+      }
+      function parseLE(pos) {
+        const b0 = parseInt(hexStr.substring(pos + 0, pos + 2), 16);
+        const b1 = parseInt(hexStr.substring(pos + 2, pos + 4), 16);
+        const b2 = parseInt(hexStr.substring(pos + 4, pos + 6), 16);
+        const b3 = parseInt(hexStr.substring(pos + 6, pos + 8), 16);
+        return (b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)) >>> 0;
+      }
+      return [
+        parseLE(0),
+        parseLE(8),
+        parseLE(16),
+        parseLE(24),
+      ];
+    }
+
+    async function crackMD5_prefixMask(hashHex, charSet, maxLen, minLen = 1, userPrefix = "") {
+      if (!prefixMaskWGSL) {
+        await loadShader();
+      }
+      
+      const dispatchWidth = 256;
+      const threadsPerGroup = 256;
+      const maxRowsPerDispatch = 65535;
+      const singlePassThreshold = BigInt(4294967296);
+
+      checkWebGPU();
+
+      const adapter = await navigator.gpu.requestAdapter();
+      if (!adapter) throw new Error("No WebGPU adapter found.");
+      const device = await adapter.requestDevice();
+      const queue = device.queue;
+
+      const module = device.createShaderModule({ code: prefixMaskWGSL });
+      const pipeline = device.createComputePipeline({
+        layout: "auto",
+        compute: { module, entryPoint: "main" },
+      });
+
+      const md5Words = md5HexToWordsLE(hashHex);
+      const expectedData = new Uint32Array(md5Words);
+
+      const charCodes = new Uint32Array(charSet.length);
+      for (let i = 0; i < charSet.length; i++) {
+        charCodes[i] = charSet.charCodeAt(i) & 0xff;
+      }
+      const charSetBuffer = device.createBuffer({
+        size: charCodes.byteLength,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+      });
+      queue.writeBuffer(charSetBuffer, 0, charCodes);
+
+      const maxPrefixBytes = 64;
+      const prefixBuffer = device.createBuffer({
+        size: maxPrefixBytes * 4,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+      });
+
+      const expectedBuffer = device.createBuffer({
+        size: expectedData.byteLength,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+      });
+      queue.writeBuffer(expectedBuffer, 0, expectedData);
+
+      const configSize = 8 * 4;
+      const configBuffer = device.createBuffer({
+        size: configSize,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+      });
+
+      const foundBuffer = device.createBuffer({
+        size: 4,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC
+      });
+
+      const bindGroup = device.createBindGroup({
+        layout: pipeline.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: { buffer: charSetBuffer } },
+          { binding: 1, resource: { buffer: prefixBuffer } },
+          { binding: 2, resource: { buffer: expectedBuffer } },
+          { binding: 3, resource: { buffer: configBuffer } },
+          { binding: 4, resource: { buffer: foundBuffer } },
+        ],
+      });
+
+      const ROW_START_OFFSET = 20;
+
+      function writeAllStaticConfig({
+        prefixLength, totalLength, suffixRange, charSetLength, dispatchWidth, rowStart
+      }) {
+        const data = new ArrayBuffer(configSize);
+        const dv = new DataView(data);
+        dv.setUint32(0, prefixLength, true);
+        dv.setUint32(4, totalLength, true);
+        dv.setUint32(8, suffixRange, true);
+        dv.setUint32(12, charSetLength, true);
+        dv.setUint32(16, dispatchWidth, true);
+        dv.setUint32(20, rowStart, true);
+        dv.setUint32(24, 0, true);
+        dv.setUint32(28, 0, true);
+        queue.writeBuffer(configBuffer, 0, data);
+      }
+
+      function updateRowStart(value) {
+        const data = new ArrayBuffer(4);
+        new DataView(data).setUint32(0, value, true);
+        queue.writeBuffer(configBuffer, ROW_START_OFFSET, data);
+      }
+
+      function resetFoundIndex() {
+        queue.writeBuffer(foundBuffer, 0, new Uint32Array([0xffffffff]));
+      }
+
+      async function readFoundIndex() {
+        const readback = device.createBuffer({
+          size: 4,
+          usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
+        });
+        const enc = device.createCommandEncoder();
+        enc.copyBufferToBuffer(foundBuffer, 0, readback, 0, 4);
+        device.queue.submit([enc.finish()]);
+        await readback.mapAsync(GPUMapMode.READ);
+        const val = new DataView(readback.getMappedRange()).getUint32(0, true);
+        readback.unmap();
+        return val === 0xffffffff ? -1 : val;
+      }
+
+      function writePrefix(prefixBytes) {
+        const tmp = new Uint32Array(prefixBytes.length);
+        for (let i = 0; i < prefixBytes.length; i++) {
+          tmp[i] = prefixBytes[i] & 0xff;
+        }
+        queue.writeBuffer(prefixBuffer, 0, tmp);
+      }
+
+      function indexToString(idx, length, charSet) {
+        let result = "";
+        const base = BigInt(charSet.length);
+        let bigIdx = BigInt(idx);
+        for (let i = 0; i < length; i++) {
+          const digit = Number(bigIdx % base);
+          bigIdx = bigIdx / base;
+          result += charSet[digit];
+        }
+        return result;
+      }
+
+      async function runOnePrefix(prefixBytes, prefixLen, totalLen) {
+        if (stopRequested) return -1;
+        
+        writePrefix(prefixBytes);
+        const suffixLen = totalLen - prefixLen;
+        const suffixRange = Math.pow(charSet.length, suffixLen);
+
+        resetFoundIndex();
+
+        writeAllStaticConfig({
+          prefixLength: prefixLen,
+          totalLength: totalLen,
+          suffixRange,
+          charSetLength: charSet.length,
+          dispatchWidth,
+          rowStart: 0
+        });
+
+        const rowWidth = dispatchWidth * threadsPerGroup;
+        let rowsNeeded = Math.ceil(suffixRange / rowWidth);
+
+        const cmd = device.createCommandEncoder();
+        const pass = cmd.beginComputePass();
+        pass.setPipeline(pipeline);
+        pass.setBindGroup(0, bindGroup);
+
+        while (rowsNeeded > 0) {
+          const subRows = Math.min(rowsNeeded, maxRowsPerDispatch);
+          const rowStart = Math.ceil(suffixRange / rowWidth) - rowsNeeded;
+
+          updateRowStart(rowStart);
+          pass.dispatchWorkgroups(dispatchWidth, subRows, 1);
+
+          rowsNeeded -= subRows;
+        }
+
+        pass.end();
+        queue.submit([cmd.finish()]);
+        await queue.onSubmittedWorkDone();
+
+        return await readFoundIndex();
+      }
+
+      function getMaxSuffixLen(charSetLength) {
+        const maxRange = 0xffffffffn;
+        let sLen = 0;
+        let combos = 1n;
+        while (true) {
+          let nextCombos = combos * BigInt(charSetLength);
+          if (nextCombos > maxRange) break;
+          combos = nextCombos;
+          sLen++;
+          if (sLen > 64) break;
+        }
+        return sLen;
+      }
+      const maxPossibleSuffixLen = getMaxSuffixLen(charSet.length);
+
+      const userPrefixBytes = new TextEncoder().encode(userPrefix);
+      const userPrefixLen = userPrefixBytes.length;
+
+      for (let length = minLen; length <= maxLen; length++) {
+        if (stopRequested) {
+          logMsg("Operation stopped by user.");
+          return null;
+        }
+        
+        if (userPrefixLen > length) {
+          continue;
+        }
+
+        const totalCombos = BigInt(charSet.length) ** BigInt(length - userPrefixLen);
+        logMsg(`Length ${length} (including userPrefixLen=${userPrefixLen}): total combos = ${totalCombos}`);
+
+        if (totalCombos <= singlePassThreshold) {
+          logMsg(`  Single GPU pass (<= threshold).`);
+          const foundIndex = await runOnePrefix(userPrefixBytes, userPrefixLen, length);
+          if (foundIndex >= 0) {
+            const suffixStr = indexToString(foundIndex, length - userPrefixLen, charSet);
+            const pwd = userPrefix + suffixStr;
+            logMsg(`FOUND match @ index=${foundIndex}, password="${pwd}"`);
+            return pwd;
+          }
+        } else {
+          const suffixLen = Math.min(length - userPrefixLen, maxPossibleSuffixLen);
+
+          if (suffixLen < 1) {
+            logMsg(`  Cannot handle length=${length} with suffixLen < 1. Skipping...`);
+            continue;
+          }
+
+          const enumeratedPrefixLen = length - userPrefixLen - suffixLen;
+          const prefixSpace = Math.pow(charSet.length, enumeratedPrefixLen);
+
+          logMsg(`  Splitting: userPrefixLen=${userPrefixLen}, enumeratedPrefixLen=${enumeratedPrefixLen}, suffixLen=${suffixLen}`);
+          logMsg(`  prefixSpace = ${prefixSpace} (CPU enumeration)`);
+
+          for (let p = 0; p < prefixSpace; p++) {
+            if (stopRequested) {
+              logMsg("Operation stopped by user.");
+              return null;
+            }
+            
+            const cpuPrefixStr = indexToString(p, enumeratedPrefixLen, charSet);
+            const prefixBytes = new Uint8Array(userPrefixLen + enumeratedPrefixLen);
+
+            prefixBytes.set(userPrefixBytes, 0);
+            for (let i = 0; i < enumeratedPrefixLen; i++) {
+              prefixBytes[userPrefixLen + i] = cpuPrefixStr.charCodeAt(i);
+            }
+
+            const startTime = performance.now();
+            const foundIndex = await runOnePrefix(prefixBytes, userPrefixLen + enumeratedPrefixLen, length);
+            const endTime = performance.now();
+            const elapsedMs = endTime - startTime;
+
+            const hashesProcessed = Math.pow(charSet.length, suffixLen);
+            const hashRate = hashesProcessed / (elapsedMs / 1000) / 1e6;
+
+            logMsg(
+              `    Prefix #${p} of ${prefixSpace}: "${cpuPrefixStr}"` +
+              ` => ${hashRate.toFixed(2)} MH/s, GPU time = ${elapsedMs.toFixed(2)} ms`
+            );
+
+            if (foundIndex >= 0) {
+              const suffixStr = indexToString(foundIndex, suffixLen, charSet);
+              const fullPwd = userPrefix + cpuPrefixStr + suffixStr;
+              logMsg(`FOUND match: prefixIdx=${p}, suffixIdx=${foundIndex}, password="${fullPwd}"`);
+              return fullPwd;
+            }
+          }
+        }
+      }
+
+      logMsg("No match up to maxLen.");
+      return null;
+    }
+
+    document.getElementById("startBtn").addEventListener("click", async () => {
+      const logArea = document.getElementById("logArea");
+      logArea.value = "";
+      
+      stopRequested = false;
+      document.getElementById("startBtn").disabled = true;
+      document.getElementById("stopBtn").disabled = false;
+
+      try {
+        if (!prefixMaskWGSL) {
+          logMsg("Loading shader...");
+          await loadShader();
+        }
+        
+        const hash = document.getElementById("hashInput").value.trim();
+        const cs = document.getElementById("charSetInput").value;
+        const ml = parseInt(document.getElementById("maxLenInput").value);
+        const minl = parseInt(document.getElementById("minLenInput").value);
+        const userPrefix = document.getElementById("userPrefixInput").value;
+
+        await crackMD5_prefixMask(hash, cs, ml, minl, userPrefix);
+      } catch (err) {
+        logMsg("ERROR: " + err);
+        console.error(err);
+      } finally {
+        document.getElementById("startBtn").disabled = false;
+        document.getElementById("stopBtn").disabled = true;
+      }
+    });
+
+    document.getElementById("stopBtn").addEventListener("click", () => {
+      stopRequested = true;
+      logMsg("Stop requested. Finishing current batch...");
+      document.getElementById("stopBtn").disabled = true;
+    });
+  </script>
+
+</body>
+</html>

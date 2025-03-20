@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>AES-256 Encryption Toy</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background-color: #111; 
+      color: #eee;
+      font-family: sans-serif;
+    }
+    header {
+      background-color: #222;
+      padding: 10px;
+      text-align: center;
+    }
+    #ic3Box {
+      position: relative;
+      width: 600px; 
+      height: 400px;
+      border: 2px solid #888;
+      margin: 20px auto;
+      overflow: hidden;
+    }
+    .mouse-dot {
+      position: absolute;
+      width: 5px;
+      height: 5px;
+      background: black;
+      border-radius: 50%;
+      pointer-events: none;
+    }
+    #keyOutput {
+      font-family: monospace;
+      margin-top: 10px;
+    }
+    .styled-button {
+      margin: 5px;
+      padding: 10px 16px;
+      background-color: #333;
+      color: #eee;
+      border: none;
+      border-radius: 3px;
+      font-size: 1.1em;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+    }
+    .placeholder {
+      opacity: 0.5;
+      pointer-events: none;
+    }
+    #controls {
+      width: 600px;
+      margin: 20px auto;
+      background-color: #222;
+      border: 1px solid #444;
+      padding: 15px;
+      border-radius: 5px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>AES-256 Encryption Toy</h1>
+    <p>Touch the ic3box to collect entropy</p>
+  </header>
+  <div id="ic3Box"></div>
+  
+  <div id="controls">
+    <p>Randomness collected: <span id="entropyCount">0</span></p>
+    <button id="generateKeyBtn" class="styled-button">Generate Key</button>
+    <div id="keyOutput">0000000000000000000000000000000000000000000000000000000000000000</div>
+    <br>
+    <input type="file" id="fileInput" class="styled-button" /><br>
+    <button id="encryptBtn" class="styled-button placeholder">Encrypt File</button>
+    <button id="decryptBtn" class="styled-button placeholder">Decrypt File</button><br>
+    <a id="downloadLink" class="styled-button placeholder">Download</a>
+    <button id="copyLinkBtn" class="styled-button">Copy Link</button>
+  </div>
+
+  <script src="./simplex-noise.js"></script>
+  <script type="module">
+    let colorSchemesCollection = [];
+    let currentSchemeIndex = 0;
+    // Crameri, F. (2018). Scientific colour-maps. Zenodo. http://doi.org/10.5281/zenodo.1243862
+    // http://www.fabiocrameri.ch/colourmaps.php
+    // version 8.0.0
+    // Converted to json from https://github.com/JuliaGraphics/ColorSchemes.jl/blob/master/data/scicolor.jl
+    fetch('scicolors.json')
+      .then(res => res.json())
+      .then(data => {
+        for (const schemeName of Object.keys(data)) {
+
+            colorSchemesCollection.push({
+              name: schemeName,
+              ...data[schemeName]
+            });
+        }
+        shuffleArray(colorSchemesCollection);
+        initPerlinCanvas();
+        initColorTransition();
+      })
+      .catch(err => console.error('Error loading scicolors_numeric.json:', err));
+
+    function shuffleArray(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+    }
+
+    const ic3Box = document.getElementById('ic3Box');
+    const canvas = document.createElement('canvas');
+    const noiseOffsetX = Math.random() * 1000;
+    const noiseOffsetY = Math.random() * 1000;
+    canvas.width = ic3Box.clientWidth;
+    canvas.height = ic3Box.clientHeight;
+    canvas.style.position = 'absolute';
+    canvas.style.top = '0';
+    canvas.style.left = '0';
+    ic3Box.appendChild(canvas);
+
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const simplex = new SimplexNoise();
+
+    let oldColors = [];
+    let newColors = [];
+
+    let transitionAlpha = 0.0;
+    let transitionDuration = 2000;
+    let transitionStartTime = 0;
+    let isTransitioning = false;
+
+    function initColorTransition() {
+      if (colorSchemesCollection.length === 0) return;
+      oldColors = colorSchemesCollection[0].colors;
+      newColors = [...oldColors];
+
+      setInterval(() => {
+        scheduleNextScheme();
+      }, 5000);
+    }
+
+    function scheduleNextScheme() {
+      currentSchemeIndex = (currentSchemeIndex + 1) % colorSchemesCollection.length;
+      const nextScheme = colorSchemesCollection[currentSchemeIndex];
+      newColors = nextScheme.colors;
+      transitionAlpha = 0.0;
+      transitionStartTime = performance.now();
+      isTransitioning = true;
+    }
+
+    function initPerlinCanvas() {
+      requestAnimationFrame(drawPerlinFrame);
+    }
+
+    const desiredFPS = 30;
+    let lastFrameTime = 0;
+
+    function drawPerlinFrame(time) {
+      const elapsed = time - lastFrameTime;
+      const interval = 1000 / desiredFPS;
+      if (elapsed < interval) {
+        requestAnimationFrame(drawPerlinFrame);
+        return;
+      }
+      lastFrameTime = time;
+      const { width, height } = canvas;
+      const imageData = ctx.getImageData(0, 0, width, height);
+      const data = imageData.data;
+
+      if (isTransitioning) {
+        const elapsed = time - transitionStartTime;
+        transitionAlpha = Math.min(1, elapsed / transitionDuration);
+        if (transitionAlpha >= 1) {
+          isTransitioning = false;
+          oldColors = [...newColors];
+        }
+      }
+
+      const noiseScale = 0.01; 
+      const timeScale = 0.0005; 
+
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const n = (simplex.noise3D(
+            (x + noiseOffsetX) * noiseScale,
+            (y + noiseOffsetY) * noiseScale,
+            time * timeScale
+          ) + 1) / 2;
+
+          const [r, g, b] = getBlendedColor(n);
+          const i = 4 * (y * width + x);
+          data[i + 0] = r;
+          data[i + 1] = g;
+          data[i + 2] = b;
+          data[i + 3] = 255;
+        }
+      }
+
+      ctx.putImageData(imageData, 0, 0);
+      requestAnimationFrame(drawPerlinFrame);
+    }
+
+    function getBlendedColor(t) {
+      const size = oldColors.length;
+      const idx = Math.floor(t * (size - 1));
+
+      const oldC = oldColors[idx] || [0, 0, 0];
+      const newC = newColors[idx] || [0, 0, 0];
+
+      const R = (1 - transitionAlpha) * oldC[0] + transitionAlpha * newC[0];
+      const G = (1 - transitionAlpha) * oldC[1] + transitionAlpha * newC[1];
+      const B = (1 - transitionAlpha) * oldC[2] + transitionAlpha * newC[2];
+
+      return [R, G, B];
+    }
+
+    let mouseEntropyData = [];
+    let isCollecting = true;
+    const entropyCountElem = document.getElementById('entropyCount');
+
+    ic3Box.addEventListener('mousemove', handleMouseMove);
+    function handleMouseMove(e) {
+      if (!isCollecting) return;
+      const rect = ic3Box.getBoundingClientRect();
+      const offsetX = e.clientX - rect.left;
+      const offsetY = e.clientY - rect.top;
+
+      const dot = document.createElement('div');
+      dot.classList.add('mouse-dot');
+      dot.style.left = offsetX + 'px';
+      dot.style.top = offsetY + 'px';
+      ic3Box.appendChild(dot);
+      setTimeout(() => dot.remove(), 500);
+
+      const pixelData = ctx.getImageData(offsetX, offsetY, 1, 1).data;
+      const [r, g, b] = pixelData;
+      mouseEntropyData.push({
+        x: offsetX,
+        y: offsetY,
+        t: Date.now(),
+        color: [r, g, b]
+      });
+
+      entropyCountElem.textContent = mouseEntropyData.length;
+    }
+
+    const generateKeyBtn = document.getElementById('generateKeyBtn');
+    const keyOutput = document.getElementById('keyOutput');
+
+    generateKeyBtn.addEventListener('click', async () => {
+      const encoder = new TextEncoder();
+      const mouseEntropyString = JSON.stringify({ mouse: mouseEntropyData });
+      const rawBytes = encoder.encode(mouseEntropyString);
+
+      try {
+        const hashBuffer = await crypto.subtle.digest('SHA-256', rawBytes);
+        const keyHex = bufferToHex(hashBuffer);
+        keyOutput.textContent = keyHex;
+        window.location.hash = keyHex;
+      } catch (err) {
+        console.error(err);
+      }
+    });
+
+    const fileInput = document.getElementById('fileInput');
+    const encryptBtn = document.getElementById('encryptBtn');
+    const decryptBtn = document.getElementById('decryptBtn');
+    const downloadLink = document.getElementById('downloadLink');
+
+    fileInput.addEventListener('change', () => {
+      encryptBtn.classList.remove('placeholder');
+      decryptBtn.classList.remove('placeholder');
+    });
+
+    encryptBtn.addEventListener('click', async () => {
+      const file = fileInput.files[0];
+      if (!file) return alert('No file selected');
+
+      const keyHex = getKeyFromURL();
+      if (!keyHex) return alert('No key!');
+
+      try {
+        const key = await importAesKeyFromHex(keyHex);
+        const fileBuffer = await file.arrayBuffer();
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const encryptedBuffer = await crypto.subtle.encrypt(
+          { name: 'AES-GCM', iv },
+          key,
+          fileBuffer
+        );
+
+        const combined = new Uint8Array(iv.byteLength + encryptedBuffer.byteLength);
+        combined.set(iv, 0);
+        combined.set(new Uint8Array(encryptedBuffer), iv.byteLength);
+
+        const blob = new Blob([combined], { type: 'application/octet-stream' });
+        downloadLink.href = URL.createObjectURL(blob);
+        downloadLink.download = file.name + ".enc";
+        downloadLink.style.display = 'inline';
+        downloadLink.textContent = 'Download';
+        downloadLink.classList.remove('placeholder');
+        encryptBtn.classList.add('placeholder');
+        decryptBtn.classList.add('placeholder');
+      } catch (err) {
+        console.error(err);
+        alert('Encryption error: ' + err.message);
+      }
+    });
+
+    decryptBtn.addEventListener('click', async () => {
+      const file = fileInput.files[0];
+      if (!file) return alert('No file selected');
+
+      const keyHex = getKeyFromURL();
+      if (!keyHex) return alert('No key!');
+
+      try {
+        const key = await importAesKeyFromHex(keyHex);
+        const fileBytes = new Uint8Array(await file.arrayBuffer());
+        const iv = fileBytes.slice(0, 12);
+        const ciphertext = fileBytes.slice(12);
+
+        const decrypted = await crypto.subtle.decrypt(
+          { name: 'AES-GCM', iv },
+          key,
+          ciphertext
+        );
+
+        const blob = new Blob([decrypted], { type: 'application/octet-stream' });
+        downloadLink.href = URL.createObjectURL(blob);
+        downloadLink.download = file.name.replace(/\.enc$/, '');
+        downloadLink.style.display = 'inline';
+        downloadLink.textContent = 'Download';
+        downloadLink.classList.remove('placeholder');
+        encryptBtn.classList.add('placeholder');
+        decryptBtn.classList.add('placeholder');
+      } catch (err) {
+        console.error(err);
+        alert('Decryption error: ' + err.message);
+      }
+    });
+
+    const copyLinkBtn = document.getElementById('copyLinkBtn');
+    copyLinkBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(window.location.href);
+        copyLinkBtn.textContent = 'Copied!';
+        setTimeout(() => {
+          copyLinkBtn.textContent = 'Copy Link';
+        }, 2000);
+      } catch (err) {
+        console.error('Failed to copy: ', err);
+        alert('Failed to copy link');
+      }
+    });
+
+    function getKeyFromURL() {
+      return window.location.hash ? window.location.hash.substring(1) : null;
+    }
+
+    function bufferToHex(buffer) {
+      return Array.from(new Uint8Array(buffer))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+    }
+
+    async function importAesKeyFromHex(hex) {
+      const raw = hexToArrayBuffer(hex);
+      return crypto.subtle.importKey(
+        'raw',
+        raw,
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['encrypt', 'decrypt']
+      );
+    }
+
+    function hexToArrayBuffer(hex) {
+      const bytes = new Uint8Array(Math.ceil(hex.length / 2));
+      for (let i = 0; i < bytes.length; i++) {
+        bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+      }
+      return bytes.buffer;
+    }
+  </script>
+</body>
+</html>

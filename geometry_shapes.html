@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Geometric Shapes Calculator</title>
+
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: "Consolas", "Courier New", Courier, monospace;
+      background: linear-gradient(120deg, #eeeeff, #ccffdd);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    h1 {
+      text-align: center;
+      margin-top: 30px;
+      font-weight: 500;
+      color: #333;
+    }
+
+    .appContainer {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      width: 90%;
+      max-width: 900px;
+      margin: 20px auto 40px auto;
+      padding: 20px;
+    }
+
+    .controls {
+      margin-top: 20px;
+      padding: 20px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      background: #fefefe;
+    }
+
+    .input-group {
+      margin-bottom: 15px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .input-group label {
+      margin-right: 8px;
+      margin-bottom: 5px;
+      font-weight: 600;
+      color: #444;
+    }
+    .input-group input,
+    .input-group select {
+      margin-right: 15px;
+      margin-bottom: 5px;
+      padding: 6px 10px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      font-size: 14px;
+    }
+    .input-group input:hover,
+    .input-group select:hover {
+      border-color: #888;
+    }
+    .input-group select {
+      cursor: pointer;
+    }
+    .hidden {
+      display: none;
+    }
+
+    .diagramAndOutputs {
+      display: flex;
+      flex-direction: row;
+      gap: 20px;
+      margin-top: 20px;
+    }
+
+    .diagramContainer {
+      flex: 1;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      background: #fafafa;
+      padding: 15px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    #shapeSVG {
+      background: #ffffff;
+      border: 1px dashed #ccc;
+      display: block;
+      border-radius: 6px;
+    }
+
+    .outputs {
+      flex: 1;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      background: #fefefe;
+      padding: 15px;
+
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .formulaBlock {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .formulaBlock h3 {
+      margin: 0 0 8px 0;
+      color: #222;
+      font-weight: 600;
+      font-size: 1rem;
+      text-decoration: underline;
+    }
+
+    #genericFormulas,
+    #valuesFormulas,
+    #results {
+      white-space: pre-wrap; 
+      color: #333;
+      font-size: 0.9rem;
+      margin: 0;
+    }
+
+    #results {
+      font-weight: 700;
+      color: #111;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Geometric Shapes Calculator</h1>
+
+  <div class="appContainer">
+    
+    <div class="controls">
+      <div class="input-group">
+        <label for="shapeSelect"><strong>Choose a shape:</strong></label>
+        <select id="shapeSelect">
+          <option value="circle">Circle</option>
+          <option value="rectangle">Rectangle</option>
+          <option value="triangle" selected>Triangle</option>
+        </select>
+      </div>
+
+      <div id="circleInputs" class="input-group">
+        <label for="circleRadius">Radius:</label>
+        <input type="number" id="circleRadius" min="0" step="1" value="10" />
+      </div>
+
+      <div id="rectangleInputs" class="input-group hidden">
+        <label for="rectLength">Length:</label>
+        <input type="number" id="rectLength" min="0" step="1" value="10" />
+        <label for="rectWidth">Width:</label>
+        <input type="number" id="rectWidth" min="0" step="1" value="5" />
+      </div>
+
+      <div id="triangleInputs" class="input-group hidden">
+        <label for="triSideA">Side A:</label>
+        <input type="number" id="triSideA" min="0" step="1" value="3" />
+        <label for="triSideB">Side B:</label>
+        <input type="number" id="triSideB" min="0" step="1" value="4" />
+        <label for="triSideC">Side C:</label>
+        <input type="number" id="triSideC" min="0" step="1" value="5" />
+      </div>
+    </div>
+
+    <div class="diagramAndOutputs">
+
+      <div class="diagramContainer">
+        <svg id="shapeSVG" width="400" height="400"></svg>
+      </div>
+
+      <div class="outputs">
+        <div class="formulaBlock">
+          <h3>Generic Formulas</h3>
+          <div id="genericFormulas"></div>
+        </div>
+
+        <div class="formulaBlock">
+          <h3>Your Values</h3>
+          <div id="valuesFormulas"></div>
+        </div>
+
+        <div class="formulaBlock">
+          <h3>Results</h3>
+          <div id="results"></div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+    function updateAll() {
+      const shape = document.getElementById("shapeSelect").value;
+
+      document.getElementById("circleInputs").classList.toggle("hidden", shape !== "circle");
+      document.getElementById("rectangleInputs").classList.toggle("hidden", shape !== "rectangle");
+      document.getElementById("triangleInputs").classList.toggle("hidden", shape !== "triangle");
+
+      clearSVG();
+      document.getElementById("genericFormulas").innerText = "";
+      document.getElementById("valuesFormulas").innerText = "";
+      document.getElementById("results").innerText = "";
+
+      let area = 0;
+      let perimeter = 0;
+      let genericText = "";
+      let valuesText = "";
+
+      if (shape === "circle") {
+        const r = parseFloat(document.getElementById("circleRadius").value);
+        if (isNaN(r) || r <= 0) {
+          document.getElementById("results").innerText = "Please enter a valid positive radius.";
+          return;
+        }
+        area = Math.PI * r * r;
+        perimeter = 2 * Math.PI * r;
+
+        genericText = `Area = π × r²\nPerimeter = 2 × π × r`;
+        valuesText = `r = ${r}\nArea = π × (${r})²\nPerimeter = 2 × π × ${r}`;
+
+        drawCircle(r);
+
+      } else if (shape === "rectangle") {
+        const length = parseFloat(document.getElementById("rectLength").value);
+        const width = parseFloat(document.getElementById("rectWidth").value);
+        if (isNaN(length) || length <= 0 || isNaN(width) || width <= 0) {
+          document.getElementById("results").innerText = "Please enter valid positive rectangle dimensions.";
+          return;
+        }
+        area = length * width;
+        perimeter = 2 * (length + width);
+
+        genericText = `Area = length × width\nPerimeter = 2 × (length + width)`;
+        valuesText = `length = ${length}, width = ${width}\nArea = ${length} × ${width}\nPerimeter = 2 × (${length} + ${width})`;
+
+        drawRectangle(length, width);
+
+      } else if (shape === "triangle") {
+        const a = parseFloat(document.getElementById("triSideA").value);
+        const b = parseFloat(document.getElementById("triSideB").value);
+        const c = parseFloat(document.getElementById("triSideC").value);
+        if (isNaN(a) || a <= 0 || isNaN(b) || b <= 0 || isNaN(c) || c <= 0) {
+          document.getElementById("results").innerText = "Please enter valid positive side lengths.";
+          return;
+        }
+        if (a + b <= c || a + c <= b || b + c <= a) {
+          document.getElementById("results").innerText =
+            "Invalid triangle sides (triangle inequality not satisfied).";
+          return;
+        }
+
+        const s = (a + b + c) / 2;
+        area = Math.sqrt(s * (s - a) * (s - b) * (s - c));
+        perimeter = a + b + c;
+
+        genericText = `Heron's Formula:\ns = (a + b + c) / 2\nArea = √[ s × (s - a) × (s - b) × (s - c) ]\nPerimeter = a + b + c`;
+        valuesText = `a = ${a}, b = ${b}, c = ${c}\ns = (${a} + ${b} + ${c}) / 2 = ${s}\nArea = √[ ${s} × (${s} - ${a}) × (${s} - ${b}) × (${s} - ${c}) ]\nPerimeter = ${a}+${b}+${c} = ${perimeter}`;
+
+        drawTriangle(a, b, c);
+      }
+
+      if (area > 0 && perimeter > 0) {
+        document.getElementById("genericFormulas").innerText = genericText;
+        document.getElementById("valuesFormulas").innerText = valuesText;
+        document.getElementById("results").innerText =
+          `Area = ${area.toFixed(2)}\nPerimeter = ${perimeter.toFixed(2)}`;
+      }
+    }
+
+    function clearSVG() {
+      const svg = document.getElementById("shapeSVG");
+      while (svg.firstChild) svg.removeChild(svg.firstChild);
+    }
+
+    function drawCircle(r) {
+      const svg = document.getElementById("shapeSVG");
+      const w = svg.clientWidth;
+      const h = svg.clientHeight;
+
+      const padding = 120;
+      const maxR = Math.min(w, h) / 2 - padding;
+      const scale = maxR / r;
+
+      const scaledR = r * scale;
+      const cx = w / 2;
+      const cy = h / 2;
+
+      const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      circle.setAttribute("cx", cx);
+      circle.setAttribute("cy", cy);
+      circle.setAttribute("r", scaledR);
+      circle.setAttribute("fill", "lightblue");
+      circle.setAttribute("stroke", "black");
+      circle.setAttribute("stroke-width", "2");
+      svg.appendChild(circle);
+
+      const radiusLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      radiusLine.setAttribute("x1", cx);
+      radiusLine.setAttribute("y1", cy);
+      radiusLine.setAttribute("x2", cx + scaledR);
+      radiusLine.setAttribute("y2", cy);
+      radiusLine.setAttribute("stroke", "red");
+      radiusLine.setAttribute("stroke-width", "2");
+      svg.appendChild(radiusLine);
+
+      const radiusLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      radiusLabel.setAttribute("x", cx + scaledR / 2);
+      radiusLabel.setAttribute("y", cy - 10);
+      radiusLabel.setAttribute("fill", "red");
+      radiusLabel.setAttribute("text-anchor", "middle");
+      radiusLabel.setAttribute("font-size", "14");
+      radiusLabel.textContent = `r = ${r}`;
+      svg.appendChild(radiusLabel);
+    }
+
+    function drawRectangle(length, width) {
+      const svg = document.getElementById("shapeSVG");
+      const svgW = svg.clientWidth;
+      const svgH = svg.clientHeight;
+      const padding = 120;
+
+      const scale = Math.min(
+        (svgW - 2 * padding) / length,
+        (svgH - 2 * padding) / width
+      );
+
+      const scaledL = length * scale;
+      const scaledW = width * scale;
+
+      const x = (svgW - scaledL) / 2;
+      const y = (svgH - scaledW) / 2;
+
+      const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      rect.setAttribute("x", x);
+      rect.setAttribute("y", y);
+      rect.setAttribute("width", scaledL);
+      rect.setAttribute("height", scaledW);
+      rect.setAttribute("fill", "lightgreen");
+      rect.setAttribute("stroke", "black");
+      rect.setAttribute("stroke-width", "2");
+      svg.appendChild(rect);
+
+      drawDimensionLine(
+        svg,
+        x, y + scaledW + 20,
+        x + scaledL, y + scaledW + 20,
+        `length = ${length}`, true
+      );
+      drawDimensionLine(
+        svg,
+        x - 20, y,
+        x - 20, y + scaledW,
+        `width = ${width}`, false
+      );
+    }
+
+    function drawTriangle(a, b, c) {
+      const svg = document.getElementById("shapeSVG");
+      const svgW = svg.clientWidth;
+      const svgH = svg.clientHeight;
+      const padding = 120;
+
+      const x1 = 0, y1 = 0;
+      const x2 = a, y2 = 0;
+      const x3 = (b*b - c*c + a*a) / (2*a);
+      const y3 = Math.sqrt(Math.max(0, b*b - x3*x3));
+
+      let pts = [
+        { x: x1, y: y1 },
+        { x: x2, y: y2 },
+        { x: x3, y: y3 }
+      ];
+
+      const minX = Math.min(...pts.map(p => p.x));
+      const maxX = Math.max(...pts.map(p => p.x));
+      const minY = Math.min(...pts.map(p => p.y));
+      const maxY = Math.max(...pts.map(p => p.y));
+      const shapeW = maxX - minX;
+      const shapeH = maxY - minY;
+
+      const scale = Math.min(
+        (svgW - 2 * padding) / shapeW,
+        (svgH - 2 * padding) / shapeH
+      );
+
+      const offsetX = (svgW - shapeW * scale) / 2;
+      const offsetY = (svgH - shapeH * scale) / 2;
+
+      pts = pts.map(p => ({
+        x: offsetX + (p.x - minX) * scale,
+        y: offsetY + (p.y - minY) * scale
+      }));
+
+      const polygon = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+      polygon.setAttribute("points", pts.map(p => `${p.x},${p.y}`).join(" "));
+      polygon.setAttribute("fill", "lightyellow");
+      polygon.setAttribute("stroke", "black");
+      polygon.setAttribute("stroke-width", "2");
+      svg.appendChild(polygon);
+
+      labelSide(svg, pts[0], pts[1], `a = ${a}`, 1);
+      labelSide(svg, pts[0], pts[2], `b = ${b}`, -1);
+      labelSide(svg, pts[1], pts[2], `c = ${c}`, 1);
+    }
+
+    function drawDimensionLine(svg, x1, y1, x2, y2, labelText, horizontal) {
+      const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      line.setAttribute("x1", x1);
+      line.setAttribute("y1", y1);
+      line.setAttribute("x2", x2);
+      line.setAttribute("y2", y2);
+      line.setAttribute("stroke", "red");
+      line.setAttribute("stroke-width", "2");
+      svg.appendChild(line);
+
+      const textEl = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      let tx = (x1 + x2) / 2;
+      let ty = (y1 + y2) / 2;
+
+      if (horizontal) {
+        ty -= 5;
+        textEl.setAttribute("text-anchor", "middle");
+      } else {
+        tx -= 5;
+        textEl.setAttribute("text-anchor", "end");
+        textEl.setAttribute("dominant-baseline", "middle");
+      }
+      textEl.setAttribute("x", tx);
+      textEl.setAttribute("y", ty);
+      textEl.setAttribute("fill", "red");
+      textEl.setAttribute("font-size", "14");
+      textEl.textContent = labelText;
+      svg.appendChild(textEl);
+    }
+
+    function labelSide(svg, p1, p2, label, offsetSign = 1) {
+      const mx = (p1.x + p2.x) / 2;
+      const my = (p1.y + p2.y) / 2;
+      const baseOffset = 25;
+      const offset = baseOffset * offsetSign;
+
+      const dx = p2.x - p1.x;
+      const dy = p2.y - p1.y;
+      const length = Math.hypot(dx, dy);
+      if (length === 0) return;
+
+      const ux = dx / length;
+      const uy = dy / length;
+
+      const px = uy;
+      const py = -ux;
+
+      const lx = mx + px * offset;
+      const ly = my + py * offset;
+
+      const textEl = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      textEl.setAttribute("x", lx);
+      textEl.setAttribute("y", ly);
+      textEl.setAttribute("fill", "red");
+      textEl.setAttribute("font-size", "14");
+      textEl.setAttribute("text-anchor", "middle");
+      textEl.setAttribute("dominant-baseline", "middle");
+      textEl.textContent = label;
+      svg.appendChild(textEl);
+    }
+
+    document.getElementById("shapeSelect").addEventListener("change", updateAll);
+    document.getElementById("circleRadius").addEventListener("input", updateAll);
+    document.getElementById("rectLength").addEventListener("input", updateAll);
+    document.getElementById("rectWidth").addEventListener("input", updateAll);
+    document.getElementById("triSideA").addEventListener("input", updateAll);
+    document.getElementById("triSideB").addEventListener("input", updateAll);
+    document.getElementById("triSideC").addEventListener("input", updateAll);
+
+    window.addEventListener("load", updateAll);
+  </script>
+</body>
+</html>

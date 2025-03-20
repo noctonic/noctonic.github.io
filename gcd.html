@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Greatest Common Divisor</title>
+  <style>
+    body {
+      font-family: 'Helvetica Neue', sans-serif;
+      background-color: #1e3c72;
+      color: #f0f0f0;
+      margin: 0;
+      padding-bottom: 80px;
+      text-align: center;
+      font-size: 18px;
+    }
+    h1 {
+      font-size: 3em;
+      margin-bottom: 0.5em;
+    }
+    p {
+      font-size: 1.5em;
+      margin-bottom: 20px;
+    }
+    .inputs {
+      display: flex;
+      justify-content: center;
+      gap: 40px;
+      margin-bottom: 30px;
+    }
+    .input-column {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 250px;
+    }
+    input[type="number"] {
+      width: 180px;
+      padding: 10px;
+      margin-bottom: 15px;
+      font-size: 1.2em;
+      text-align: center;
+      border: 2px solid #fff;
+      border-radius: 5px;
+      background: rgba(255, 255, 255, 0.2);
+      color: #fff;
+    }
+    .factorization {
+      font-size: 1.5em;
+      margin-bottom: 15px;
+    }
+    #factorsContainerA,
+    #factorsContainerB {
+      max-height: 150px;
+      overflow-y: auto;
+      width: 100%;
+    }
+    button {
+      margin: 8px;
+      padding: 10px 15px;
+      font-size: 1.2em;
+      cursor: pointer;
+      background-color: #34495e;
+      color: #ecf0f1;
+      border: none;
+      border-radius: 5px;
+      transition: background-color 0.3s;
+    }
+    button:hover {
+      background-color: #2c3e50;
+    }
+    .factor-button.green {
+      background-color: #27ae60;
+    }
+    .footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      background-color: #16345c;
+      padding: 20px 0;
+      text-align: center;
+    }
+    #gcdEquation {
+      font-weight: bold;
+      margin: 0 auto;
+      padding: 15px 20px;
+      border: 3px solid #fff;
+      display: inline-block;
+      min-width: 150px;
+      font-size: 1.8em;
+      text-align: center;
+      background: rgba(0, 0, 0, 0.2);
+    }
+    #gcdEquation.green {
+      color: #27ae60;
+      border-color: #27ae60;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Greatest Common Divisor</h1>
+  <p>Enter two numbers:</p>
+  
+  <div class="inputs">
+    <div class="input-column">
+      <input type="number" id="numA" oninput="factorNumbers()" />
+      <div id="factorizationA" class="factorization"></div>
+      <div id="factorsContainerA"></div>
+    </div>
+    <div class="input-column">
+      <input type="number" id="numB" oninput="factorNumbers()" />
+      <div id="factorizationB" class="factorization"></div>
+      <div id="factorsContainerB"></div>
+    </div>
+  </div>
+  
+  <div class="footer">
+    <div id="gcdEquation">1</div>
+  </div>
+
+  <script>
+    let factorArrayA = [];
+    let factorArrayB = [];
+    let gcdFactors = [];
+    function getPrimeFactors(n) {
+      const factors = [];
+      let divisor = 2;
+      while (n >= 2) {
+        if (n % divisor === 0) {
+          factors.push(divisor);
+          n /= divisor;
+        } else {
+          divisor++;
+        }
+      }
+      return factors;
+    }
+    function formatFactorization(factors) {
+      const counts = {};
+      factors.forEach(f => { counts[f] = (counts[f] || 0) + 1; });
+      const sortedKeys = Object.keys(counts).sort((a, b) => a - b);
+      const parts = sortedKeys.map(factor => {
+        const count = counts[factor];
+        return count > 1 ? factor + "<sup>" + count + "</sup>" : factor;
+      });
+      return parts.join(" x ");
+    }
+    function factorNumbers() {
+      const inputA = document.getElementById("numA").value;
+      const inputB = document.getElementById("numB").value;
+      document.getElementById("factorizationA").innerHTML = "";
+      document.getElementById("factorizationB").innerHTML = "";
+      document.getElementById("factorsContainerA").innerHTML = "";
+      document.getElementById("factorsContainerB").innerHTML = "";
+      gcdFactors = [];
+      document.getElementById("gcdEquation").textContent = "1";
+      document.getElementById("gcdEquation").classList.remove("green");
+      if (inputA !== "") {
+        const numA = parseInt(inputA, 10);
+        if (!isNaN(numA) && numA > 0) {
+          const factorsA = getPrimeFactors(numA);
+          document.getElementById("factorizationA").innerHTML = formatFactorization(factorsA);
+          factorArrayA = factorsA.map(f => ({ value: f, used: false }));
+          factorArrayA.forEach((obj, index) => {
+            const btn = document.createElement("button");
+            btn.textContent = obj.value;
+            btn.className = "factor-button";
+            btn.onclick = function() { factorClicked("A", index); };
+            document.getElementById("factorsContainerA").appendChild(btn);
+          });
+        }
+      } else {
+        factorArrayA = [];
+      }
+      if (inputB !== "") {
+        const numB = parseInt(inputB, 10);
+        if (!isNaN(numB) && numB > 0) {
+          const factorsB = getPrimeFactors(numB);
+          document.getElementById("factorizationB").innerHTML = formatFactorization(factorsB);
+          factorArrayB = factorsB.map(f => ({ value: f, used: false }));
+          factorArrayB.forEach((obj, index) => {
+            const btn = document.createElement("button");
+            btn.textContent = obj.value;
+            btn.className = "factor-button";
+            btn.onclick = function() { factorClicked("B", index); };
+            document.getElementById("factorsContainerB").appendChild(btn);
+          });
+        }
+      } else {
+        factorArrayB = [];
+      }
+    }
+    function factorClicked(side, index) {
+      let clickedFactor, clickedElement, otherArray, otherContainer;
+      if (side === "A") {
+        clickedFactor = factorArrayA[index];
+        clickedElement = document.getElementById("factorsContainerA").children[index];
+        otherArray = factorArrayB;
+        otherContainer = document.getElementById("factorsContainerB").children;
+      } else {
+        clickedFactor = factorArrayB[index];
+        clickedElement = document.getElementById("factorsContainerB").children[index];
+        otherArray = factorArrayA;
+        otherContainer = document.getElementById("factorsContainerA").children;
+      }
+      if (clickedFactor.used) return;
+      const matchIndex = otherArray.findIndex(f => f.value === clickedFactor.value && !f.used);
+      if (matchIndex !== -1) {
+        clickedFactor.used = true;
+        otherArray[matchIndex].used = true;
+        clickedElement.classList.add("green");
+        otherContainer[matchIndex].classList.add("green");
+        gcdFactors.push(clickedFactor.value);
+        updateGCD();
+      }
+    }
+    function updateGCD() {
+      if (gcdFactors.length === 0) {
+        document.getElementById("gcdEquation").textContent = "1";
+        document.getElementById("gcdEquation").classList.remove("green");
+        return;
+      }
+      const expression = gcdFactors.join(" x ");
+      const product = gcdFactors.reduce((acc, val) => acc * val, 1);
+      document.getElementById("gcdEquation").textContent = expression + " = " + product;
+      const inputA = document.getElementById("numA").value;
+      const inputB = document.getElementById("numB").value;
+      if (inputA !== "" && inputB !== "") {
+        const numA = parseInt(inputA, 10);
+        const numB = parseInt(inputB, 10);
+        if (gcdEuclid(numA, numB) === product) {
+          document.getElementById("gcdEquation").classList.add("green");
+        }
+      }
+    }
+    function gcdEuclid(a, b) {
+      return b === 0 ? a : gcdEuclid(b, a % b);
+    }
+  </script>
+
+</body>
+</html>

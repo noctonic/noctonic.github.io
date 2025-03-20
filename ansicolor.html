@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>ANSI 256-color mode</title>
+  <style>
+    body {
+      font-family: monospace;
+      margin: 0;
+      padding: 0;
+      background: #000;    
+      color: #fff;         
+      text-align: center;
+    }
+    h1 {
+      margin: 20px 0;
+    }
+    #wrapper {
+      width: 800px;         
+      margin: 0 auto;       
+      padding: 20px;        
+    }
+    #controls {
+      margin-bottom: 1em;
+    }
+    .slider-label {
+      display: inline-block;
+      width: 6em;
+      text-align: right;
+      margin-right: 0.5em;
+    }
+    .color-swatch {
+      width: 40px;
+      height: 40px;
+      display: inline-block;
+      vertical-align: middle;
+      margin: 4px;
+      border: 1px solid #aaa;
+    }
+    
+    #colorGridCanvas {
+      border: 1px solid #ccc;
+      margin: 20px auto;   
+      display: block;
+      cursor: pointer;     
+    }
+
+    #colorSchemesTable {
+      display: table;
+      margin: 20px auto;
+      border-spacing: 20px; 
+    }
+    .scheme-col {
+      display: table-cell;
+      vertical-align: top;
+      width: 160px;         
+    }
+    .scheme-col h3 {
+      margin: 0 0 10px 0;   
+      font-size: 1em;
+      font-weight: normal;
+      text-decoration: underline;
+    }
+    .swatch-label {
+      display: inline-block;
+      width: 140px;       
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      text-align: left;   
+      font-size: 0.9em;   
+    }
+  </style>
+</head>
+<body>
+
+<div id="wrapper">
+  <h1>ANSI 256-color mode</h1>
+
+  <div id="controls">
+    <label>
+      <span class="slider-label">Saturation</span>
+      <input type="range" id="satSlider" min="0" max="100" value="100">
+      <span id="satValue">100</span>%
+    </label>
+    <br>
+    <label>
+      <span class="slider-label">Lightness</span>
+      <input type="range" id="lumSlider" min="0" max="100" value="50">
+      <span id="lumValue">50</span>%
+    </label>
+    <br>
+    <label>
+      <input type="checkbox" id="snapCheckbox" />
+      Snap to ANSI before calculation
+    </label>
+  </div>
+
+  <canvas id="colorGridCanvas" width="720" height="200"></canvas>
+
+  <p>
+    <strong>Selected Color:</strong>
+    <span id="selectedSwatch" class="color-swatch"></span>
+    <span id="selectedInfo"></span>
+  </p>
+
+  
+  <div id="colorSchemesTable">
+    <div class="scheme-col" id="colComplementary">
+      <h3>Complementary</h3>
+      
+    </div>
+    <div class="scheme-col" id="colTriadic">
+      <h3>Triadic</h3>
+      
+    </div>
+    <div class="scheme-col" id="colAnalogous">
+      <h3>Analogous</h3>
+      
+    </div>
+    <div class="scheme-col" id="colSplitComp">
+      <h3>Split Comp</h3>
+      
+    </div>
+  </div>
+</div>
+
+<script>
+
+  const rawXterm256 = [
+    { index: 0,   hex: '#000000' },
+    { index: 1,   hex: '#800000' },
+    { index: 2,   hex: '#008000' },
+    { index: 3,   hex: '#808000' },
+    { index: 4,   hex: '#000080' },
+    { index: 5,   hex: '#800080' },
+    { index: 6,   hex: '#008080' },
+    { index: 7,   hex: '#c0c0c0' },
+    { index: 8,   hex: '#808080' },
+    { index: 9,   hex: '#ff0000' },
+    { index: 10,  hex: '#00ff00' },
+    { index: 11,  hex: '#ffff00' },
+    { index: 12,  hex: '#0000ff' },
+    { index: 13,  hex: '#ff00ff' },
+    { index: 14,  hex: '#00ffff' },
+    { index: 15,  hex: '#ffffff' },
+    { index: 16,  hex: '#000000' },
+    { index: 17,  hex: '#00005f' },
+    { index: 18,  hex: '#000087' },
+    { index: 19,  hex: '#0000af' },
+    { index: 20,  hex: '#0000d7' },
+    { index: 21,  hex: '#0000ff' },
+    { index: 22,  hex: '#005f00' },
+    { index: 23,  hex: '#005f5f' },
+    { index: 24,  hex: '#005f87' },
+    { index: 25,  hex: '#005faf' },
+    { index: 26,  hex: '#005fd7' },
+    { index: 27,  hex: '#005fff' },
+    { index: 28,  hex: '#008700' },
+    { index: 29,  hex: '#00875f' },
+    { index: 30,  hex: '#008787' },
+    { index: 31,  hex: '#0087af' },
+    { index: 32,  hex: '#0087d7' },
+    { index: 33,  hex: '#0087ff' },
+    { index: 34,  hex: '#00af00' },
+    { index: 35,  hex: '#00af5f' },
+    { index: 36,  hex: '#00af87' },
+    { index: 37,  hex: '#00afaf' },
+    { index: 38,  hex: '#00afd7' },
+    { index: 39,  hex: '#00afff' },
+    { index: 40,  hex: '#00d700' },
+    { index: 41,  hex: '#00d75f' },
+    { index: 42,  hex: '#00d787' },
+    { index: 43,  hex: '#00d7af' },
+    { index: 44,  hex: '#00d7d7' },
+    { index: 45,  hex: '#00d7ff' },
+    { index: 46,  hex: '#00ff00' },
+    { index: 47,  hex: '#00ff5f' },
+    { index: 48,  hex: '#00ff87' },
+    { index: 49,  hex: '#00ffaf' },
+    { index: 50,  hex: '#00ffd7' },
+    { index: 51,  hex: '#00ffff' },
+    { index: 52,  hex: '#5f0000' },
+    { index: 53,  hex: '#5f005f' },
+    { index: 54,  hex: '#5f0087' },
+    { index: 55,  hex: '#5f00af' },
+    { index: 56,  hex: '#5f00d7' },
+    { index: 57,  hex: '#5f00ff' },
+    { index: 58,  hex: '#5f5f00' },
+    { index: 59,  hex: '#5f5f5f' },
+    { index: 60,  hex: '#5f5f87' },
+    { index: 61,  hex: '#5f5faf' },
+    { index: 62,  hex: '#5f5fd7' },
+    { index: 63,  hex: '#5f5fff' },
+    { index: 64,  hex: '#5f8700' },
+    { index: 65,  hex: '#5f875f' },
+    { index: 66,  hex: '#5f8787' },
+    { index: 67,  hex: '#5f87af' },
+    { index: 68,  hex: '#5f87d7' },
+    { index: 69,  hex: '#5f87ff' },
+    { index: 70,  hex: '#5faf00' },
+    { index: 71,  hex: '#5faf5f' },
+    { index: 72,  hex: '#5faf87' },
+    { index: 73,  hex: '#5fafaf' },
+    { index: 74,  hex: '#5fafd7' },
+    { index: 75,  hex: '#5fafff' },
+    { index: 76,  hex: '#5fd700' },
+    { index: 77,  hex: '#5fd75f' },
+    { index: 78,  hex: '#5fd787' },
+    { index: 79,  hex: '#5fd7af' },
+    { index: 80,  hex: '#5fd7d7' },
+    { index: 81,  hex: '#5fd7ff' },
+    { index: 82,  hex: '#5fff00' },
+    { index: 83,  hex: '#5fff5f' },
+    { index: 84,  hex: '#5fff87' },
+    { index: 85,  hex: '#5fffaf' },
+    { index: 86,  hex: '#5fffd7' },
+    { index: 87,  hex: '#5fffff' },
+    { index: 88,  hex: '#870000' },
+    { index: 89,  hex: '#87005f' },
+    { index: 90,  hex: '#870087' },
+    { index: 91,  hex: '#8700af' },
+    { index: 92,  hex: '#8700d7' },
+    { index: 93,  hex: '#8700ff' },
+    { index: 94,  hex: '#875f00' },
+    { index: 95,  hex: '#875f5f' },
+    { index: 96,  hex: '#875f87' },
+    { index: 97,  hex: '#875faf' },
+    { index: 98,  hex: '#875fd7' },
+    { index: 99,  hex: '#875fff' },
+    { index: 100, hex: '#878700' },
+    { index: 101, hex: '#87875f' },
+    { index: 102, hex: '#878787' },
+    { index: 103, hex: '#8787af' },
+    { index: 104, hex: '#8787d7' },
+    { index: 105, hex: '#8787ff' },
+    { index: 106, hex: '#87af00' },
+    { index: 107, hex: '#87af5f' },
+    { index: 108, hex: '#87af87' },
+    { index: 109, hex: '#87afaf' },
+    { index: 110, hex: '#87afd7' },
+    { index: 111, hex: '#87afff' },
+    { index: 112, hex: '#87d700' },
+    { index: 113, hex: '#87d75f' },
+    { index: 114, hex: '#87d787' },
+    { index: 115, hex: '#87d7af' },
+    { index: 116, hex: '#87d7d7' },
+    { index: 117, hex: '#87d7ff' },
+    { index: 118, hex: '#87ff00' },
+    { index: 119, hex: '#87ff5f' },
+    { index: 120, hex: '#87ff87' },
+    { index: 121, hex: '#87ffaf' },
+    { index: 122, hex: '#87ffd7' },
+    { index: 123, hex: '#87ffff' },
+    { index: 124, hex: '#af0000' },
+    { index: 125, hex: '#af005f' },
+    { index: 126, hex: '#af0087' },
+    { index: 127, hex: '#af00af' },
+    { index: 128, hex: '#af00d7' },
+    { index: 129, hex: '#af00ff' },
+    { index: 130, hex: '#af5f00' },
+    { index: 131, hex: '#af5f5f' },
+    { index: 132, hex: '#af5f87' },
+    { index: 133, hex: '#af5faf' },
+    { index: 134, hex: '#af5fd7' },
+    { index: 135, hex: '#af5fff' },
+    { index: 136, hex: '#af8700' },
+    { index: 137, hex: '#af875f' },
+    { index: 138, hex: '#af8787' },
+    { index: 139, hex: '#af87af' },
+    { index: 140, hex: '#af87d7' },
+    { index: 141, hex: '#af87ff' },
+    { index: 142, hex: '#afaf00' },
+    { index: 143, hex: '#afaf5f' },
+    { index: 144, hex: '#afaf87' },
+    { index: 145, hex: '#afafaf' },
+    { index: 146, hex: '#afafd7' },
+    { index: 147, hex: '#afafff' },
+    { index: 148, hex: '#afd700' },
+    { index: 149, hex: '#afd75f' },
+    { index: 150, hex: '#afd787' },
+    { index: 151, hex: '#afd7af' },
+    { index: 152, hex: '#afd7d7' },
+    { index: 153, hex: '#afd7ff' },
+    { index: 154, hex: '#afff00' },
+    { index: 155, hex: '#afff5f' },
+    { index: 156, hex: '#afff87' },
+    { index: 157, hex: '#afffaf' },
+    { index: 158, hex: '#afffd7' },
+    { index: 159, hex: '#afffff' },
+    { index: 160, hex: '#d70000' },
+    { index: 161, hex: '#d7005f' },
+    { index: 162, hex: '#d70087' },
+    { index: 163, hex: '#d700af' },
+    { index: 164, hex: '#d700d7' },
+    { index: 165, hex: '#d700ff' },
+    { index: 166, hex: '#d75f00' },
+    { index: 167, hex: '#d75f5f' },
+    { index: 168, hex: '#d75f87' },
+    { index: 169, hex: '#d75faf' },
+    { index: 170, hex: '#d75fd7' },
+    { index: 171, hex: '#d75fff' },
+    { index: 172, hex: '#d78700' },
+    { index: 173, hex: '#d7875f' },
+    { index: 174, hex: '#d78787' },
+    { index: 175, hex: '#d787af' },
+    { index: 176, hex: '#d787d7' },
+    { index: 177, hex: '#d787ff' },
+    { index: 178, hex: '#d7af00' },
+    { index: 179, hex: '#d7af5f' },
+    { index: 180, hex: '#d7af87' },
+    { index: 181, hex: '#d7afaf' },
+    { index: 182, hex: '#d7afd7' },
+    { index: 183, hex: '#d7afff' },
+    { index: 184, hex: '#d7d700' },
+    { index: 185, hex: '#d7d75f' },
+    { index: 186, hex: '#d7d787' },
+    { index: 187, hex: '#d7d7af' },
+    { index: 188, hex: '#d7d7d7' },
+    { index: 189, hex: '#d7d7ff' },
+    { index: 190, hex: '#d7ff00' },
+    { index: 191, hex: '#d7ff5f' },
+    { index: 192, hex: '#d7ff87' },
+    { index: 193, hex: '#d7ffaf' },
+    { index: 194, hex: '#d7ffd7' },
+    { index: 195, hex: '#d7ffff' },
+    { index: 196, hex: '#ff0000' },
+    { index: 197, hex: '#ff005f' },
+    { index: 198, hex: '#ff0087' },
+    { index: 199, hex: '#ff00af' },
+    { index: 200, hex: '#ff00d7' },
+    { index: 201, hex: '#ff00ff' },
+    { index: 202, hex: '#ff5f00' },
+    { index: 203, hex: '#ff5f5f' },
+    { index: 204, hex: '#ff5f87' },
+    { index: 205, hex: '#ff5faf' },
+    { index: 206, hex: '#ff5fd7' },
+    { index: 207, hex: '#ff5fff' },
+    { index: 208, hex: '#ff8700' },
+    { index: 209, hex: '#ff875f' },
+    { index: 210, hex: '#ff8787' },
+    { index: 211, hex: '#ff87af' },
+    { index: 212, hex: '#ff87d7' },
+    { index: 213, hex: '#ff87ff' },
+    { index: 214, hex: '#ffaf00' },
+    { index: 215, hex: '#ffaf5f' },
+    { index: 216, hex: '#ffaf87' },
+    { index: 217, hex: '#ffafaf' },
+    { index: 218, hex: '#ffafd7' },
+    { index: 219, hex: '#ffafff' },
+    { index: 220, hex: '#ffd700' },
+    { index: 221, hex: '#ffd75f' },
+    { index: 222, hex: '#ffd787' },
+    { index: 223, hex: '#ffd7af' },
+    { index: 224, hex: '#ffd7d7' },
+    { index: 225, hex: '#ffd7ff' },
+    { index: 226, hex: '#ffff00' },
+    { index: 227, hex: '#ffff5f' },
+    { index: 228, hex: '#ffff87' },
+    { index: 229, hex: '#ffffaf' },
+    { index: 230, hex: '#ffffd7' },
+    { index: 231, hex: '#ffffff' },
+    { index: 232, hex: '#080808' },
+    { index: 233, hex: '#121212' },
+    { index: 234, hex: '#1c1c1c' },
+    { index: 235, hex: '#262626' },
+    { index: 236, hex: '#303030' },
+    { index: 237, hex: '#3a3a3a' },
+    { index: 238, hex: '#444444' },
+    { index: 239, hex: '#4e4e4e' },
+    { index: 240, hex: '#585858' },
+    { index: 241, hex: '#626262' },
+    { index: 242, hex: '#6c6c6c' },
+    { index: 243, hex: '#767676' },
+    { index: 244, hex: '#808080' },
+    { index: 245, hex: '#8a8a8a' },
+    { index: 246, hex: '#949494' },
+    { index: 247, hex: '#9e9e9e' },
+    { index: 248, hex: '#a8a8a8' },
+    { index: 249, hex: '#b2b2b2' },
+    { index: 250, hex: '#bcbcbc' },
+    { index: 251, hex: '#c6c6c6' },
+    { index: 252, hex: '#d0d0d0' },
+    { index: 253, hex: '#dadada' },
+    { index: 254, hex: '#e4e4e4' },
+    { index: 255, hex: '#eeeeee' },
+  ];
+
+  function hexToRgbInt(hex) {
+    let c = parseInt(hex.slice(1), 16);
+    return {
+      r: (c >> 16) & 0xff,
+      g: (c >> 8) & 0xff,
+      b: c & 0xff
+    };
+  }
+
+  const XTERM_256 = rawXterm256.map(c => {
+    const { r, g, b } = hexToRgbInt(c.hex);
+    return { ...c, r, g, b };
+  });
+
+  
+  
+  
+  function hslToRgb(h, s, l) {
+    
+    h = (h % 360) / 360; 
+    s /= 100; 
+    l /= 100; 
+
+    if (s === 0) {
+      const val = Math.round(l * 255);
+      return { r: val, g: val, b: val };
+    }
+
+    const hue2rgb = (p, q, t) => {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1 / 6) return p + (q - p) * 6 * t;
+      if (t < 1 / 2) return q;
+      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+      return p;
+    };
+
+    const q = l < 0.5 ? l * (1 + s) : l + s - l*s;
+    const p = 2*l - q;
+
+    let r = hue2rgb(p, q, h + 1/3);
+    let g = hue2rgb(p, q, h);
+    let b = hue2rgb(p, q, h - 1/3);
+
+    return {
+      r: Math.round(r * 255),
+      g: Math.round(g * 255),
+      b: Math.round(b * 255)
+    };
+  }
+
+  function rgbToHsl(r, g, b) {
+    r /= 255;
+    g /= 255;
+    b /= 255;
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    let h, s, l = (max + min) / 2;
+    if (max === min) {
+      h = s = 0;
+    } else {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      switch (max) {
+        case r:
+          h = (g - b) / d + (g < b ? 6 : 0);
+          break;
+        case g:
+          h = (b - r) / d + 2;
+          break;
+        case b:
+          h = (r - g) / d + 4;
+          break;
+      }
+      h /= 6;
+    }
+
+    return {
+      h: Math.round(h * 360),
+      s: Math.round(s * 100),
+      l: Math.round(l * 100)
+    };
+  }  
+  
+  
+  function getNearestXtermColor(h, s, l) {
+    const { r, g, b } = hslToRgb(h, s, l);
+    let bestDist = Infinity;
+    let bestColor = null;
+
+    for (let c of XTERM_256) {
+      const dr = c.r - r;
+      const dg = c.g - g;
+      const db = c.b - b;
+      const dist = dr*dr + dg*dg + db*db;
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestColor = c;
+      }
+    }
+    return bestColor;
+  }
+
+  
+  
+  
+  const canvas = document.getElementById('colorGridCanvas');
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+
+  const COLS = 36;           
+  const ROWS = 10;           
+  const SQ_SIZE = 20;        
+
+  
+  let squares = [];
+
+  
+  
+  
+  let cursorX = canvas.width / 2;  
+  let cursorY = canvas.height / 2; 
+  let isDragging = false;
+
+  function drawGrid(sat, lum) {
+    squares = [];
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    let hue = 0;
+    for (let row = 0; row < ROWS; row++) {
+      for (let col = 0; col < COLS; col++) {
+        const colorObj = getNearestXtermColor(hue, sat, lum);
+        const x = col * SQ_SIZE;
+        const y = row * SQ_SIZE;
+
+        squares.push({ x, y, hue, color: colorObj });
+
+        ctx.fillStyle = colorObj.hex;
+        ctx.fillRect(x, y, SQ_SIZE, SQ_SIZE);
+
+        hue++;
+      }
+    }
+  }
+
+  
+  
+  
+  function drawCursor() {
+    ctx.beginPath();
+    ctx.arc(cursorX, cursorY, 6, 0, 2 * Math.PI);
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.closePath();
+  }
+
+  
+  
+  
+  const satSlider = document.getElementById('satSlider');
+  const lumSlider = document.getElementById('lumSlider');
+  const satValue = document.getElementById('satValue');
+  const lumValue = document.getElementById('lumValue');
+  const snapCheckbox = document.getElementById('snapCheckbox');
+
+  let selectedHue = null;
+
+  function refreshGrid() {
+    const sat = parseInt(satSlider.value, 10);
+    const lum = parseInt(lumSlider.value, 10);
+    satValue.textContent = sat;
+    lumValue.textContent = lum;
+
+    
+    drawGrid(sat, lum);
+
+    
+    drawCursor();
+
+    
+    if (selectedHue !== null) {
+      showColorSchemes(selectedHue);
+    }
+  }
+
+  satSlider.addEventListener('input', refreshGrid);
+  lumSlider.addEventListener('input', refreshGrid);
+  snapCheckbox.addEventListener('change', () => {
+    if (selectedHue !== null) {
+      showColorSchemes(selectedHue);
+    }
+  });
+  
+  refreshGrid();
+
+  
+  
+  
+  const selectedSwatch = document.getElementById('selectedSwatch');
+  const selectedInfo = document.getElementById('selectedInfo');
+
+  const colComplementary = document.getElementById('colComplementary');
+  const colTriadic       = document.getElementById('colTriadic');
+  const colAnalogous     = document.getElementById('colAnalogous');
+  const colSplitComp     = document.getElementById('colSplitComp');
+
+  
+  function computeHueFromXY(x, y) {
+    
+    const clampedX = Math.min(Math.max(0, x), canvas.width - 1);
+    const clampedY = Math.min(Math.max(0, y), canvas.height - 1);
+
+    const col = Math.floor(clampedX / SQ_SIZE);
+    const row = Math.floor(clampedY / SQ_SIZE);
+
+    return row * COLS + col; 
+  }
+
+  function onPointerDown(e) {
+    isDragging = true;
+    moveCursor(e);
+  }
+
+  function onPointerMove(e) {
+    if (!isDragging) return;
+    moveCursor(e);
+  }
+
+  function onPointerUp(e) {
+    if (isDragging) {
+      isDragging = false;
+    }
+  }
+
+  function moveCursor(e) {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    
+    cursorX = x;
+    cursorY = y;
+
+    
+    refreshGrid();
+
+    
+    const hueClicked = computeHueFromXY(x, y);
+    selectedHue = hueClicked;
+    showColorSchemes(selectedHue);
+  }
+
+  canvas.addEventListener('mousedown', onPointerDown);
+  canvas.addEventListener('mousemove', onPointerMove);
+  canvas.addEventListener('mouseup', onPointerUp);
+
+  
+  canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    onPointerDown(e.touches[0]);
+  }, { passive: false });
+  canvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    onPointerMove(e.touches[0]);
+  }, { passive: false });
+  canvas.addEventListener('touchend', (e) => {
+    onPointerUp(e);
+  }, { passive: false });
+
+  
+  
+  
+  function showColorSchemes(baseHue) {
+    let sat = parseInt(satSlider.value, 10);
+    let lum = parseInt(lumSlider.value, 10);
+    let mainColor = getNearestXtermColor(baseHue, sat, lum);
+    if (snapCheckbox.checked) {
+      const hslSnapped = rgbToHsl(mainColor.r, mainColor.g, mainColor.b);
+      baseHue = hslSnapped.h;
+      sat     = hslSnapped.s;
+      lum     = hslSnapped.l;
+    }
+    
+    const zeroPad = n => String(n).padStart(3, '0');
+
+    
+    const finalMainColor = getNearestXtermColor(baseHue, sat, lum);
+
+
+    selectedSwatch.style.backgroundColor = finalMainColor.hex;
+    selectedInfo.textContent = `ANSI ${zeroPad(finalMainColor.index)}, ${finalMainColor.hex}`;
+
+    
+    const hueComp = (baseHue + 180) % 360;
+    const hueTri1 = (baseHue + 120) % 360;
+    const hueTri2 = (baseHue + 240) % 360;
+    const hueAna1 = (baseHue + 30) % 360;
+    const hueAna2 = (baseHue - 30 + 360) % 360;
+    const hueSC1  = (baseHue + 180 + 30) % 360;
+    const hueSC2  = (baseHue + 180 - 30 + 360) % 360;
+
+    
+    const compColor       = getNearestXtermColor(hueComp, sat, lum);
+    const triColor1       = getNearestXtermColor(hueTri1, sat, lum);
+    const triColor2       = getNearestXtermColor(hueTri2, sat, lum);
+    const anaColor1       = getNearestXtermColor(hueAna1, sat, lum);
+    const anaColor2       = getNearestXtermColor(hueAna2, sat, lum);
+    const splitCompColor1 = getNearestXtermColor(hueSC1, sat, lum);
+    const splitCompColor2 = getNearestXtermColor(hueSC2, sat, lum);
+
+    
+    colComplementary.innerHTML = '<h3>Complementary</h3>';
+    colTriadic.innerHTML       = '<h3>Triadic</h3>';
+    colAnalogous.innerHTML     = '<h3>Analogous</h3>';
+    colSplitComp.innerHTML     = '<h3>Split Comp</h3>';
+
+    
+    appendSwatch(colComplementary, compColor);
+    appendSwatch(colTriadic,       triColor1);
+    appendSwatch(colTriadic,       triColor2);
+    appendSwatch(colAnalogous,     anaColor1);
+    appendSwatch(colAnalogous,     anaColor2);
+    appendSwatch(colSplitComp,     splitCompColor1);
+    appendSwatch(colSplitComp,     splitCompColor2);
+  }
+
+  function appendSwatch(parentEl, colorObj) {
+    const wrapper = document.createElement('div');
+
+    const swatch = document.createElement('span');
+    swatch.className = 'color-swatch';
+    swatch.style.backgroundColor = colorObj.hex;
+    wrapper.appendChild(swatch);
+
+    const label = document.createElement('span');
+    label.className = 'swatch-label';
+    label.textContent = `ANSI ${colorObj.index} (${colorObj.hex})`;
+
+    wrapper.appendChild(label);
+    parentEl.appendChild(wrapper);
+  }
+  selectedHue = computeHueFromXY(cursorX, cursorY);
+  showColorSchemes(selectedHue);
+
+</script>
+</body>
+</html>

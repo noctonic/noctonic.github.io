@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>NES Sprite Sheet Extractor</title>
+  <style>
+    body {
+      background-color: #000;
+      color: #fff;
+      font-family: sans-serif;
+      margin: 0;
+      padding: 20px;
+      text-align: center;
+    }
+    h1, h2, p {
+      margin: 0.5em auto;
+      max-width: 800px;
+    }
+    #controls {
+      margin: 1em auto;
+      max-width: 800px;
+    }
+    #output {
+      display: block;
+      margin: 20px auto;
+      border: 1px solid #ccc;
+      max-width: 90vw;
+      height: auto;
+    }
+    label {
+      margin-right: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>NES Sprite Sheet Extractor</h1>
+  <p>
+    Select a <code>.nes</code> file, choose a CHR extraction method and a color palette.<br/>
+    Then pick a scaling (1× to 7×) to display the sprites.
+  </p>
+
+  <div id="controls">
+    <input type="file" id="fileInput" />
+
+    <h2>Method:</h2>
+    <label><input type="radio" name="method" value="standard" checked>Standard</label>
+    <label><input type="radio" name="method" value="fallback">Fallback</label>
+
+    <h2>Palette:</h2>
+    <select id="paletteSelect">
+      <option value="grayscale">Grayscale</option>
+      <option value="blueish">Blueish</option>
+      <option value="greenish">Greenish</option>
+      <option value="redish">Redish</option>
+    </select>
+
+    <h2>Scale:</h2>
+    <select id="scaleSelect">
+      <option value="1">1×</option>
+      <option value="2">2×</option>
+      <option value="3">3×</option>
+      <option value="4">4×</option>
+      <option value="5" selected>5×</option>
+      <option value="6">6×</option>
+      <option value="7">7×</option>
+    </select>
+  </div>
+
+  <img id="output" alt="Sprite Sheet PNG" />
+
+  <script>
+    let globalFileArrayBuffer = null;
+    let globalCHRDataList = [];
+
+    document.getElementById('fileInput').addEventListener('change', async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      try {
+        globalFileArrayBuffer = await file.arrayBuffer();
+        parseAndRenderSelectedFile();
+      } catch (err) {
+        console.error(err);
+      }
+    });
+
+    const methodRadios = document.getElementsByName('method');
+    for (const radio of methodRadios) {
+      radio.addEventListener('change', () => {
+        if (globalFileArrayBuffer) {
+          parseAndRenderSelectedFile();
+        }
+      });
+    }
+
+    document.getElementById('paletteSelect').addEventListener('change', () => {
+      if (globalCHRDataList.length > 0) {
+        parseAndRenderSelectedFile();
+      }
+    });
+
+    document.getElementById('scaleSelect').addEventListener('change', () => {
+      if (globalCHRDataList.length > 0) {
+        parseAndRenderSelectedFile();
+      }
+    });
+
+    function parseAndRenderSelectedFile() {
+      if (!globalFileArrayBuffer) return;
+
+      const method = getSelectedMethod();
+      globalCHRDataList = parseAllCHRFromNES(globalFileArrayBuffer, method);
+
+      if (globalCHRDataList.length === 0) {
+        document.getElementById('output').src = "";
+        return;
+      }
+
+      const combinedCHR = combineCHRData(globalCHRDataList);
+
+      const palette = getSelectedPalette();
+      const scale = getSelectedScale();
+
+      renderCHR(combinedCHR, palette, scale);
+    }
+
+    function getSelectedMethod() {
+      const radios = document.getElementsByName('method');
+      for (const r of radios) {
+        if (r.checked) return r.value;
+      }
+      return 'standard';
+    }
+
+    function getSelectedPalette() {
+      return document.getElementById('paletteSelect').value;
+    }
+
+    function getSelectedScale() {
+      return parseInt(document.getElementById('scaleSelect').value, 10);
+    }
+
+    function parseAllCHRFromNES(arrayBuffer, method) {
+      const bytes = new Uint8Array(arrayBuffer);
+
+      if (bytes[0] !== 0x4E || bytes[1] !== 0x45 || bytes[2] !== 0x53 || bytes[3] !== 0x1A) {
+        throw new Error("Not a valid iNES ROM (missing 'NES\\x1A' signature).");
+      }
+
+      const prgBanks = bytes[4];
+      const chrBanks = bytes[5];
+      const flags6 = bytes[6];
+      const flags7 = bytes[7];
+
+      const isINES2 = ((flags7 & 0x0C) === 0x08);
+      let actualCHRBankCount = chrBanks;
+      if (isINES2) {
+        const extendedCHR = (bytes[9] & 0x0F) << 8;
+        actualCHRBankCount |= extendedCHR;
+      }
+
+      const hasTrainer = (flags6 & 0x04) !== 0;
+
+      let offset = 16;
+      if (hasTrainer) {
+        offset += 512;
+      }
+
+      offset += prgBanks * 16384;
+
+      const expectedCHRSize = actualCHRBankCount * 8192;
+      const totalFileSize = bytes.length;
+
+      let results = [];
+
+      if (method === 'standard') {
+        if (expectedCHRSize > 0 && (offset + expectedCHRSize) <= totalFileSize) {
+          const standardCHR = bytes.slice(offset, offset + expectedCHRSize);
+          if (standardCHR.length > 0) {
+            results.push(standardCHR);
+          }
+        }
+      }
+
+      if (method === 'fallback') {
+        results = naiveCHRScan(bytes.slice(16));
+      }
+
+      return results;
+    }
+
+    function naiveCHRScan(data) {
+      const bankSize = 8192;
+      const foundBanks = [];
+      for (let start = 0; start + bankSize <= data.length; start += bankSize) {
+        const chunk = data.slice(start, start + bankSize);
+        if (looksLikeCHR(chunk)) {
+          foundBanks.push(chunk);
+        }
+      }
+      return foundBanks;
+    }
+
+    function looksLikeCHR(chunk) {
+      if (chunk.length < 16) return false;
+      let nonZero = 0;
+      for (let i = 0; i < chunk.length; i++) {
+        if (chunk[i] !== 0) nonZero++;
+      }
+      return (nonZero >= chunk.length * 0.1);
+    }
+
+    function combineCHRData(chrDataList) {
+      if (chrDataList.length === 1) {
+        return chrDataList[0];
+      }
+      const totalLength = chrDataList.reduce((acc, slice) => acc + slice.length, 0);
+      const combined = new Uint8Array(totalLength);
+      let offset = 0;
+      for (const slice of chrDataList) {
+        combined.set(slice, offset);
+        offset += slice.length;
+      }
+      return combined;
+    }
+
+    function decodeCHR(chrData, paletteName) {
+      const paletteMap = {
+        grayscale: [
+          [  0,   0,   0, 255],
+          [ 85,  85,  85, 255],
+          [170, 170, 170, 255],
+          [255, 255, 255, 255]
+        ],
+        blueish: [
+          [  0,   0,   0, 255],
+          [  0,  30, 116, 255],
+          [  8,  76, 176, 255],
+          [192, 208, 232, 255]
+        ],
+        greenish: [
+          [  0,   0,   0, 255],
+          [  0,  85,   0, 255],
+          [  0, 170,   0, 255],
+          [  0, 255,   0, 255]
+        ],
+        redish: [
+          [  0,   0,   0, 255],
+          [170,   0,   0, 255],
+          [255,  85,  85, 255],
+          [255, 170, 170, 255]
+        ]
+      };
+
+      const palette = paletteMap[paletteName] || paletteMap.grayscale;
+      const tileCount = Math.floor(chrData.length / 16);
+
+      const tilesAcross = 16;
+      const tilesDown = Math.ceil(tileCount / tilesAcross);
+
+      const imageWidth = tilesAcross * 8;
+      const imageHeight = tilesDown * 8;
+      const pixelData = new Uint8ClampedArray(imageWidth * imageHeight * 4);
+
+      for (let tileIndex = 0; tileIndex < tileCount; tileIndex++) {
+        const tileX = (tileIndex % tilesAcross) * 8;
+        const tileY = Math.floor(tileIndex / tilesAcross) * 8;
+        const base = tileIndex * 16;
+
+        for (let row = 0; row < 8; row++) {
+          const lowByte  = chrData[base + row];
+          const highByte = chrData[base + 8 + row];
+
+          for (let col = 0; col < 8; col++) {
+            const bitLow  = (lowByte  >> (7 - col)) & 1;
+            const bitHigh = (highByte >> (7 - col)) & 1;
+            const colorIndex = (bitHigh << 1) | bitLow;
+            const [r, g, b, a] = palette[colorIndex];
+
+            const px = tileX + col;
+            const py = tileY + row;
+            const idx = (py * imageWidth + px) * 4;
+
+            pixelData[idx]   = r;
+            pixelData[idx+1] = g;
+            pixelData[idx+2] = b;
+            pixelData[idx+3] = a;
+          }
+        }
+      }
+
+      return { width: imageWidth, height: imageHeight, data: pixelData };
+    }
+
+    function drawCHRToCanvas({ width, height, data }) {
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+
+      const imageData = ctx.createImageData(width, height);
+      imageData.data.set(data);
+      ctx.putImageData(imageData, 0, 0);
+
+      return canvas;
+    }
+
+    function scaleCanvas(canvas, scale) {
+      const scaledCanvas = document.createElement('canvas');
+      scaledCanvas.width = canvas.width * scale;
+      scaledCanvas.height = canvas.height * scale;
+
+      const ctx = scaledCanvas.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      ctx.mozImageSmoothingEnabled = false;
+      ctx.webkitImageSmoothingEnabled = false;
+      ctx.msImageSmoothingEnabled = false;
+
+      ctx.drawImage(canvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
+      return scaledCanvas;
+    }
+
+    function renderCHR(chrData, paletteName, scale) {
+      const decoded = decodeCHR(chrData, paletteName);
+      const unscaledCanvas = drawCHRToCanvas(decoded);
+      const scaledCanvas = scaleCanvas(unscaledCanvas, scale);
+      document.getElementById('output').src = scaledCanvas.toDataURL("image/png");
+    }
+  </script>
+</body>
+</html>

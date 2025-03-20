@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>DMG Channel 3</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #222, #444);
+      color: #eee;
+    }
+    h1 {
+      text-align: center;
+      margin-top: 20px;
+    }
+    #waveCanvas {
+      margin: 20px 0;
+      border: 2px solid #ccc;
+      background: #555;
+      cursor: crosshair;
+      touch-action: none;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+    }
+    .controls {
+      text-align: center;
+    }
+    .control-group {
+      margin: 12px 0;
+    }
+    label {
+      margin-right: 10px;
+    }
+    #waveHex {
+      resize: none;
+      font-family: monospace;
+      background: #222;
+      color: #0f0;
+      border: 1px solid #444;
+      padding: 5px;
+    }
+    #regValue,
+    #volume {
+      width: 640px;
+      margin-top: 8px;
+    }
+    .keyboard {
+      display: inline-block;
+      user-select: none;
+      border: 2px solid #888;
+      padding: 8px;
+      margin-top: 20px;
+      background: #333;
+      box-shadow: 0 0 8px rgba(0, 0, 0, 0.4);
+      position: relative;
+    }
+    .keyboard button {
+      width: 40px;
+      height: 120px;
+      margin: 0 1px;
+      border: 1px solid #999;
+      position: relative;
+      background: #fff;
+      cursor: pointer;
+    }
+    .keyboard button.black {
+      transform: translateY(-50%);
+      background: #111;
+      color: #fff;
+      width: 30px;
+      height: 80px;
+      margin: 0 -15px;
+      z-index: 2;
+    }
+  </style>
+</head>
+<body>
+  <h1>DMG Channel 3 Wavetable</h1>
+  <canvas id="waveCanvas" width="640" height="256"></canvas>
+  <div>
+    <label for="waveHex">Wavetable Hex:</label>
+    <textarea id="waveHex" cols="47" rows="1" readonly></textarea>
+  </div>
+  <div class="controls">
+    <div class="control-group">
+      <label for="regValue">Channel 3 11-bit Value (0–2047):</label>
+      <span id="regValueHex">0x400</span>
+      <span id="freqValue">~??? Hz</span>
+      <br>
+      <input type="range" id="regValue" min="0" max="2047" value="1024" step="1"/>
+      <button id="beepBtn">Beep</button>
+    </div>
+    <div class="control-group">
+      <label for="volume">Volume:</label><span id="volValue">0.25</span><br>
+      <input type="range" id="volume" min="0" max="1" value="0.25" step="0.01" />
+    </div>
+  </div>
+  <div id="keyboardContainer" class="keyboard"></div>
+  <script>
+    const noteData = [
+      { name: 'C2',  gb: 1046, isBlack: false },
+      { name: 'C#2', gb: 1102, isBlack: true },
+      { name: 'D2',  gb: 1155, isBlack: false },
+      { name: 'D#2', gb: 1205, isBlack: true },
+      { name: 'E2',  gb: 1253, isBlack: false },
+      { name: 'F2',  gb: 1297, isBlack: false },
+      { name: 'F#2', gb: 1339, isBlack: true },
+      { name: 'G2',  gb: 1379, isBlack: false },
+      { name: 'G#2', gb: 1417, isBlack: true },
+      { name: 'A2',  gb: 1452, isBlack: false },
+      { name: 'A#2', gb: 1486, isBlack: true },
+      { name: 'B2',  gb: 1517, isBlack: false },
+      { name: 'C3',  gb: 1547, isBlack: false },
+      { name: 'C#3', gb: 1575, isBlack: true },
+      { name: 'D3',  gb: 1602, isBlack: false },
+      { name: 'D#3', gb: 1627, isBlack: true },
+      { name: 'E3',  gb: 1650, isBlack: false },
+      { name: 'F3',  gb: 1673, isBlack: false },
+      { name: 'F#3', gb: 1694, isBlack: true },
+      { name: 'G3',  gb: 1714, isBlack: false },
+      { name: 'G#3', gb: 1732, isBlack: true },
+      { name: 'A3',  gb: 1750, isBlack: false },
+      { name: 'A#3', gb: 1767, isBlack: true },
+      { name: 'B3',  gb: 1783, isBlack: false },
+      { name: 'C4',  gb: 1798, isBlack: false },
+      { name: 'C#4', gb: 1812, isBlack: true },
+      { name: 'D4',  gb: 1825, isBlack: false },
+      { name: 'D#4', gb: 1837, isBlack: true },
+      { name: 'E4',  gb: 1849, isBlack: false },
+      { name: 'F4',  gb: 1860, isBlack: false },
+      { name: 'F#4', gb: 1871, isBlack: true },
+      { name: 'G4',  gb: 1881, isBlack: false },
+      { name: 'G#4', gb: 1890, isBlack: true },
+      { name: 'A4',  gb: 1899, isBlack: false },
+      { name: 'A#4', gb: 1907, isBlack: true },
+      { name: 'B4',  gb: 1915, isBlack: false }
+    ];
+    let audioContext = null;
+    let sourceNode = null;
+    let gainNode = null;
+    let waveBuffer = null;
+    const waveData = [
+      0,1,2,3,4,5,6,7,
+      8,9,10,11,12,13,14,15,
+      14,13,12,11,10,9,8,7,
+      6,5,4,3,2,1,0,0
+    ];
+    const canvas = document.getElementById("waveCanvas");
+    const ctx = canvas.getContext("2d");
+    const width = canvas.width;
+    const height = canvas.height;
+    const barWidth = width / 32;
+    const stepHeight = height / 16;
+
+    function buildWaveTable() {
+      if (!audioContext) return;
+      const sr = audioContext.sampleRate;
+      const floatData = waveData.map(v => (v / 15) * 2 - 1);
+      waveBuffer = audioContext.createBuffer(1, 32, sr);
+      const channelData = waveBuffer.getChannelData(0);
+      for (let i = 0; i < 32; i++) {
+        channelData[i] = floatData[i];
+      }
+    }
+
+    function initAudioContext() {
+      if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      }
+    }
+
+    function createBitcrusher(audioContext, reductionFactor = 48000/32000, bitDepth = 4) {
+      const scriptNode = audioContext.createScriptProcessor(256, 1, 1);
+      let sampleCount = 0;
+      let lastSample = 0;
+      const step = Math.pow(2, bitDepth);
+      scriptNode.onaudioprocess = function(e) {
+        const input = e.inputBuffer.getChannelData(0);
+        const output = e.outputBuffer.getChannelData(0);
+        for (let i = 0; i < input.length; i++) {
+          if (sampleCount % reductionFactor < 1) {
+            lastSample = Math.floor(input[i] * step) / step;
+          }
+          output[i] = lastSample;
+          sampleCount++;
+        }
+      };
+      return scriptNode;
+    }
+
+
+    function startWave(timeout) {
+      initAudioContext();
+      buildWaveTable();
+      sourceNode = audioContext.createBufferSource();
+      sourceNode.buffer = waveBuffer;
+      sourceNode.loop = true;
+      gainNode = audioContext.createGain();
+      gainNode.gain.value = parseFloat(volumeSlider.value);
+      sourceNode.connect(gainNode).connect(audioContext.destination);
+      gainNode.connect(createBitcrusher(audioContext, 48000/32000, 4)).connect(audioContext.destination);
+      updateNoteFrequency();
+      sourceNode.start(0);
+      if (typeof timeout === 'number') {
+        setTimeout(() => {
+          sourceNode.stop();
+        }, timeout);
+  }
+    }
+
+    function stopWave() {
+      if (sourceNode) {
+        try {
+          sourceNode.stop();
+        } catch (e) {}
+        sourceNode.disconnect();
+        sourceNode = null;
+      }
+      if (gainNode) {
+        gainNode.disconnect();
+        gainNode = null;
+      }
+    }
+
+    function updateNoteFrequency() {
+      if (!sourceNode || !audioContext) return;
+      const regVal = parseInt(regSlider.value, 10);
+      const freq = 65536 / (2048 - regVal);
+      sourceNode.playbackRate.value = freq * (32 / audioContext.sampleRate);
+    }
+
+    function drawWave() {
+      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = "white";
+      for (let i = 0; i < 32; i++) {
+        const val = waveData[i];
+        const barHeight = val * stepHeight;
+        const x = i * barWidth;
+        const y = height - barHeight;
+        ctx.fillRect(x, y, barWidth, barHeight);
+      }
+      updateWaveHex();
+    }
+
+    function updateWaveHex() {
+      const hexArray = [];
+      for (let i = 0; i < 16; i++) {
+        const hi = waveData[2 * i] & 0x0F;
+        const lo = waveData[2 * i + 1] & 0x0F;
+        const byteVal = (hi << 4) | lo;
+        hexArray.push(byteVal.toString(16).padStart(2, '0').toUpperCase());
+      }
+      document.getElementById('waveHex').value = hexArray.join(' ');
+    }
+
+    let isDrawing = false;
+
+    canvas.addEventListener('pointerdown', e => {
+      isDrawing = true;
+      updateBarFromPointer(e);
+    });
+
+    canvas.addEventListener('pointermove', e => {
+      if (isDrawing) {
+        updateBarFromPointer(e);
+      }
+    });
+
+    canvas.addEventListener('pointerup', () => {
+      isDrawing = false;
+    });
+
+    canvas.addEventListener('pointerleave', () => {
+      isDrawing = false;
+    });
+
+    function updateBarFromPointer(e) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const x = (e.clientX - rect.left) * scaleX;
+      const y = (e.clientY - rect.top-15) * scaleY;
+      const barIndex = Math.floor(x / barWidth);
+      if (barIndex < 0 || barIndex >= 32) return;
+      const rawVal = 15 - (y / stepHeight);
+      const val = Math.max(0, Math.min(15, Math.round(rawVal)));
+      waveData[barIndex] = val;
+      drawWave();
+    }
+
+    const regSlider = document.getElementById('regValue');
+    const regValueHexLabel = document.getElementById('regValueHex');
+    const freqValueLabel = document.getElementById('freqValue');
+
+    regSlider.addEventListener('input', () => {
+      const regVal = parseInt(regSlider.value, 10);
+      const hexStr = regVal.toString(16).toUpperCase().padStart(3, '0');
+      regValueHexLabel.textContent = '0x' + hexStr;
+      const freq = 65536 / (2048 - regVal);
+      freqValueLabel.textContent = freq.toFixed(2) + ' Hz';
+      updateNoteFrequency();
+    });
+
+    const volumeSlider = document.getElementById('volume');
+    const volValueLabel = document.getElementById('volValue');
+
+    volumeSlider.addEventListener('input', () => {
+      volValueLabel.textContent = parseFloat(volumeSlider.value).toFixed(2);
+      if (gainNode) {
+        gainNode.gain.value = parseFloat(volumeSlider.value);
+      }
+    });
+
+    let isPointerDown = false;
+    let lastKeyBtn = null;
+    const keyboardContainer = document.getElementById('keyboardContainer');
+
+    function handleKeyHover(e) {
+      if (e.target.tagName === 'BUTTON') {
+        if (lastKeyBtn !== e.target) {
+          lastKeyBtn = e.target;
+          const gbVal = parseInt(e.target.dataset.gb, 10);
+          document.getElementById('regValue').value = gbVal;
+          regSlider.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      }
+    }
+
+    keyboardContainer.addEventListener('pointerdown', e => {
+      isPointerDown = true;
+      lastKeyBtn = null;
+      handleKeyHover(e);
+      startWave();
+    });
+
+    keyboardContainer.addEventListener('pointermove', e => {
+      if (isPointerDown) {
+        handleKeyHover(e);
+      }
+    });
+
+    keyboardContainer.addEventListener('pointerup', () => {
+      isPointerDown = false;
+      lastKeyBtn = null;
+      stopWave();
+    });
+
+    keyboardContainer.addEventListener('pointerleave', () => {
+      if (isPointerDown) {
+        stopWave();
+      }
+      isPointerDown = false;
+      lastKeyBtn = null;
+    });
+
+    function createKeyboard() {
+      noteData.forEach(note => {
+        const keyBtn = document.createElement('button');
+        keyBtn.dataset.gb = note.gb;
+        if (note.isBlack) {
+          keyBtn.classList.add('black');
+        }
+        keyBtn.addEventListener('click', () => {
+          document.getElementById('regValue').value = note.gb;
+          regSlider.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+        keyboardContainer.appendChild(keyBtn);
+      });
+    }
+
+    function beep() {
+      startWave(500)
+    }
+
+    document.getElementById('beepBtn').addEventListener('click', beep);
+
+    window.addEventListener('load', () => {
+      drawWave();
+      regValueHexLabel.textContent = '0x400';
+      freqValueLabel.textContent = (65536 / (2048 - 1024)).toFixed(2) + ' Hz';
+      volValueLabel.textContent = '0.25';
+      createKeyboard();
+    });
+  </script>
+</body>
+</html>
