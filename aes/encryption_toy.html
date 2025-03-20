@@ -94,11 +94,12 @@
       .then(res => res.json())
       .then(data => {
         for (const schemeName of Object.keys(data)) {
-
+          if (schemeName.endsWith('100')) {
             colorSchemesCollection.push({
               name: schemeName,
               ...data[schemeName]
             });
+          }
         }
         shuffleArray(colorSchemesCollection);
         initPerlinCanvas();
