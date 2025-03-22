@@ -35,17 +35,13 @@
     input[type="range"] {
       width: 120px;
     }
-    #paletteContainer {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      width: 100%;
+    #paletteContainer, #paletteContainer2 {
+      position: relative;
       height: 60px;
       display: flex;
       justify-content: center;
       align-items: center;
       background: rgba(0,0,0,0.8);
-      z-index: 999;
       padding: 8px 0;
       box-sizing: border-box;
     }
@@ -69,6 +65,14 @@
     #copyPaletteBtn:hover {
       background: #aaa;
     }
+
+    #bottomPalettes {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      z-index: 999;
+    }
   </style>
 </head>
 <body>
@@ -78,26 +82,23 @@
   <h3>Helix Configuration</h3>
 
   <label>Revolutions:
-    <input type="number" id="helixRevs" value="1" max="10"step="0.01"/>
+    <input type="number" id="helixRevs" value=".5" max="10" step="0.1"/>
   </label>
   <label>Points:
-    <input type="number" id="helixPoints" min="0" max="64"value="32" />
+    <input type="number" id="helixPoints" min="0" max="64" value="32" />
   </label>
-  <hr/>
   <label>
-    Max Size:
-    <input type="range" id="cMaxSlider" min="0" max="1000" step="1" value="100" />
-    <span id="cMaxVal">100</span>
+    <input type="checkbox" id="complimentAmpCb" />
+    Compliment Amp
+  </label>
+  <label>
+    <input type="checkbox" id="complimentDirCb" checked />
+    Compliment Dir
   </label>
   <label>
     Amplitude:
-    <input type="range" id="ampSlider" min="0" max="1" step="0.01" value="1" />
+    <input type="range" id="ampSlider" min="-1" max="1" step="0.01" value="0.25" />
     <span id="ampVal">1</span>
-  </label>
-  <label>
-    Frequency:
-    <input type="range" id="freqSlider" min="1" max="10" step="0.01" value="1" />
-    <span id="freqVal">1</span>
   </label>
   <label>
     Ellipse X:
@@ -111,19 +112,17 @@
   </label>
   <label>
     Hue Offset:
-    <input type="range" id="hueOffSlider" min="0" max="360" step="1" value="0" />
+    <input type="range" id="hueOffSlider" min="0" max="360" step="1" value="300" />
     <span id="hueOffVal">0</span>
-  </label>
-  <label>
-    Rev Direction:
-    <input type="range" id="dirSlider" min="-2" max="2" step="0.1" value="-1" />
-    <span id="dirVal">-1</span>
   </label>
 
   <button id="copyPaletteBtn">Copy Palette to Clipboard</button>
 </div>
 
-<div id="paletteContainer"></div>
+<div id="bottomPalettes">
+  <div id="paletteContainer"></div>
+  <div id="paletteContainer2" style="display:none;"></div>
+</div>
 
 <script type="importmap">
 {
@@ -138,36 +137,34 @@ import * as THREE from 'three';
 import { OrbitControls } from './threejs/OrbitControls.js';
 
 let scene, camera, renderer, controls;
+
 let helixGroup = null;
+let primaryPalette = [];
 
-let currentPalette = [];
+let helixCompGroup = null;
+let complimentPalette = [];
 
-const helixRevsInput  = document.getElementById('helixRevs');
-const helixPointsInput = document.getElementById('helixPoints');
+const helixRevsInput     = document.getElementById('helixRevs');
+const helixPointsInput   = document.getElementById('helixPoints');
 
-const cMaxSlider      = document.getElementById('cMaxSlider');
-const cMaxValSpan     = document.getElementById('cMaxVal');
+const complimentAmpCb    = document.getElementById('complimentAmpCb');
+const complimentDirCb    = document.getElementById('complimentDirCb');
 
-const ampSlider       = document.getElementById('ampSlider');
-const ampVal          = document.getElementById('ampVal');
+const ampSlider          = document.getElementById('ampSlider');
+const ampVal             = document.getElementById('ampVal');
 
-const freqSlider      = document.getElementById('freqSlider');
-const freqVal         = document.getElementById('freqVal');
+const ellipseXSlider     = document.getElementById('ellipseXSlider');
+const ellipseZSlider     = document.getElementById('ellipseZSlider');
+const ellipseXVal        = document.getElementById('ellipseXVal');
+const ellipseZVal        = document.getElementById('ellipseZVal');
 
-const ellipseXSlider = document.getElementById('ellipseXSlider');
-const ellipseZSlider = document.getElementById('ellipseZSlider');
+const hueOffSlider       = document.getElementById('hueOffSlider');
+const hueOffVal          = document.getElementById('hueOffVal');
 
-const ellipseXVal = document.getElementById('ellipseXVal');
-const ellipseZVal = document.getElementById('ellipseZVal');
 
-const hueOffSlider    = document.getElementById('hueOffSlider');
-const hueOffVal       = document.getElementById('hueOffVal');
-
-const dirSlider       = document.getElementById('dirSlider');
-const dirVal          = document.getElementById('dirVal');
-
-const paletteContainer= document.getElementById('paletteContainer');
-const copyBtn         = document.getElementById('copyPaletteBtn');
+const paletteContainer   = document.getElementById('paletteContainer');
+const paletteContainer2  = document.getElementById('paletteContainer2');
+const copyBtn            = document.getElementById('copyPaletteBtn');
 
 init();
 animate();
@@ -193,30 +190,24 @@ function init(){
   controls.dampingFactor = 0.05;
   controls.target.set(0, 50, 0);
 
-  const amb = new THREE.AmbientLight(0xffffff, 0.4);
+  const amb = new THREE.AmbientLight(0xffffff, 1);
   scene.add(amb);
 
   window.addEventListener("resize", onWindowResize);
 
-  cMaxValSpan.textContent  = cMaxSlider.value;
   ampVal.textContent       = ampSlider.value;
-  freqVal.textContent      = freqSlider.value;
   hueOffVal.textContent    = hueOffSlider.value;
-  dirVal.textContent       = dirSlider.value;
+  ellipseXVal.textContent  = ellipseXSlider.value;
+  ellipseZVal.textContent  = ellipseZSlider.value;
 
   helixRevsInput.addEventListener('input', buildHelix);
   helixPointsInput.addEventListener('input', buildHelix);
 
-  cMaxSlider.addEventListener('input', () => {
-    cMaxValSpan.textContent = cMaxSlider.value;
-    buildHelix();
-  });
+  complimentAmpCb.addEventListener('change', buildHelix);
+  complimentDirCb.addEventListener('change', buildHelix);
+
   ampSlider.addEventListener('input', () => {
     ampVal.textContent = ampSlider.value;
-    buildHelix();
-  });
-  freqSlider.addEventListener('input', () => {
-    freqVal.textContent = freqSlider.value;
     buildHelix();
   });
   ellipseXSlider.addEventListener('input', () => {
@@ -229,10 +220,6 @@ function init(){
   });
   hueOffSlider.addEventListener('input', () => {
     hueOffVal.textContent = hueOffSlider.value;
-    buildHelix();
-  });
-  dirSlider.addEventListener('input', () => {
-    dirVal.textContent = dirSlider.value;
     buildHelix();
   });
 
@@ -257,49 +244,72 @@ function buildHelix() {
   if (helixGroup) {
     scene.remove(helixGroup);
   }
-  helixGroup = new THREE.Group();
+  if (helixCompGroup) {
+    scene.remove(helixCompGroup);
+  }
+
+  const mainAmp = parseFloat(ampSlider.value);
+  const mainDir = 1;
+  const mainHelix = buildSingleHelix(mainAmp, mainDir);
+  helixGroup = mainHelix.group;
+  primaryPalette = mainHelix.palette;
   scene.add(helixGroup);
 
-  const colorsArray = [];
+  const doCompliment = (complimentAmpCb.checked || complimentDirCb.checked);
+  if (doCompliment) {
+    let compAmp = mainAmp;
+    let compDir = mainDir;
+    if (complimentAmpCb.checked) compAmp *= -1;
+    if (complimentDirCb.checked) compDir *= -1;
+
+    const compHelix = buildSingleHelix(compAmp, compDir);
+    helixCompGroup = compHelix.group;
+    complimentPalette = compHelix.palette.reverse();
+    scene.add(helixCompGroup);
+
+    paletteContainer2.style.display = 'flex';
+    buildPalette(complimentPalette.slice(), paletteContainer2);
+  } else {
+    complimentPalette = [];
+    paletteContainer2.style.display = 'none';
+    paletteContainer2.innerHTML = '';
+  }
+
+  buildPalette(primaryPalette, paletteContainer);
+}
+
+function buildSingleHelix(amp, helixDir) {
+  const group = new THREE.Group();
 
   const baseRevs  = parseFloat(helixRevsInput.value);
   const totalPts  = parseInt(helixPointsInput.value) - 1;
-  const cMaxVal   = parseFloat(cMaxSlider.value);
-  const amp       = parseFloat(ampSlider.value);
-  const freq      = parseFloat(freqSlider.value);
+  const cMaxVal   = 300;
+  const freq      = 1
   const ellipseX  = parseFloat(ellipseXSlider.value);
   const ellipseZ  = parseFloat(ellipseZSlider.value);
   const hueOff    = parseFloat(hueOffSlider.value);
-  const dir       = parseFloat(dirSlider.value);
 
-  const actualRevs = baseRevs * dir;
+  const actualRevs = baseRevs * helixDir;
+  const colorsArray = [];
 
   for (let i = 0; i <= totalPts; i++) {
     const t = i / totalPts;
     const L = 100 * t;
-
     const frac = amp * Math.sin(freq * Math.PI * t);
-
     const cRadius = frac * cMaxVal;
-
     const angleRad = actualRevs * 2.0 * Math.PI * t;
 
     const x = ellipseX * cRadius * Math.cos(angleRad);
     const z = ellipseZ * cRadius * Math.sin(angleRad);
-    const y = L;
+    const y = 100 * t;
 
     const cDist = Math.sqrt(x*x + z*z);
-
     let hueRaw = THREE.MathUtils.radToDeg(Math.atan2(z, x));
     if (hueRaw < 0) hueRaw += 360;
     const hDeg = hueRaw + hueOff;
-
     const fraction = Math.min(1.0, cDist / cMaxVal);
-
     const cSat = computeSatC(hDeg, L, cMaxVal);
-
     const cUsed = fraction * cSat;
-
     const colorHex = lchColorToHex(L, cUsed, hDeg);
     colorsArray.push(colorHex);
 
@@ -307,15 +317,14 @@ function buildHelix() {
     const mat = new THREE.MeshBasicMaterial({ color: colorHex });
     const sp  = new THREE.Mesh(geo, mat);
     sp.position.set(x, y, z);
-
-    helixGroup.add(sp);
+    group.add(sp);
   }
 
-  buildPalette(colorsArray);
+  return { group, palette: colorsArray };
 }
 
-function buildPalette(fullColors){
-  paletteContainer.innerHTML = '';
+function buildPalette(fullColors, containerEl){
+  containerEl.innerHTML = '';
 
   const desiredCount = 32;
   const swatchColors = [];
@@ -339,23 +348,36 @@ function buildPalette(fullColors){
     }
   }
 
-  currentPalette = swatchColors.map(hexVal => {
-    return '#' + ('000000' + hexVal.toString(16)).slice(-6);
-  });
-
   swatchColors.forEach(hexVal => {
     const div = document.createElement('div');
     div.className = 'colorSwatch';
     const cssHex = '#' + ( ('000000' + hexVal.toString(16)).slice(-6) );
     div.style.backgroundColor = cssHex;
-    paletteContainer.appendChild(div);
+    containerEl.appendChild(div);
   });
 }
 
 async function copyPaletteToClipboard() {
   try {
-    const paletteJson = JSON.stringify(currentPalette);
-    await navigator.clipboard.writeText(paletteJson);
+    const primaryStrings = primaryPalette.map(hexVal => {
+      return '#' + ('000000' + hexVal.toString(16)).slice(-6);
+    });
+
+    const doCompliment = (complimentAmpCb.checked || complimentDirCb.checked);
+
+    if (!doCompliment) {
+      const paletteJson = JSON.stringify(primaryStrings);
+      await navigator.clipboard.writeText(paletteJson);
+    } else {
+      const complimentStrings = complimentPalette.map(hexVal => {
+        return '#' + ('000000' + hexVal.toString(16)).slice(-6);
+      });
+      const combined = {
+        primary: primaryStrings,
+        compliment: complimentStrings
+      };
+      await navigator.clipboard.writeText(JSON.stringify(combined));
+    }
   } catch (err) {
     console.error('Failed to copy palette:', err);
     alert('Failed to copy palette');
