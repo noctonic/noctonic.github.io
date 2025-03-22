@@ -77,15 +77,15 @@
 <div id="controlsPanel">
   <h3>Helix Configuration</h3>
 
-  <label>Base Helix Revs:
-    <input type="number" id="helixRevs" value="1" step="0.01"/>
+  <label>Revolutions:
+    <input type="number" id="helixRevs" value="1" max="10" step="0.01"/>
   </label>
   <label>Points:
-    <input type="number" id="helixPoints" min="0" value="32" />
+    <input type="number" id="helixPoints" min="0" max="64" value="32" />
   </label>
   <hr/>
   <label>
-    C Max:
+    Max Size:
     <input type="range" id="cMaxSlider" min="0" max="1000" step="1" value="100" />
     <span id="cMaxVal">100</span>
   </label>
