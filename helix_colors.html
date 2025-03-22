@@ -35,7 +35,6 @@
     input[type="range"] {
       width: 120px;
     }
-    /* Palette container at bottom */
     #paletteContainer {
       position: absolute;
       bottom: 0;
@@ -57,6 +56,19 @@
       border: 1px solid #555;
       box-sizing: border-box;
     }
+    #copyPaletteBtn {
+      margin-top: 10px;
+      padding: 6px 12px;
+      background: #888;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      color: #fff;
+      font-size: 14px;
+    }
+    #copyPaletteBtn:hover {
+      background: #aaa;
+    }
   </style>
 </head>
 <body>
@@ -66,12 +78,11 @@
   <h3>Helix Configuration</h3>
 
   <label>Base Helix Revs:
-    <input type="number" id="helixRevs" value="1" step="0.1"/>
+    <input type="number" id="helixRevs" value="1" step="0.01"/>
   </label>
-  <label>Points / rev:
-    <input type="number" id="helixPPR" value="32" />
+  <label>Points:
+    <input type="number" id="helixPoints" min="0" value="32" />
   </label>
-
   <hr/>
   <label>
     C Max:
@@ -85,7 +96,7 @@
   </label>
   <label>
     Frequency:
-    <input type="range" id="freqSlider" min="1" max="3" step="0.1" value="1" />
+    <input type="range" id="freqSlider" min="1" max="10" step="0.01" value="1" />
     <span id="freqVal">1</span>
   </label>
   <label>
@@ -98,6 +109,8 @@
     <input type="range" id="dirSlider" min="-2" max="2" step="0.1" value="-1" />
     <span id="dirVal">-1</span>
   </label>
+
+  <button id="copyPaletteBtn">Copy Palette to Clipboard</button>
 </div>
 
 <div id="paletteContainer"></div>
@@ -117,9 +130,10 @@ import { OrbitControls } from './threejs/OrbitControls.js';
 let scene, camera, renderer, controls;
 let helixGroup = null;
 
-const helixRevsInput  = document.getElementById('helixRevs');
-const helixPPRInput   = document.getElementById('helixPPR');
+let currentPalette = [];
 
+const helixRevsInput  = document.getElementById('helixRevs');
+const helixPointsInput = document.getElementById('helixPoints');
 const cMaxSlider      = document.getElementById('cMaxSlider');
 const cMaxValSpan     = document.getElementById('cMaxVal');
 
@@ -136,6 +150,7 @@ const dirSlider       = document.getElementById('dirSlider');
 const dirVal          = document.getElementById('dirVal');
 
 const paletteContainer= document.getElementById('paletteContainer');
+const copyBtn         = document.getElementById('copyPaletteBtn');
 
 init();
 animate();
@@ -173,7 +188,7 @@ function init(){
   dirVal.textContent       = dirSlider.value;
 
   helixRevsInput.addEventListener('input', buildHelix);
-  helixPPRInput.addEventListener('input', buildHelix);
+  helixPointsInput.addEventListener('input', buildHelix);
 
   cMaxSlider.addEventListener('input', () => {
     cMaxValSpan.textContent = cMaxSlider.value;
@@ -195,6 +210,8 @@ function init(){
     dirVal.textContent = dirSlider.value;
     buildHelix();
   });
+
+  copyBtn.addEventListener('click', copyPaletteToClipboard);
 
   buildHelix();
 }
@@ -220,11 +237,10 @@ function buildHelix(){
 
   const colorsArray = [];
 
-  const baseRevs = parseFloat(helixRevsInput.value) || 2;
-  const ppr = parseInt(helixPPRInput.value) || 40;
-  const totalPts = Math.max(1, Math.floor(baseRevs * ppr));
+  const baseRevs = parseFloat(helixRevsInput.value);
+  const totalPts = parseInt(helixPointsInput.value)-1;
 
-  const cMaxVal = parseFloat(cMaxSlider.value) || 80;
+  const cMaxVal = parseFloat(cMaxSlider.value);
   const amp     = parseFloat(ampSlider.value);
   const freq    = parseFloat(freqSlider.value);
   const hueOff  = parseFloat(hueOffSlider.value);
@@ -288,6 +304,10 @@ function buildPalette(fullColors){
     }
   }
 
+  currentPalette = swatchColors.map(hexVal => {
+    return '#' + ('000000' + hexVal.toString(16)).slice(-6);
+  });
+
   swatchColors.forEach(hexVal => {
     const div = document.createElement('div');
     div.className = 'colorSwatch';
@@ -297,9 +317,84 @@ function buildPalette(fullColors){
   });
 }
 
+async function copyPaletteToClipboard() {
+  try {
+    const paletteJson = JSON.stringify(currentPalette);
+    await navigator.clipboard.writeText(paletteJson);
+  } catch (err) {
+    console.error('Failed to copy palette:', err);
+    alert('Failed to copy palette');
+  }
+}
+
 function computeSatC(hDeg, L, cMax){
-  const s = 0.5*(1 + Math.sin((Math.PI/180)*hDeg));
-  return (0.4 + 0.6*s)* cMax; 
+  let low = 0;
+  let high = cMax;
+
+  for (let i=0; i<8; i++) {
+    const mid = 0.5*(low + high);
+    const [r, g, b] = lchToSrgb(L, mid, hDeg);
+
+    if (r >= 0 && r <= 1 &&
+        g >= 0 && g <= 1 &&
+        b >= 0 && b <= 1) {
+      low = mid;
+    } else {
+      high = mid;
+    }
+  }
+  return low;
+}
+
+function lchToSrgb(L, C, H) {
+  const hRad = (Math.PI / 180) * H;
+  const a = C * Math.cos(hRad);
+  const b = C * Math.sin(hRad);
+
+  let [X, Y, Z] = labToXyz(L, a, b);
+
+  let [rLin, gLin, bLin] = xyzToLinearSrgb(X, Y, Z);
+
+  const r = gammaEncode_sRGB(rLin);
+  const g = gammaEncode_sRGB(gLin);
+  const b_ = gammaEncode_sRGB(bLin);
+
+  return [r, g, b_];
+}
+
+function labToXyz(L, a, b){
+  const REF_X =  95.047;
+  const REF_Y = 100.000;
+  const REF_Z = 108.883;
+
+  const y = (L + 16) / 116;
+  const x = y + (a / 500);
+  const z = y - (b / 200);
+
+  const x3 = x*x*x;
+  const y3 = y*y*y;
+  const z3 = z*z*z;
+
+  const X = (x3 > 0.008856)? (x3) : ((x - 16/116) / 7.787);
+  const Y = (y3 > 0.008856)? (y3) : ((y - 16/116) / 7.787);
+  const Z = (z3 > 0.008856)? (z3) : ((z - 16/116) / 7.787);
+
+  return [X * REF_X, Y * REF_Y, Z * REF_Z];
+}
+
+function xyzToLinearSrgb(X, Y, Z){
+  const rLin =  0.4124*X/100 + 0.3576*Y/100 + 0.1805*Z/100;
+  const gLin =  0.2126*X/100 + 0.7152*Y/100 + 0.0722*Z/100;
+  const bLin =  0.0193*X/100 + 0.1192*Y/100 + 0.9505*Z/100;
+  return [rLin, gLin, bLin];
+}
+
+function gammaEncode_sRGB(u){
+  if (u <= 0.0031308) {
+    return 12.92 * u;
+  } else {
+    return 1.055 * Math.pow(u, 1/2.4) - 0.055;
+  }
 }
 
 function lchColorToHex(L, C, hDeg){
@@ -324,8 +419,8 @@ function lchToRgb(L, C, hDeg){
   x/=100; y/=100; z/=100;
 
   let rLin=  3.2406*x +(-1.5372)*y +(-0.4986)*z;
-  let gLin= -0.9689*x + 1.8758*y  + 0.0415*z;
-  let bLin=  0.0557*x +(-0.2040)*y + 1.0570*z;
+  let gLin= -0.9689*x +  1.8758*y +  0.0415*z;
+  let bLin=  0.0557*x +(-0.2040)*y +  1.0570*z;
   
   const r = gammaSRGB(rLin);
   const g = gammaSRGB(gLin);
