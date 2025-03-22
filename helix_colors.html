@@ -78,10 +78,10 @@
   <h3>Helix Configuration</h3>
 
   <label>Revolutions:
-    <input type="number" id="helixRevs" value="1" max="10" step="0.01"/>
+    <input type="number" id="helixRevs" value="1" max="10"step="0.01"/>
   </label>
   <label>Points:
-    <input type="number" id="helixPoints" min="0" max="64" value="32" />
+    <input type="number" id="helixPoints" min="0" max="64"value="32" />
   </label>
   <hr/>
   <label>
@@ -98,6 +98,16 @@
     Frequency:
     <input type="range" id="freqSlider" min="1" max="10" step="0.01" value="1" />
     <span id="freqVal">1</span>
+  </label>
+  <label>
+    Ellipse X:
+    <input type="range" id="ellipseXSlider" min="0.1" max="2" step="0.01" value="1" />
+    <span id="ellipseXVal">1</span>
+  </label>
+  <label>
+    Ellipse Z:
+    <input type="range" id="ellipseZSlider" min="0.1" max="2" step="0.01" value="1" />
+    <span id="ellipseZVal">1</span>
   </label>
   <label>
     Hue Offset:
@@ -134,6 +144,7 @@ let currentPalette = [];
 
 const helixRevsInput  = document.getElementById('helixRevs');
 const helixPointsInput = document.getElementById('helixPoints');
+
 const cMaxSlider      = document.getElementById('cMaxSlider');
 const cMaxValSpan     = document.getElementById('cMaxVal');
 
@@ -142,6 +153,12 @@ const ampVal          = document.getElementById('ampVal');
 
 const freqSlider      = document.getElementById('freqSlider');
 const freqVal         = document.getElementById('freqVal');
+
+const ellipseXSlider = document.getElementById('ellipseXSlider');
+const ellipseZSlider = document.getElementById('ellipseZSlider');
+
+const ellipseXVal = document.getElementById('ellipseXVal');
+const ellipseZVal = document.getElementById('ellipseZVal');
 
 const hueOffSlider    = document.getElementById('hueOffSlider');
 const hueOffVal       = document.getElementById('hueOffVal');
@@ -202,6 +219,14 @@ function init(){
     freqVal.textContent = freqSlider.value;
     buildHelix();
   });
+  ellipseXSlider.addEventListener('input', () => {
+    ellipseXVal.textContent = ellipseXSlider.value;
+    buildHelix();
+  });
+  ellipseZSlider.addEventListener('input', () => {
+    ellipseZVal.textContent = ellipseZSlider.value;
+    buildHelix();
+  });
   hueOffSlider.addEventListener('input', () => {
     hueOffVal.textContent = hueOffSlider.value;
     buildHelix();
@@ -228,7 +253,7 @@ function animate(){
   renderer.render(scene, camera);
 }
 
-function buildHelix(){
+function buildHelix() {
   if (helixGroup) {
     scene.remove(helixGroup);
   }
@@ -237,36 +262,46 @@ function buildHelix(){
 
   const colorsArray = [];
 
-  const baseRevs = parseFloat(helixRevsInput.value);
-  const totalPts = parseInt(helixPointsInput.value)-1;
-
-  const cMaxVal = parseFloat(cMaxSlider.value);
-  const amp     = parseFloat(ampSlider.value);
-  const freq    = parseFloat(freqSlider.value);
-  const hueOff  = parseFloat(hueOffSlider.value);
-  const dir     = parseFloat(dirSlider.value);
+  const baseRevs  = parseFloat(helixRevsInput.value);
+  const totalPts  = parseInt(helixPointsInput.value) - 1;
+  const cMaxVal   = parseFloat(cMaxSlider.value);
+  const amp       = parseFloat(ampSlider.value);
+  const freq      = parseFloat(freqSlider.value);
+  const ellipseX  = parseFloat(ellipseXSlider.value);
+  const ellipseZ  = parseFloat(ellipseZSlider.value);
+  const hueOff    = parseFloat(hueOffSlider.value);
+  const dir       = parseFloat(dirSlider.value);
 
   const actualRevs = baseRevs * dir;
 
-  for(let i = 0; i <= totalPts; i++){
+  for (let i = 0; i <= totalPts; i++) {
     const t = i / totalPts;
     const L = 100 * t;
-    const rawHue = actualRevs * 360 * t;
-    const hDeg   = rawHue + hueOff;  
 
-    const frac   = amp * Math.sin(freq * Math.PI * t);
-    const cFinal = Math.max(0, frac * cMaxVal);
+    const frac = amp * Math.sin(freq * Math.PI * t);
 
-    const cSat   = computeSatC(hDeg, L, cMaxVal);
-    const cRaw   = Math.max(0, frac * cSat);
+    const cRadius = frac * cMaxVal;
 
-    const colorHex = lchColorToHex(L, cRaw, hDeg);
-    colorsArray.push(colorHex);
+    const angleRad = actualRevs * 2.0 * Math.PI * t;
 
-    const angleRad = (Math.PI/180) * hDeg;
-    const x = cFinal * Math.cos(angleRad);
+    const x = ellipseX * cRadius * Math.cos(angleRad);
+    const z = ellipseZ * cRadius * Math.sin(angleRad);
     const y = L;
-    const z = cFinal * Math.sin(angleRad);
+
+    const cDist = Math.sqrt(x*x + z*z);
+
+    let hueRaw = THREE.MathUtils.radToDeg(Math.atan2(z, x));
+    if (hueRaw < 0) hueRaw += 360;
+    const hDeg = hueRaw + hueOff;
+
+    const fraction = Math.min(1.0, cDist / cMaxVal);
+
+    const cSat = computeSatC(hDeg, L, cMaxVal);
+
+    const cUsed = fraction * cSat;
+
+    const colorHex = lchColorToHex(L, cUsed, hDeg);
+    colorsArray.push(colorHex);
 
     const geo = new THREE.SphereGeometry(3, 12, 12);
     const mat = new THREE.MeshBasicMaterial({ color: colorHex });
