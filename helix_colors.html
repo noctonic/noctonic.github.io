@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Helix Colors</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #000;
+    }
+    #appContainer {
+      position: absolute;
+      width: 100%;
+      height: calc(100% - 60px);
+      top: 0;
+      left: 0;
+    }
+    #controlsPanel {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 999;
+      background: rgba(0,0,0,0.7);
+      color: #fff;
+      padding: 10px;
+      border-radius: 6px;
+      max-width: 330px;
+      font-family: sans-serif;
+    }
+    label {
+      display: block;
+      margin-top: 6px;
+    }
+    input[type="range"] {
+      width: 120px;
+    }
+    /* Palette container at bottom */
+    #paletteContainer {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 60px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: rgba(0,0,0,0.8);
+      z-index: 999;
+      padding: 8px 0;
+      box-sizing: border-box;
+    }
+    .colorSwatch {
+      width: 30px;
+      height: 30px;
+      margin: 0 2px;
+      border: 1px solid #555;
+      box-sizing: border-box;
+    }
+  </style>
+</head>
+<body>
+<div id="appContainer"></div>
+
+<div id="controlsPanel">
+  <h3>Helix Configuration</h3>
+
+  <label>Base Helix Revs:
+    <input type="number" id="helixRevs" value="1" step="0.1"/>
+  </label>
+  <label>Points / rev:
+    <input type="number" id="helixPPR" value="40" />
+  </label>
+
+  <hr/>
+  <label>
+    C Max:
+    <input type="range" id="cMaxSlider" min="0" max="1000" step="1" value="100" />
+    <span id="cMaxVal">100</span>
+  </label>
+  <label>
+    Amplitude:
+    <input type="range" id="ampSlider" min="0" max="1" step="0.01" value="1" />
+    <span id="ampVal">1</span>
+  </label>
+  <label>
+    Frequency:
+    <input type="range" id="freqSlider" min="1" max="3" step="0.1" value="1" />
+    <span id="freqVal">1</span>
+  </label>
+  <label>
+    Hue Offset:
+    <input type="range" id="hueOffSlider" min="0" max="360" step="1" value="0" />
+    <span id="hueOffVal">0</span>
+  </label>
+  <label>
+    Rev Direction:
+    <input type="range" id="dirSlider" min="-2" max="2" step="0.1" value="-1" />
+    <span id="dirVal">-1</span>
+  </label>
+</div>
+
+<div id="paletteContainer"></div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "./threejs/three.module.js"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from './threejs/OrbitControls.js';
+
+let scene, camera, renderer, controls;
+let helixGroup = null;
+
+const helixRevsInput  = document.getElementById('helixRevs');
+const helixPPRInput   = document.getElementById('helixPPR');
+
+const cMaxSlider      = document.getElementById('cMaxSlider');
+const cMaxValSpan     = document.getElementById('cMaxVal');
+
+const ampSlider       = document.getElementById('ampSlider');
+const ampVal          = document.getElementById('ampVal');
+
+const freqSlider      = document.getElementById('freqSlider');
+const freqVal         = document.getElementById('freqVal');
+
+const hueOffSlider    = document.getElementById('hueOffSlider');
+const hueOffVal       = document.getElementById('hueOffVal');
+
+const dirSlider       = document.getElementById('dirSlider');
+const dirVal          = document.getElementById('dirVal');
+
+const paletteContainer= document.getElementById('paletteContainer');
+
+init();
+animate();
+
+function init(){
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x333333);
+
+  camera = new THREE.PerspectiveCamera(
+    45,
+    window.innerWidth / window.innerHeight,
+    0.1,
+    2000
+  );
+  camera.position.set(0, 120, 400);
+
+  renderer = new THREE.WebGLRenderer({ antialias:true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  document.getElementById("appContainer").appendChild(renderer.domElement);
+
+  controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.05;
+  controls.target.set(0, 50, 0);
+
+  const amb = new THREE.AmbientLight(0xffffff, 0.4);
+  scene.add(amb);
+
+  window.addEventListener("resize", onWindowResize);
+
+  cMaxValSpan.textContent  = cMaxSlider.value;
+  ampVal.textContent       = ampSlider.value;
+  freqVal.textContent      = freqSlider.value;
+  hueOffVal.textContent    = hueOffSlider.value;
+  dirVal.textContent       = dirSlider.value;
+
+  helixRevsInput.addEventListener('input', buildHelix);
+  helixPPRInput.addEventListener('input', buildHelix);
+
+  cMaxSlider.addEventListener('input', () => {
+    cMaxValSpan.textContent = cMaxSlider.value;
+    buildHelix();
+  });
+  ampSlider.addEventListener('input', () => {
+    ampVal.textContent = ampSlider.value;
+    buildHelix();
+  });
+  freqSlider.addEventListener('input', () => {
+    freqVal.textContent = freqSlider.value;
+    buildHelix();
+  });
+  hueOffSlider.addEventListener('input', () => {
+    hueOffVal.textContent = hueOffSlider.value;
+    buildHelix();
+  });
+  dirSlider.addEventListener('input', () => {
+    dirVal.textContent = dirSlider.value;
+    buildHelix();
+  });
+
+  buildHelix();
+}
+
+function onWindowResize(){
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function animate(){
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+function buildHelix(){
+  if (helixGroup) {
+    scene.remove(helixGroup);
+  }
+  helixGroup = new THREE.Group();
+  scene.add(helixGroup);
+
+  const colorsArray = [];
+
+  const baseRevs = parseFloat(helixRevsInput.value) || 2;
+  const ppr = parseInt(helixPPRInput.value) || 40;
+  const totalPts = Math.max(1, Math.floor(baseRevs * ppr));
+
+  const cMaxVal = parseFloat(cMaxSlider.value) || 80;
+  const amp     = parseFloat(ampSlider.value);
+  const freq    = parseFloat(freqSlider.value);
+  const hueOff  = parseFloat(hueOffSlider.value);
+  const dir     = parseFloat(dirSlider.value);
+
+  const actualRevs = baseRevs * dir;
+
+  for(let i = 0; i <= totalPts; i++){
+    const t = i / totalPts;
+    const L = 100 * t;
+    const rawHue = actualRevs * 360 * t;
+    const hDeg   = rawHue + hueOff;  
+
+    const frac   = amp * Math.sin(freq * Math.PI * t);
+    const cFinal = Math.max(0, frac * cMaxVal);
+
+    const cSat   = computeSatC(hDeg, L, cMaxVal);
+    const cRaw   = Math.max(0, frac * cSat);
+
+    const colorHex = lchColorToHex(L, cRaw, hDeg);
+    colorsArray.push(colorHex);
+
+    const angleRad = (Math.PI/180) * hDeg;
+    const x = cFinal * Math.cos(angleRad);
+    const y = L;
+    const z = cFinal * Math.sin(angleRad);
+
+    const geo = new THREE.SphereGeometry(3, 12, 12);
+    const mat = new THREE.MeshBasicMaterial({ color: colorHex });
+    const sp  = new THREE.Mesh(geo, mat);
+    sp.position.set(x, y, z);
+
+    helixGroup.add(sp);
+  }
+
+  buildPalette(colorsArray);
+}
+
+function buildPalette(fullColors){
+  paletteContainer.innerHTML = '';
+
+  const desiredCount = 32;
+  const swatchColors = [];
+
+  if (fullColors.length === 0) {
+    for(let i=0; i<desiredCount; i++){
+      swatchColors.push(0x000000);
+    }
+  }
+  else if (fullColors.length < desiredCount) {
+    for(let i=0; i<desiredCount; i++){
+      const color = fullColors[i % fullColors.length];
+      swatchColors.push(color);
+    }
+  }
+  else {
+    for(let i=0; i<desiredCount; i++){
+      const idx = Math.round(i * (fullColors.length - 1) / (desiredCount - 1));
+      const color = fullColors[idx];
+      swatchColors.push(color);
+    }
+  }
+
+  swatchColors.forEach(hexVal => {
+    const div = document.createElement('div');
+    div.className = 'colorSwatch';
+    const cssHex = '#' + ( ('000000' + hexVal.toString(16)).slice(-6) );
+    div.style.backgroundColor = cssHex;
+    paletteContainer.appendChild(div);
+  });
+}
+
+function computeSatC(hDeg, L, cMax){
+  const s = 0.5*(1 + Math.sin((Math.PI/180)*hDeg));
+  return (0.4 + 0.6*s)* cMax; 
+}
+
+function lchColorToHex(L, C, hDeg){
+  const {r, g, b} = lchToRgb(L, C, hDeg);
+  const R255 = clamp(Math.round(r*255), 0, 255);
+  const G255 = clamp(Math.round(g*255), 0, 255);
+  const B255 = clamp(Math.round(b*255), 0, 255);
+  return (R255 << 16) | (G255 << 8) | B255;
+}
+
+function lchToRgb(L, C, hDeg){
+  const hRad = (Math.PI/180)*hDeg;
+  const a = C * Math.cos(hRad);
+  const b_ = C * Math.sin(hRad);
+
+  const refX=95.047, refY=100.0, refZ=108.883;
+  let y=(L+16)/116, x=a/500 + y, z=y - b_/200;
+  x= labPivotInv(x); 
+  y= labPivotInv(y); 
+  z= labPivotInv(z);
+  x*=refX; y*=refY; z*=refZ;
+  x/=100; y/=100; z/=100;
+
+  let rLin=  3.2406*x +(-1.5372)*y +(-0.4986)*z;
+  let gLin= -0.9689*x + 1.8758*y  + 0.0415*z;
+  let bLin=  0.0557*x +(-0.2040)*y + 1.0570*z;
+  
+  const r = gammaSRGB(rLin);
+  const g = gammaSRGB(gLin);
+  const b = gammaSRGB(bLin);
+
+  return {r, g, b};
+}
+
+function labPivotInv(t){
+  const d=6/29;
+  if(t>d) return t**3;
+  return 3*d*d*(t - 4/29);
+}
+
+function gammaSRGB(v){
+  if(v<=0.0031308) return 12.92*v;
+  return 1.055*(v**(1/2.4)) - 0.055;
+}
+
+function clamp(x, mn, mx){ 
+  return (x<mn) ? mn : (x>mx) ? mx : x; 
+}
+</script>
+</body>
+</html>
