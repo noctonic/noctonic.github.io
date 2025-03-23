@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -80,20 +81,31 @@
 
 <div id="controlsPanel">
   <h3>Helix Configuration</h3>
-
+  <label>
+    <input type="checkbox" id="complementAmpCb" />
+    Complement Amplitude
+  </label>
+  <label>
+    <input type="checkbox" id="complementDirCb" />
+    Complement Direction
+  </label>
   <label>Revolutions:
-    <input type="number" id="helixRevs" value=".5" min="-2" max="2" step="0.01"/>
+    <input type="range" id="helixRevs" value="0.5" min="-2" max="2" step="0.01"/>
+    <span id="helixRevsVal">0.5</span>
   </label>
   <label>Points:
-    <input type="number" id="helixPoints" min="0" max="64" value="32" />
+    <input type="range" id="helixPoints" min="0" max="64" value="32" step="1"/>
+    <span id="helixPointsVal">32</span>
+  </label>
+  </label>
+  <label>Direction:
+    <input type="range" id="helixDir" value="-11" min="-1" max="1" step="0.01"/>
+    <span id="helixDirVal">1</span>
   </label>
   <label>
-    <input type="checkbox" id="complimentAmpCb" />
-    Compliment Amp
-  </label>
-  <label>
-    <input type="checkbox" id="complimentDirCb" checked />
-    Compliment Dir
+    Angle Offset:
+    <input type="range" id="hueOffSlider" min="0" max="6.28" step="0.01" value="4.45" />
+    <span id="hueOffVal">0</span>
   </label>
   <label>
     Amplitude:
@@ -109,11 +121,6 @@
     Ellipse Z:
     <input type="range" id="ellipseZSlider" min="0.1" max="2" step="0.01" value="1" />
     <span id="ellipseZVal">1</span>
-  </label>
-  <label>
-    Hue Offset:
-    <input type="range" id="hueOffSlider" min="0" max="360" step="1" value="300" />
-    <span id="hueOffVal">0</span>
   </label>
 
   <button id="copyPaletteBtn">Copy Palette to Clipboard</button>
@@ -142,13 +149,14 @@ let helixGroup = null;
 let primaryPalette = [];
 
 let helixCompGroup = null;
-let complimentPalette = [];
+let complementPalette = [];
 
 const helixRevsInput     = document.getElementById('helixRevs');
 const helixPointsInput   = document.getElementById('helixPoints');
-
-const complimentAmpCb    = document.getElementById('complimentAmpCb');
-const complimentDirCb    = document.getElementById('complimentDirCb');
+const helixDirInput       = document.getElementById('helixDir');
+const helixDirVal        = document.getElementById('helixDirVal');
+const complementAmpCb    = document.getElementById('complementAmpCb');
+const complementDirCb    = document.getElementById('complementDirCb');
 
 const ampSlider          = document.getElementById('ampSlider');
 const ampVal             = document.getElementById('ampVal');
@@ -199,30 +207,64 @@ function init(){
   hueOffVal.textContent    = hueOffSlider.value;
   ellipseXVal.textContent  = ellipseXSlider.value;
   ellipseZVal.textContent  = ellipseZSlider.value;
+  helixRevsVal.textContent = helixRevsInput.value;
+  helixPointsVal.textContent = helixPointsInput.value;
+  helixDirVal.textContent  = helixDirInput.value;
 
-  helixRevsInput.addEventListener('input', buildHelix);
-  helixPointsInput.addEventListener('input', buildHelix);
 
-  complimentAmpCb.addEventListener('change', buildHelix);
-  complimentDirCb.addEventListener('change', buildHelix);
+  complementAmpCb.addEventListener('change', buildHelix);
+  complementDirCb.addEventListener('change', buildHelix);
+
+  helixRevsInput.addEventListener('input', () => {
+    helixRevsVal.textContent = helixRevsInput.value;
+
+  });
+  helixRevsInput.addEventListener('change', () => {
+    buildHelix();
+  });
+
+  helixPointsInput.addEventListener('input', () => {
+    helixPointsVal.textContent = helixPointsInput.value;
+  });
+  helixPointsInput.addEventListener('change', () => {
+    buildHelix();
+  });
+
+
+  helixDirInput.addEventListener('input', () => {
+    helixDirVal.textContent = helixDirInput.value;
+  });
+  helixDirInput.addEventListener('change', () => {
+    buildHelix();
+  });
+
 
   ampSlider.addEventListener('input', () => {
     ampVal.textContent = ampSlider.value;
+  });
+  ampSlider.addEventListener('change', () => {
     buildHelix();
   });
+
+
   ellipseXSlider.addEventListener('input', () => {
     ellipseXVal.textContent = ellipseXSlider.value;
+  });
+  ellipseXSlider.addEventListener('change', () => {
     buildHelix();
   });
   ellipseZSlider.addEventListener('input', () => {
     ellipseZVal.textContent = ellipseZSlider.value;
+  });
+  ellipseZSlider.addEventListener('change', () => {
     buildHelix();
   });
   hueOffSlider.addEventListener('input', () => {
     hueOffVal.textContent = hueOffSlider.value;
+  });
+  hueOffSlider.addEventListener('change', () => {
     buildHelix();
   });
-
   copyBtn.addEventListener('click', copyPaletteToClipboard);
 
   buildHelix();
@@ -249,28 +291,28 @@ function buildHelix() {
   }
 
   const mainAmp = parseFloat(ampSlider.value);
-  const mainDir = 1;
+  const mainDir = parseFloat(helixDirInput.value);
   const mainHelix = buildSingleHelix(mainAmp, mainDir);
   helixGroup = mainHelix.group;
   primaryPalette = mainHelix.palette;
   scene.add(helixGroup);
 
-  const doCompliment = (complimentAmpCb.checked || complimentDirCb.checked);
-  if (doCompliment) {
+  const docomplement = (complementAmpCb.checked || complementDirCb.checked);
+  if (docomplement) {
     let compAmp = mainAmp;
     let compDir = mainDir;
-    if (complimentAmpCb.checked) compAmp *= -1;
-    if (complimentDirCb.checked) compDir *= -1;
+    if (complementAmpCb.checked) compAmp *= -1;
+    if (complementDirCb.checked) compDir *= -1;
 
     const compHelix = buildSingleHelix(compAmp, compDir);
     helixCompGroup = compHelix.group;
-    complimentPalette = compHelix.palette.reverse();
+    complementPalette = compHelix.palette.reverse();
     scene.add(helixCompGroup);
 
     paletteContainer2.style.display = 'flex';
-    buildPalette(complimentPalette.slice(), paletteContainer2);
+    buildPalette(complementPalette.slice(), paletteContainer2);
   } else {
-    complimentPalette = [];
+    complementPalette = [];
     paletteContainer2.style.display = 'none';
     paletteContainer2.innerHTML = '';
   }
@@ -284,7 +326,6 @@ function buildSingleHelix(amp, helixDir) {
   const baseRevs  = parseFloat(helixRevsInput.value);
   const totalPts  = parseInt(helixPointsInput.value) - 1;
   const cMaxVal   = 300;
-  const freq      = 1
   const ellipseX  = parseFloat(ellipseXSlider.value);
   const ellipseZ  = parseFloat(ellipseZSlider.value);
   const hueOff    = parseFloat(hueOffSlider.value);
@@ -295,9 +336,9 @@ function buildSingleHelix(amp, helixDir) {
   for (let i = 0; i <= totalPts; i++) {
     const t = i / totalPts;
     const L = 100 * t;
-    const frac = amp * Math.sin(freq * Math.PI * t);
+    const frac = amp * Math.sin(Math.PI * t);
     const cRadius = frac * cMaxVal;
-    const angleRad = actualRevs * 2.0 * Math.PI * t;
+    const angleRad = hueOff + actualRevs * 2.0 * Math.PI * t;
 
     const x = ellipseX * cRadius * Math.cos(angleRad);
     const z = ellipseZ * cRadius * Math.sin(angleRad);
@@ -306,7 +347,7 @@ function buildSingleHelix(amp, helixDir) {
     const cDist = Math.sqrt(x*x + z*z);
     let hueRaw = THREE.MathUtils.radToDeg(Math.atan2(z, x));
     if (hueRaw < 0) hueRaw += 360;
-    const hDeg = hueRaw + hueOff;
+    const hDeg = hueRaw;
     const fraction = Math.min(1.0, cDist / cMaxVal);
     const cSat = computeSatC(hDeg, L, cMaxVal);
     const cUsed = fraction * cSat;
@@ -363,18 +404,18 @@ async function copyPaletteToClipboard() {
       return '#' + ('000000' + hexVal.toString(16)).slice(-6);
     });
 
-    const doCompliment = (complimentAmpCb.checked || complimentDirCb.checked);
+    const docomplement = (complementAmpCb.checked || complementDirCb.checked);
 
-    if (!doCompliment) {
+    if (!docomplement) {
       const paletteJson = JSON.stringify(primaryStrings);
       await navigator.clipboard.writeText(paletteJson);
     } else {
-      const complimentStrings = complimentPalette.map(hexVal => {
+      const complementStrings = complementPalette.map(hexVal => {
         return '#' + ('000000' + hexVal.toString(16)).slice(-6);
       });
       const combined = {
         primary: primaryStrings,
-        compliment: complimentStrings
+        complement: complementStrings
       };
       await navigator.clipboard.writeText(JSON.stringify(combined));
     }
