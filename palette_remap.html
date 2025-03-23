@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Palette Remap</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Poppins', sans-serif;
+      background-color: #1e1e1e;
+      color: #f0f0f0;
+      padding: 20px;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+      font-weight: 600;
+      font-size: 2rem;
+    }
+
+    #mainContainer {
+      display: flex;
+      flex-direction: row;
+      align-items: flex-start;
+      gap: 20px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    #controls {
+      background-color: #2e2e2e;
+      padding: 20px;
+      border-radius: 8px;
+      width: 300px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    }
+
+    label {
+      display: block;
+      margin-top: 10px;
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+
+    input[type="file"],
+    select,
+    textarea {
+      width: 100%;
+      margin-bottom: 16px;
+      padding: 10px;
+      border-radius: 4px;
+      border: 1px solid #555;
+      background-color: #3a3a3a;
+      color: #f0f0f0;
+      font-size: 1rem;
+      outline: none;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    #paletteInput {
+      height: 120px;
+    }
+
+    button {
+      cursor: pointer;
+      background-color: #66bb6a;
+      border: none;
+      border-radius: 4px;
+      padding: 12px 20px;
+      font-size: 1rem;
+      font-weight: 500;
+      color: #ffffff;
+      transition: background-color 0.2s ease;
+    }
+
+    button:hover {
+      background-color: #5da163;
+    }
+
+    #canvasContainer {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+    }
+
+    canvas {
+      border: 2px solid #555;
+      max-width: 100%;
+      margin-top: 20px;
+    }
+
+    .palette-link {
+      color: #66bb6a; 
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .palette-link:hover {
+      color: #5da163;
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Palette Remap</h1>
+
+<div id="mainContainer">
+
+  <div id="controls">
+    <label for="imageUpload">Select an image:</label>
+    <input type="file" id="imageUpload" accept="image/*" />
+
+    <label for="paletteInput">Enter your palette (JSON array):</label>
+    <textarea id="paletteInput">
+["#000000","#060c13","#0a151e","#0b1d28","#0b2432","#0a2b3b","#0b3343","#0c3b4b","#0f4352","#0f4b58","#06545e","#005e65","#006865","#007061","#27785c","#477e5c","#5e845f","#6e8b62","#7c9364","#899b66","#96a268","#a3aa6b","#b0b26f","#bdba75","#c9c17d","#d5c987","#e1d194","#ebd9a4","#f3e2b9","#f9ebd0","#fdf5e7","#ffffff"]
+    </textarea>
+    
+    <label>
+
+      <a 
+        href="./helix_colors.html" 
+        target="_blank" 
+        rel="noopener noreferrer"
+        class="palette-link"
+      >
+        Generate palettes here!
+      </a>
+    </label>
+
+    <label for="modeSelect">Mode:</label>
+    <select id="modeSelect">
+      <option value="closest">RGB Distance</option>
+      <option value="ordered" selected>Ordered Mapping</option>
+    </select>
+
+    <button id="applyPaletteBtn">Apply Palette</button>
+  </div>
+
+  <div id="canvasContainer">
+    <canvas id="canvas"></canvas>
+  </div>
+
+</div>
+
+<script>
+  const imageUpload = document.getElementById('imageUpload');
+  const paletteInput = document.getElementById('paletteInput');
+  const modeSelect = document.getElementById('modeSelect');
+  const applyPaletteBtn = document.getElementById('applyPaletteBtn');
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+
+  let originalImageData = null;
+
+  imageUpload.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+        originalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  function hexToRgb(hex) {
+    hex = hex.replace(/^#/, '');
+    if (hex.length === 3) {
+      return {
+        r: parseInt(hex[0] + hex[0], 16),
+        g: parseInt(hex[1] + hex[1], 16),
+        b: parseInt(hex[2] + hex[2], 16)
+      };
+    } else if (hex.length === 6) {
+      return {
+        r: parseInt(hex.substring(0,2), 16),
+        g: parseInt(hex.substring(2,4), 16),
+        b: parseInt(hex.substring(4,6), 16)
+      };
+    }
+    return { r: 0, g: 0, b: 0 };
+  }
+
+  function rgbDistance(r1, g1, b1, r2, g2, b2) {
+    return Math.sqrt(
+      (r1 - r2) * (r1 - r2) +
+      (g1 - g2) * (g1 - g2) +
+      (b1 - b2) * (b1 - b2)
+    );
+  }
+
+  function applyClosestMatch(paletteRgb) {
+    const newImageData = ctx.createImageData(originalImageData);
+    const data = originalImageData.data;
+    const outData = newImageData.data;
+
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      const a = data[i + 3];
+
+      const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+
+      let closestIndex = 0;
+      let minDistance = Infinity;
+      for (let j = 0; j < paletteRgb.length; j++) {
+        const dist = rgbDistance(
+          gray, gray, gray,
+          paletteRgb[j].r, paletteRgb[j].g, paletteRgb[j].b
+        );
+        if (dist < minDistance) {
+          minDistance = dist;
+          closestIndex = j;
+        }
+      }
+
+      outData[i]     = paletteRgb[closestIndex].r;
+      outData[i + 1] = paletteRgb[closestIndex].g;
+      outData[i + 2] = paletteRgb[closestIndex].b;
+      outData[i + 3] = a;
+    }
+
+    ctx.putImageData(newImageData, 0, 0);
+  }
+
+  function applyOrderedMapping(paletteRgb) {
+    const newImageData = ctx.createImageData(originalImageData);
+    const data = originalImageData.data;
+    const outData = newImageData.data;
+
+    const maxIndex = paletteRgb.length - 1;
+
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      const a = data[i + 3];
+
+      const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+      const index = Math.round((gray / 255) * maxIndex);
+
+      const { r: pr, g: pg, b: pb } = paletteRgb[index];
+      outData[i]     = pr;
+      outData[i + 1] = pg;
+      outData[i + 2] = pb;
+      outData[i + 3] = a;
+    }
+
+    ctx.putImageData(newImageData, 0, 0);
+  }
+
+  applyPaletteBtn.addEventListener('click', () => {
+    if (!originalImageData) {
+      alert('Please upload an image first.');
+      return;
+    }
+
+    let palette;
+    try {
+      palette = JSON.parse(paletteInput.value);
+    } catch (err) {
+      alert('Invalid JSON for palette!');
+      return;
+    }
+    if (!Array.isArray(palette)) {
+      alert('Your palette must be a JSON array of hex strings.');
+      return;
+    }
+
+    const paletteRgb = palette.map(hex => hexToRgb(hex));
+    const mode = modeSelect.value;
+
+    if (mode === 'closest') {
+      applyClosestMatch(paletteRgb);
+    } else {
+      applyOrderedMapping(paletteRgb);
+    }
+  });
+</script>
+
+</body>
+</html>
