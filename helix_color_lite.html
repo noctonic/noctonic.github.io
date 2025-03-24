@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Helix Color Generator</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Roboto", sans-serif;
+        background-color: #1e1e1e;
+        color: #f0f0f0;
+        margin: 0;
+        padding: 0;
+      }
+
+      .container {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+
+      h1 {
+        text-align: center;
+        margin-bottom: 20px;
+      }
+
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+        margin-bottom: 20px;
+        justify-content: space-between;
+      }
+
+      .control-group {
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 140px;
+        min-width: 120px;
+      }
+
+      .control-group label {
+        font-weight: bold;
+        margin-bottom: 4px;
+      }
+
+      .control-group input[type="range"] {
+        width: 100%;
+        margin: 0;
+      }
+
+      .slider-value {
+        text-align: right;
+        margin-top: 6px;
+        font-size: 0.9em;
+        color: #f0f0f0;
+      }
+
+      .numeric-input {
+        width: 60px;
+        margin-top: 6px;
+      }
+
+      .button-group {
+        display: flex;
+        align-items: flex-end;
+      }
+
+      button#generateBtn {
+        padding: 10px 20px;
+        border: none;
+        background: #0072ce;
+        color: #fff;
+        cursor: pointer;
+        border-radius: 4px;
+        font-size: 16px;
+        transition: background-color 0.2s ease;
+      }
+
+      button#generateBtn:hover {
+        background-color: #005da7;
+      }
+
+      .colors-container {
+        display: flex;
+        flex-wrap: nowrap;
+        gap: 0;
+        height: 60px;
+        overflow-x: hidden;
+        overflow-y: hidden;
+      }
+
+      .color-swatch {
+        width: 48px;
+        height: 48px;
+        border: none;
+        box-shadow: none;
+        margin: 0;
+      }
+
+      .json-output {
+        width: 100%;
+        height: 150px;
+        margin-top: 20px;
+        font-family: monospace;
+        resize: none;
+        border: 1px solid #ccc;
+        padding: 10px;
+        border-radius: 4px;
+        background-color: #1e1e1e;
+        color: #f0f0f0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Helix Color Generator</h1>
+
+      <div class="controls">
+        <div class="control-group">
+          <label for="startZ">Start Z:</label>
+          <input type="range" id="startZ" min="-1" max="1" step="0.01" value="-0.5" />
+          <span id="startZVal" class="slider-value">-0.5</span>
+        </div>
+
+        <div class="control-group">
+          <label for="endZ">End Z:</label>
+          <input type="range" id="endZ" min="-1" max="1" step="0.01" value="0.5" />
+          <span id="endZVal" class="slider-value">0.5</span>
+        </div>
+
+        <div class="control-group">
+          <label for="turns">Turns:</label>
+          <input type="range" id="turns" min="-2" max="2" step="0.01" value="0.5" />
+          <span id="turnsVal" class="slider-value">0.5</span>
+        </div>
+
+        <div class="control-group">
+          <label for="amplitude">Amplitude:</label>
+          <input type="range" id="amplitude" min="0.1" max="3" step="0.01" value="1" />
+          <span id="amplitudeVal" class="slider-value">1</span>
+        </div>
+
+        <div class="control-group">
+          <label for="direction">Direction:</label>
+          <input type="range" id="direction" min="-1" max="1" step="0.01" value="1" />
+          <span id="directionVal" class="slider-value">1</span>
+        </div>
+
+        <div class="control-group">
+          <label for="initialAngle">Initial Angle:</label>
+          <input type="range" id="initialAngle" min="0" max="360" step="0.1" value="180" />
+          <span id="initialAngleVal" class="slider-value">180</span>
+        </div>
+
+        <div class="control-group">
+          <label for="numColors"># Colors:</label>
+          <input
+            type="number"
+            id="numColors"
+            min="1"
+            max="256"
+            value="32"
+            class="numeric-input"
+          />
+        </div>
+
+        <div class="button-group">
+          <button id="generateBtn">Generate Colors</button>
+        </div>
+      </div>
+
+      <div id="colorsOutput" class="colors-container"></div>
+
+      <textarea
+        id="jsonOutput"
+        class="json-output"
+        readonly
+      ></textarea>
+    </div>
+
+    <script>
+
+      function lchToRgb(L, C, h) {
+        const hRad = (h * Math.PI) / 180;
+        const a = C * Math.cos(hRad);
+        const b = C * Math.sin(hRad);
+
+        // Convert L,a,b (CIELAB) to XYZ
+        const y = (L + 16) / 116;
+        const x = y + a / 500;
+        const z = y - b / 200;
+
+        const delta = 6 / 29;
+        function fInv(t) {
+          return t > delta ? t ** 3 : 3 * delta ** 2 * (t - 4 / 29);
+        }
+
+        const whiteX = 95.047,
+          whiteY = 100.0,
+          whiteZ = 108.883;
+
+        let X = (whiteX * fInv(x)) / 100;
+        let Y = (whiteY * fInv(y)) / 100;
+        let Z = (whiteZ * fInv(z)) / 100;
+
+        // XYZ to linear RGB
+        let R_lin = 3.2406 * X - 1.5372 * Y - 0.4986 * Z;
+        let G_lin = -0.9689 * X + 1.8758 * Y + 0.0415 * Z;
+        let B_lin = 0.0557 * X - 0.2040 * Y + 1.0570 * Z;
+
+        // gamma correction
+        function gamma(u) {
+          return u <= 0.0031308
+            ? 12.92 * u
+            : 1.055 * Math.pow(u, 1 / 2.4) - 0.055;
+        }
+
+        const R = gamma(R_lin);
+        const G = gamma(G_lin);
+        const B = gamma(B_lin);
+
+        return { r: R, g: G, b: B };
+      }
+
+      function isInGamut(rgb) {
+        return (
+          rgb.r >= 0 &&
+          rgb.r <= 1 &&
+          rgb.g >= 0 &&
+          rgb.g <= 1 &&
+          rgb.b >= 0 &&
+          rgb.b <= 1
+        );
+      }
+
+      function computeMaxChroma(L, h, epsilon = 0.01) {
+        let low = 0;
+        let high = 230;
+        while (high - low > epsilon) {
+          const mid = (low + high) / 2;
+          const rgb = lchToRgb(L, mid, h);
+          if (isInGamut(rgb)) {
+            low = mid;
+          } else {
+            high = mid;
+          }
+        }
+        return low;
+      }
+
+      function rgbToHex({ r, g, b }) {
+        const rr = Math.round(Math.min(1, Math.max(0, r)) * 255);
+        const gg = Math.round(Math.min(1, Math.max(0, g)) * 255);
+        const bb = Math.round(Math.min(1, Math.max(0, b)) * 255);
+
+        return (
+          "#" +
+          ((1 << 24) | (rr << 16) | (gg << 8) | bb)
+            .toString(16)
+            .slice(1)
+            .toUpperCase()
+        );
+      }
+
+
+      function getHelixColors(
+        { startZ, endZ, turns, amplitude, direction, initialAngleDeg },
+        numColors
+      ) {
+        // height = luminance
+        const cylHeight = 1;
+        const cylBottom = -cylHeight / 2;
+
+        // make helix
+        function helixPoint(t) {
+          const initialAngle = (initialAngleDeg || 0) * (Math.PI / 180);
+          const z = startZ + (endZ - startZ) * t;
+          const angle = initialAngle + direction * turns * 2 * Math.PI * t;
+          const r = amplitude * Math.sin(Math.PI * t);
+          return {
+            x: r * Math.cos(angle),
+            y: r * Math.sin(angle),
+            z
+          };
+        }
+
+        const colors = [];
+        for (let i = 0; i < numColors; i++) {
+          const t = numColors > 1 ? i / (numColors - 1) : 0;
+          const { x, y, z } = helixPoint(t);
+
+          // L, C, H
+          const heightVal = z - cylBottom;
+          let angleDeg = (Math.atan2(y, x) * 180) / Math.PI;
+          if (angleDeg < 0) angleDeg += 360;
+
+          // calculate distance to z axis
+          const distanceVal = Math.sqrt(x * x + y * y);
+
+          let luminanceVal = (heightVal / cylHeight) * 100;
+          luminanceVal = Math.max(0, Math.min(100, luminanceVal));
+
+          const hueVal = angleDeg;
+          // clamp max chromascale to 1
+          const chromaScale = Math.min(1, distanceVal);
+
+          // we are sRGB gamut clipping here to find out how 
+          // colorful this color can be
+          const maxChr = computeMaxChroma(luminanceVal, hueVal);
+          // then we scale that value
+          const chroma = maxChr * chromaScale;
+
+          const rgb = lchToRgb(luminanceVal, chroma, hueVal);
+          const hexColor = rgbToHex(rgb);
+          colors.push(hexColor);
+        }
+        return colors;
+      }
+
+      const startZEl       = document.getElementById("startZ");
+      const endZEl         = document.getElementById("endZ");
+      const turnsEl        = document.getElementById("turns");
+      const amplitudeEl    = document.getElementById("amplitude");
+      const directionEl    = document.getElementById("direction");
+      const initialAngleEl = document.getElementById("initialAngle");
+      const numColorsEl    = document.getElementById("numColors");
+
+      const startZValEl       = document.getElementById("startZVal");
+      const endZValEl         = document.getElementById("endZVal");
+      const turnsValEl        = document.getElementById("turnsVal");
+      const amplitudeValEl    = document.getElementById("amplitudeVal");
+      const directionValEl    = document.getElementById("directionVal");
+      const initialAngleValEl = document.getElementById("initialAngleVal");
+
+      const generateBtn    = document.getElementById("generateBtn");
+      const colorsOutputEl = document.getElementById("colorsOutput");
+      const jsonOutputEl   = document.getElementById("jsonOutput");
+
+      [
+        { slider: startZEl, label: startZValEl },
+        { slider: endZEl, label: endZValEl },
+        { slider: turnsEl, label: turnsValEl },
+        { slider: amplitudeEl, label: amplitudeValEl },
+        { slider: directionEl, label: directionValEl },
+        { slider: initialAngleEl, label: initialAngleValEl }
+      ].forEach(({ slider, label }) => {
+        slider.addEventListener("input", () => {
+          label.textContent = slider.value;
+        });
+      });
+
+      generateBtn.addEventListener("click", () => {
+        const helixParams = {
+          startZ: parseFloat(startZEl.value),
+          endZ: parseFloat(endZEl.value),
+          turns: parseFloat(turnsEl.value),
+          amplitude: parseFloat(amplitudeEl.value),
+          direction: parseFloat(directionEl.value),
+          initialAngleDeg: parseFloat(initialAngleEl.value)
+        };
+        const n = parseInt(numColorsEl.value, 10) || 1;
+
+        const hexColors = getHelixColors(helixParams, n);
+
+        colorsOutputEl.innerHTML = "";
+        jsonOutputEl.value = "";
+
+        hexColors.forEach((hex) => {
+          const swatch = document.createElement("div");
+          swatch.className = "color-swatch";
+          swatch.style.backgroundColor = hex;
+          swatch.title = hex;
+          colorsOutputEl.appendChild(swatch);
+        });
+
+        jsonOutputEl.value = JSON.stringify(hexColors);
+      });
+
+      generateBtn.click();
+    </script>
+  </body>
+</html>
