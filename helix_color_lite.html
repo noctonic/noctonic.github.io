@@ -64,26 +64,6 @@
         margin-top: 6px;
       }
 
-      .button-group {
-        display: flex;
-        align-items: flex-end;
-      }
-
-      button#generateBtn {
-        padding: 10px 20px;
-        border: none;
-        background: #0072ce;
-        color: #fff;
-        cursor: pointer;
-        border-radius: 4px;
-        font-size: 16px;
-        transition: background-color 0.2s ease;
-      }
-
-      button#generateBtn:hover {
-        background-color: #005da7;
-      }
-
       .colors-container {
         display: flex;
         flex-wrap: nowrap;
@@ -167,14 +147,9 @@
             class="numeric-input"
           />
         </div>
-
-        <div class="button-group">
-          <button id="generateBtn">Generate Colors</button>
-        </div>
       </div>
 
       <div id="colorsOutput" class="colors-container"></div>
-
       <textarea
         id="jsonOutput"
         class="json-output"
@@ -183,7 +158,6 @@
     </div>
 
     <script>
-
       function lchToRgb(L, C, h) {
         const hRad = (h * Math.PI) / 180;
         const a = C * Math.cos(hRad);
@@ -266,7 +240,6 @@
         );
       }
 
-
       function getHelixColors(
         { startZ, endZ, turns, amplitude, direction, initialAngleDeg },
         numColors
@@ -336,7 +309,6 @@
       const directionValEl    = document.getElementById("directionVal");
       const initialAngleValEl = document.getElementById("initialAngleVal");
 
-      const generateBtn    = document.getElementById("generateBtn");
       const colorsOutputEl = document.getElementById("colorsOutput");
       const jsonOutputEl   = document.getElementById("jsonOutput");
 
@@ -350,10 +322,15 @@
       ].forEach(({ slider, label }) => {
         slider.addEventListener("input", () => {
           label.textContent = slider.value;
+          updateColors();
         });
       });
 
-      generateBtn.addEventListener("click", () => {
+      numColorsEl.addEventListener("input", () => {
+        updateColors();
+      });
+
+      function updateColors() {
         const helixParams = {
           startZ: parseFloat(startZEl.value),
           endZ: parseFloat(endZEl.value),
@@ -378,9 +355,9 @@
         });
 
         jsonOutputEl.value = JSON.stringify(hexColors);
-      });
+      }
 
-      generateBtn.click();
+      updateColors();
     </script>
   </body>
 </html>
