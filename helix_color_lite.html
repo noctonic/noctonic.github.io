@@ -158,47 +158,122 @@
     </div>
 
     <script>
-      function lchToRgb(L, C, h) {
-        const hRad = (h * Math.PI) / 180;
-        const a = C * Math.cos(hRad);
-        const b = C * Math.sin(hRad);
 
-        // Convert L,a,b (CIELAB) to XYZ
-        const y = (L + 16) / 116;
-        const x = y + a / 500;
-        const z = y - b / 200;
+    function lchToLabD50(L, C, hDeg) {
+      const hRad = (hDeg * Math.PI) / 180;
+      return {
+        L: L,
+        a: C * Math.cos(hRad),
+        b: C * Math.sin(hRad)
+      };
+    }
 
-        const delta = 6 / 29;
-        function fInv(t) {
-          return t > delta ? t ** 3 : 3 * delta ** 2 * (t - 4 / 29);
-        }
-
-        const whiteX = 95.047,
-          whiteY = 100.0,
-          whiteZ = 108.883;
-
-        let X = (whiteX * fInv(x)) / 100;
-        let Y = (whiteY * fInv(y)) / 100;
-        let Z = (whiteZ * fInv(z)) / 100;
-
-        // XYZ to linear RGB
-        let R_lin = 3.2406 * X - 1.5372 * Y - 0.4986 * Z;
-        let G_lin = -0.9689 * X + 1.8758 * Y + 0.0415 * Z;
-        let B_lin = 0.0557 * X - 0.2040 * Y + 1.0570 * Z;
-
-        // gamma correction
-        function gamma(u) {
-          return u <= 0.0031308
-            ? 12.92 * u
-            : 1.055 * Math.pow(u, 1 / 2.4) - 0.055;
-        }
-
-        const R = gamma(R_lin);
-        const G = gamma(G_lin);
-        const B = gamma(B_lin);
-
-        return { r: R, g: G, b: B };
+    function labD50ToXYZD50({ L, a, b }) {
+      const delta = 6 / 29;
+      function finv(t) {
+        return (t > delta)
+          ? t ** 3
+          : 3 * delta**2 * (t - 4/29);
       }
+
+      const fy = (L + 16) / 116;
+      const fx = fy + a/500;
+      const fz = fy - b/200;
+
+      const Xw = 96.422, Yw = 100.000, Zw = 82.521;
+
+      const xr = finv(fx);
+      const yr = finv(fy);
+      const zr = finv(fz);
+
+      return [
+        (Xw * xr) / 100,
+        (Yw * yr) / 100,
+        (Zw * zr) / 100
+      ];
+    }
+
+    const whiteX_D50 = 96.422;
+    const whiteY_D50 = 100.000;
+    const whiteZ_D50 = 82.521;
+
+    const whiteX_D65 = 95.047;
+    const whiteY_D65 = 100.0;
+    const whiteZ_D65 = 108.883;
+
+    // The Bradford matrix
+    const M_Bradford = [
+      [ 0.8951,  0.2664, -0.1614 ],
+      [-0.7502,  1.7135,  0.0367 ],
+      [ 0.0389, -0.0685,  1.0296 ]
+    ];
+
+    const M_Bradford_inv = [
+      [  0.9869929, -0.1470543,  0.1599627 ],
+      [ -0.2764111,  1.2348378,  0.0416411 ],
+      [  0.0000000,  0.0000000,  0.9184327 ]
+    ];
+
+    function bradfordAdaptXYZtoD65([X_d50, Y_d50, Z_d50]) {
+      const [L_A, M_A, S_A] = multiplyMatrixVec(M_Bradford, [X_d50, Y_d50, Z_d50]);
+      const [L_w_D50, M_w_D50, S_w_D50] = multiplyMatrixVec(
+        M_Bradford, 
+        [whiteX_D50, whiteY_D50, whiteZ_D50]
+      );
+      const [L_w_D65, M_w_D65, S_w_D65] = multiplyMatrixVec(
+        M_Bradford,
+        [whiteX_D65, whiteY_D65, whiteZ_D65]
+      );
+
+      const scaleL = L_w_D65 / L_w_D50;
+      const scaleM = M_w_D65 / M_w_D50;
+      const scaleS = S_w_D65 / S_w_D50;
+
+      const L_adapted = L_A * scaleL;
+      const M_adapted = M_A * scaleM;
+      const S_adapted = S_A * scaleS;
+
+      return multiplyMatrixVec(M_Bradford_inv, [L_adapted, M_adapted, S_adapted]);
+    }
+
+    function multiplyMatrixVec(M, [x, y, z]) {
+      return [
+        M[0][0]*x + M[0][1]*y + M[0][2]*z,
+        M[1][0]*x + M[1][1]*y + M[1][2]*z,
+        M[2][0]*x + M[2][1]*y + M[2][2]*z
+      ];
+    }
+
+
+    function xyzD50toD65([X_d50, Y_d50, Z_d50]) {
+      return bradfordAdaptXYZtoD65([X_d50, Y_d50, Z_d50]);
+    }
+
+    function xyzD65ToSrgb([X, Y, Z]) {
+      const R_lin =  3.2404542 * X - 1.5371385 * Y - 0.4985314 * Z;
+      const G_lin = -0.9692660 * X + 1.8760108 * Y + 0.0415560 * Z;
+      const B_lin =  0.0556434 * X - 0.2040259 * Y + 1.0572252 * Z;
+
+      const R = gammaEncode_sRGB(R_lin);
+      const G = gammaEncode_sRGB(G_lin);
+      const B = gammaEncode_sRGB(B_lin);
+
+      return { r: R, g: G, b: B };
+    }
+
+    function gammaEncode_sRGB(u) {
+      return (u <= 0.0031308)
+        ? 12.92 * u
+        : 1.055 * Math.pow(u, 1/2.4) - 0.055;
+    }
+
+    function lchToSrgb(L, C, hDeg) {
+      const lab = lchToLabD50(L, C, hDeg);
+      const xyzD50 = labD50ToXYZD50(lab);
+      const xyzD65 = xyzD50toD65(xyzD50);
+      const rgb    = xyzD65ToSrgb(xyzD65);
+      return rgb;
+    }
 
       function isInGamut(rgb) {
         return (
@@ -216,7 +291,7 @@
         let high = 230;
         while (high - low > epsilon) {
           const mid = (low + high) / 2;
-          const rgb = lchToRgb(L, mid, h);
+          const rgb = lchToSrgb(L, mid, h);
           if (isInGamut(rgb)) {
             low = mid;
           } else {
@@ -225,12 +300,13 @@
         }
         return low;
       }
-
+      function clamp(x, mn, mx){ 
+        return (x<mn) ? mn : (x>mx) ? mx : x; 
+      }
       function rgbToHex({ r, g, b }) {
-        const rr = Math.round(Math.min(1, Math.max(0, r)) * 255);
-        const gg = Math.round(Math.min(1, Math.max(0, g)) * 255);
-        const bb = Math.round(Math.min(1, Math.max(0, b)) * 255);
-
+        const rr = clamp(Math.round(r*255), 0, 255);
+        const gg = clamp(Math.round(g*255), 0, 255);
+        const bb = clamp(Math.round(b*255), 0, 255);
         return (
           "#" +
           ((1 << 24) | (rr << 16) | (gg << 8) | bb)
@@ -287,7 +363,7 @@
           // then we scale that value
           const chroma = maxChr * chromaScale;
 
-          const rgb = lchToRgb(luminanceVal, chroma, hueVal);
+          const rgb = lchToSrgb(luminanceVal, chroma, hueVal);
           const hexColor = rgbToHex(rgb);
           colors.push(hexColor);
         }
