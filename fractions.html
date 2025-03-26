@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Fractions</title>
+  <style>
+    :root {
+      --bg-color: #23181E;
+      --panel-bg-color: #2E1C28;
+      --text-color: #F8FFF3;
+      --accent-color: #07A3A2;
+      --circle-fill: #59DAB4;
+      --circle-empty: #FFFFFF;
+    }
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      font-size: 18px;
+    }
+    h3 {
+      text-align: center;
+      margin: 0;
+      font-size: 2em;
+    }
+    .app-container {
+      display: flex;
+      align-items: flex-start; 
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      gap: 20px;
+    }
+    .left-panel {
+      background-color: var(--panel-bg-color);
+      padding: 30px;
+      border-radius: 8px;
+      width: 600px;
+      box-sizing: border-box;
+    }
+    .fraction-input {
+      display: inline-block;
+      text-align: center;
+      margin-bottom: 10px;
+    }
+    .fraction-input input {
+      width: 80px;
+      text-align: center;
+      font-size: 24px;
+      border: none;
+      outline: none;
+      margin: 0 auto;
+      color: var(--text-color);
+      background-color: #493C8A44;
+      padding: 6px 0;
+      border-radius: 4px;
+    }
+    .fraction-bar {
+      width: 80px;
+      height: 4px;
+      background: var(--text-color);
+      margin: 2px auto;
+    }
+    #output {
+      margin-top: 10px;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      background-color: #493C8A22;
+      font-size: 20px;
+    }
+    .label {
+      font-weight: bold;
+    }
+    hr {
+      border-top: 1px solid #AAA;
+    }
+    .right-panel {
+      flex: 1;
+      background-color: var(--panel-bg-color);
+      padding: 30px;
+      border-radius: 8px;
+      box-sizing: border-box;
+    }
+    .circle-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 30px;
+      align-items: center;
+    }
+    canvas.circle-canvas {
+      background-color: #f9f9f9;
+      border: 1px solid #666;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <h3>Fraction Info</h3>
+  <div class="app-container">
+    <div class="left-panel">
+      <div>
+        <center>
+        <div class="fraction-input">
+          <input type="number" id="numInput" value="1">
+          <div class="fraction-bar"></div>
+          <input type="number" id="denInput" value="1"/>
+        </div>
+      </center>
+      </div>
+      <div id="output"></div>
+    </div>
+    <div class="right-panel">
+      <div id="circleContainer" class="circle-container"></div>
+    </div>
+  </div>
+  
+  <script>
+    function gcd(a, b) {
+      if (b === 0) return a;
+      return gcd(b, a % b);
+    }
+
+    function getPrimeFactors(n) {
+      let absN = Math.abs(n);
+      if (absN === 0) {
+        return ["undefined"];
+      }
+      const factors = [];
+      while (absN % 2 === 0) {
+        factors.push(2);
+        absN /= 2;
+      }
+      let i = 3;
+      while (i <= Math.sqrt(absN)) {
+        while (absN % i === 0) {
+          factors.push(i);
+          absN /= i;
+        }
+        i += 2;
+      }
+      if (absN > 1) {
+        factors.push(absN);
+      }
+      return factors;
+    }
+
+    function formatPrimeFactorization(n) {
+      const isNegative = (n < 0);
+      const factors = getPrimeFactors(n);
+      if (factors.length === 1 && factors[0] === "undefined") {
+        return "undefined";
+      }
+      const factorMap = {};
+      for (const prime of factors) {
+        factorMap[prime] = (factorMap[prime] || 0) + 1;
+      }
+      const factorStrings = [];
+      for (const prime in factorMap) {
+        const exponent = factorMap[prime];
+        if (exponent === 1) {
+          factorStrings.push(prime);
+        } else {
+          factorStrings.push(`${prime}<sup>${exponent}</sup>`);
+        }
+      }
+      factorStrings.sort((a, b) => parseInt(a) - parseInt(b));
+      let result = factorStrings.join(" × ");
+      if (isNegative && result !== "undefined") {
+        result = "-1 × " + result;
+      }
+      if (result === "") {
+        result = "1";
+      }
+      return result;
+    }
+
+    function reduceFraction(numerator, denominator) {
+      const divisor = gcd(Math.abs(numerator), Math.abs(denominator));
+      numerator = numerator / divisor;
+      denominator = denominator / divisor;
+      if (denominator < 0) {
+        numerator = -numerator;
+        denominator = -denominator;
+      }
+      return [numerator, denominator];
+    }
+
+    function fractionToMixed(numerator, denominator) {
+      const whole = Math.floor(numerator / denominator);
+      const remainder = numerator % denominator;
+      return { whole, remainder, denominator };
+    }
+
+    function drawCircleOnCanvas(canvas, denominator, fillCount) {
+      const ctx = canvas.getContext('2d');
+      const { width, height } = canvas;
+      const xCenter = width / 2;
+      const yCenter = height / 2;
+      const radius = Math.min(width, height) / 2 - 5; // margin
+      for (let i = 0; i < denominator; i++) {
+        const startAngle = (2 * Math.PI * i) / denominator;
+        const endAngle = (2 * Math.PI * (i + 1)) / denominator;
+        ctx.beginPath();
+        ctx.moveTo(xCenter, yCenter);
+        ctx.arc(xCenter, yCenter, radius, startAngle, endAngle);
+        ctx.closePath();
+        if (i < fillCount) {
+          ctx.fillStyle = getComputedStyle(document.documentElement)
+                             .getPropertyValue('--circle-fill').trim() || '#FFCC00';
+        } else {
+          ctx.fillStyle = getComputedStyle(document.documentElement)
+                             .getPropertyValue('--circle-empty').trim() || '#FFFFFF';
+        }
+        ctx.fill();
+        ctx.strokeStyle = '#000000';
+        ctx.stroke();
+      }
+    }
+
+    function generateCircleCanvases(numerator, denominator) {
+      const container = document.getElementById('circleContainer');
+      container.innerHTML = '';
+      if (denominator === 0) return;
+      const isNegative = (numerator < 0);
+      numerator = Math.abs(numerator);
+      const whole = Math.floor(numerator / denominator);
+      const remainder = numerator % denominator;
+      const totalCircles = whole + (remainder > 0 ? 1 : 0);
+      if (isNegative) {
+        const label = document.createElement('div');
+        label.textContent = '(-)';
+        label.style.color = 'red';
+        label.style.fontWeight = 'bold';
+        label.style.fontSize = '24px';
+        label.style.marginLeft = '10px';
+        container.appendChild(label);
+      }
+      for (let i = 0; i < totalCircles; i++) {
+        const cv = document.createElement('canvas');
+        cv.width = 140;
+        cv.height = 140;
+        cv.className = 'circle-canvas';
+        let fillCount;
+        if (i < whole) {
+          fillCount = denominator;
+        } else {
+          fillCount = remainder;
+        }
+        drawCircleOnCanvas(cv, denominator, fillCount);
+        container.appendChild(cv);
+      }
+    }
+
+    function calculateFractionInfo() {
+      const numeratorInput = document.getElementById('numInput').value;
+      const denominatorInput = document.getElementById('denInput').value;
+      let num = parseInt(numeratorInput, 10);
+      let den = parseInt(denominatorInput, 10);
+      if (isNaN(num) || isNaN(den)) {
+        document.getElementById('output').innerHTML = "<p>Please enter valid numbers for numerator and denominator.</p>";
+        document.getElementById('circleContainer').innerHTML = '';
+        return;
+      }
+      if (den === 0) {
+        document.getElementById('output').innerHTML = "<p>Denominator cannot be 0.</p>";
+        document.getElementById('circleContainer').innerHTML = '';
+        return;
+      }
+      const originalNum = num;
+      const originalDen = den;
+      const originalNumFact = formatPrimeFactorization(originalNum);
+      const originalDenFact = formatPrimeFactorization(originalDen);
+      const [reducedNum, reducedDen] = reduceFraction(num, den);
+      const decimalValue = reducedNum / reducedDen;
+      const percentage = (decimalValue * 100).toFixed(2);
+      const { whole, remainder, denominator } = fractionToMixed(reducedNum, reducedDen);
+      const mixedStr = whole + (remainder ? ` ${remainder}/${denominator}` : '');
+      const gcdValue = gcd(Math.abs(originalNum), Math.abs(originalDen));
+      const reducedNumFact = formatPrimeFactorization(reducedNum);
+      const reducedDenFact = formatPrimeFactorization(reducedDen);
+      const resultHtml = `
+        <p><span class="label">Original Fraction:</span> ${originalNum}/${originalDen}</p>
+        <p><span class="label">Prime Factorization (Original):</span><br>
+           Numerator: ${originalNumFact}<br>
+           Denominator: ${originalDenFact}
+        </p>
+        <p><span class="label">GCD:</span> ${gcdValue}</p>
+        <hr>
+        <p><span class="label">Reduced Fraction:</span> ${reducedNum}/${reducedDen}</p>
+        <p><span class="label">Decimal Value:</span> ${decimalValue}</p>
+        <p><span class="label">Percentage:</span> ${percentage}%</p>
+        <p><span class="label">Mixed Number:</span> ${mixedStr}</p>
+        <p><span class="label">Prime Factorization (Reduced):</span><br>
+           Numerator: ${reducedNumFact}<br>
+           Denominator: ${reducedDenFact}
+        </p>
+      `;
+      document.getElementById('output').innerHTML = resultHtml;
+      generateCircleCanvases(reducedNum, reducedDen);
+    }
+
+    document.getElementById('numInput').addEventListener('input', calculateFractionInfo);
+    document.getElementById('denInput').addEventListener('input', calculateFractionInfo);
+    
+    calculateFractionInfo();
+  </script>
+</body>
+</html>
