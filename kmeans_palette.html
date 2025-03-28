@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Palette Extractor</title>
+    <script src="./color_utils/colorConversion.js"></script>
+    <script src="./color_utils/kmeans_lch.js"></script>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: 'monospace;', sans-serif;
+        background-color: #1e1e1e;
+        color: #f0f0f0;
+        padding: 20px;
+      }
+
+      h1 {
+        text-align: center;
+        margin-bottom: 20px;
+        font-weight: 600;
+        font-size: 2rem;
+      }
+
+      #mainContainer {
+        display: flex;
+        align-items: stretch;
+        gap: 20px;
+        max-width: 1200px;
+        margin: 0 auto;
+        height: 600px;
+      }
+
+      #controls {
+        display: flex;
+        flex-direction: column;
+        width: 300px;
+        background-color: #2e2e2e;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+      }
+
+      label {
+        display: block;
+        margin-top: 10px;
+        margin-bottom: 6px;
+        font-weight: 500;
+      }
+
+      input[type="file"],
+      input[type="number"],
+      select,
+      textarea {
+        width: 100%;
+        margin-bottom: 16px;
+        padding: 10px;
+        border-radius: 4px;
+        border: 1px solid #555;
+        background-color: #3a3a3a;
+        color: #f0f0f0;
+        font-size: 1rem;
+        outline: none;
+      }
+      .checkbox-row {
+        display: flex;
+        align-items: center;
+        margin: 10px 0;
+      }
+      .checkbox-row input[type="checkbox"] {
+        margin-right: 8px;
+      }
+      #infoText {
+        margin: 20px 0;
+      }
+
+      #extractPaletteButton {
+        margin-top: auto;
+        margin-bottom: 20px;
+        cursor: pointer;
+        background-color: #66bb6a;
+        border: none;
+        border-radius: 4px;
+        padding: 12px 20px;
+        font-size: 1rem;
+        font-weight: 500;
+        color: #ffffff;
+        transition: background-color 0.2s ease;
+      }
+      #extractPaletteButton:hover {
+        background-color: #5da163;
+      }
+
+      #canvasContainer {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+      }
+
+      canvas#displayCanvas {
+        border: 2px solid #555;
+        max-height: 600px;
+        max-width: 100%;
+        margin-top: 20px;
+      }
+
+      canvas#fullCanvas {
+        display: none;
+      }
+
+      #colorsOutput {
+        margin: 20px auto;
+        display: grid;
+        grid-gap: 10px;
+        justify-content: center;
+        max-width: 1200px;
+        overflow-y: auto;
+      }
+
+      .palette-swatch {
+        width: 40px;
+        height: 40px;
+        border-radius: 4px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      }
+
+      .json-output {
+        width: 100%;
+        max-width: 1200px;
+        display: block;
+        margin: 20px auto 0 auto;
+        font-family: monospace;
+        resize: none;
+        border: 1px solid #ccc;
+        padding: 10px;
+        border-radius: 4px;
+        background-color: #1e1e1e;
+        color: #f0f0f0;
+        height: 150px;
+      }
+    </style>
+  </head>
+  <body>
+
+    <h1>Palette Extractor (k-means)</h1>
+
+
+    <div id="mainContainer">
+      <div id="controls">
+        <label>Upload an Image:</label>
+        <input type="file" id="imageUploader" accept="image/*" />
+
+        <label>Number of Colors (K):</label>
+        <input type="number" id="paletteSizeInput" value="16" min="1" max="32" />
+        <div class="checkbox-row">
+          <input type="checkbox" id="normalizeHclCheckbox" checked />
+          <label for="normalizeHclCheckbox">Normalize HCL Chroma</label>
+        </div>
+        <div id="infoText">
+          Convert RGB to LCH color space.<br><br>
+          Bucket colors to weighted k-means.<br><br>
+          Highest frequency color wins.<br><br>
+          K-means may have a different results every time you click the button.
+        </div>
+
+        <button id="extractPaletteButton">Extract Palette</button>
+      </div>
+
+      <div id="canvasContainer">
+        <canvas id="displayCanvas" width="400" height="400"></canvas>
+
+        <canvas id="fullCanvas"></canvas>
+      </div>
+    </div>
+
+    <div id="colorsOutput" class="colors-container"></div>
+    <textarea id="jsonOutput" class="json-output" readonly></textarea>
+    <script>
+      let uploadedImage = null;
+      const maxDim = 600;
+
+      const displayCanvas = document.getElementById('displayCanvas');
+      const displayCtx = displayCanvas.getContext('2d', { willReadFrequently: true });
+
+      const fullCanvas = document.getElementById('fullCanvas');
+      const fullCtx = fullCanvas.getContext('2d', { willReadFrequently: true });
+
+      const imageUploader = document.getElementById('imageUploader');
+      const extractPaletteButton = document.getElementById('extractPaletteButton');
+      const colorsOutputDiv = document.getElementById('colorsOutput');
+      const jsonOutputArea = document.getElementById('jsonOutput');
+
+      document.addEventListener("DOMContentLoaded", () => {
+        imageUploader.addEventListener("change", handleImageUpload);
+        extractPaletteButton.addEventListener("click", extractPalette);
+      });
+
+      function handleImageUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = e => {
+          const img = new Image();
+          img.onload = () => {
+            uploadedImage = img;
+
+            fullCanvas.width = img.naturalWidth;
+            fullCanvas.height = img.naturalHeight;
+            fullCtx.drawImage(img, 0, 0);
+
+            let { width, height } = img;
+            if (width > height && width > maxDim) {
+              height = (height * maxDim) / width;
+              width = maxDim;
+            } else if (height > maxDim) {
+              width = (width * maxDim) / height;
+              height = maxDim;
+            }
+            displayCanvas.width = width;
+            displayCanvas.height = height;
+            displayCtx.drawImage(img, 0, 0, width, height);
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      }
+
+      function arrayRgbToHex([r, g, b]) {
+        return (
+          "#" +
+          ((1 << 24) | (r << 16) | (g << 8) | b)
+            .toString(16)
+            .slice(1)
+            .toUpperCase()
+        );
+      }
+
+      function displayPalette(paletteRGB, paletteHEX) {
+        colorsOutputDiv.innerHTML = "";
+        const numberOfColors = paletteRGB.length;
+        if (numberOfColors < 16) {
+          colorsOutputDiv.style.gridTemplateColumns = `repeat(${numberOfColors}, 40px)`;
+        } else {
+          colorsOutputDiv.style.gridTemplateColumns = `repeat(16, 40px)`;
+        }
+
+        for (let i = 0; i < paletteRGB.length; i++) {
+          const [r, g, b] = paletteRGB[i];
+          const swatch = document.createElement('div');
+          swatch.className = 'palette-swatch';
+          swatch.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
+          swatch.title = paletteHEX[i];
+          colorsOutputDiv.appendChild(swatch);
+        }
+      }
+
+
+      function displayJsonOutput(hexPalette) {
+        jsonOutputArea.value = JSON.stringify(hexPalette);
+      }
+
+      function extractPalette() {
+        if (!uploadedImage) {
+          alert("Please upload an image first.");
+          return;
+        }
+
+        const doNormalize = document.getElementById('normalizeHclCheckbox').checked;
+        const k = parseInt(document.getElementById('paletteSizeInput').value, 10);
+
+        const { width, height } = fullCanvas;
+        const { data: pixels } = fullCtx.getImageData(0, 0, width, height);
+
+        const colorFreqMap = new Map();
+        for (let i = 0; i < pixels.length; i += 4) {
+          const r = pixels[i + 0];
+          const g = pixels[i + 1];
+          const b = pixels[i + 2];
+          const key = (r << 16) | (g << 8) | b;
+          colorFreqMap.set(key, (colorFreqMap.get(key) || 0) + 1);
+        }
+
+        const colorData = [];
+        for (const [key, freq] of colorFreqMap.entries()) {
+          const r = (key >> 16) & 0xff;
+          const g = (key >>  8) & 0xff;
+          const b = (key >>  0) & 0xff;
+          const [L, C, H] = rgb2lch(r, g, b);
+          const [Ln, Cn, Hn] = normalizeLCH([L, C, H]);
+
+          colorData.push({
+            rgb:  [r, g, b],
+            lch:  [L, C, H],
+            norm: [Ln, Cn, Hn],
+            freq
+          });
+        }
+
+        const points  = colorData.map(d => doNormalize ? d.norm : d.lch);
+        const weights = colorData.map(d => d.freq);
+
+        const centroids = kmeans_lch_weighted(points, weights, k);
+
+        const assignments = new Array(colorData.length);
+        for (let i = 0; i < colorData.length; i++) {
+          const colorPoint = doNormalize ? colorData[i].norm : colorData[i].lch;
+
+          let bestIndex = 0, bestDist = Infinity;
+          for (let cIdx = 0; cIdx < centroids.length; cIdx++) {
+            const dist = distanceLCH(colorPoint, centroids[cIdx]);
+            if (dist < bestDist) {
+              bestDist = dist;
+              bestIndex = cIdx;
+            }
+          }
+          assignments[i] = bestIndex;
+        }
+
+        const clusterColorCounts = Array.from({ length: k }, () => new Map());
+        for (let i = 0; i < colorData.length; i++) {
+          const cIndex = assignments[i];
+          const rgbKey = colorData[i].rgb.join(',');
+          const oldVal = clusterColorCounts[cIndex].get(rgbKey) || 0;
+          clusterColorCounts[cIndex].set(rgbKey, oldVal + colorData[i].freq);
+        }
+
+        const freqColorsRGB = new Array(k);
+        for (let cIdx = 0; cIdx < k; cIdx++) {
+          let maxCount = -Infinity;
+          let maxColorKey = "0,0,0";
+          for (const [colorKey, cnt] of clusterColorCounts[cIdx].entries()) {
+            if (cnt > maxCount) {
+              maxCount = cnt;
+              maxColorKey = colorKey;
+            }
+          }
+          freqColorsRGB[cIdx] = maxColorKey.split(',').map(x => parseInt(x, 10));
+        }
+
+        freqColorsRGB.sort((a, b) => {
+          const [LA] = rgb2lch(a[0], a[1], a[2]);
+          const [LB] = rgb2lch(b[0], b[1], b[2]);
+          return LA - LB;
+        });
+
+        const freqColorsHex = freqColorsRGB.map(arrayRgbToHex);
+        displayPalette(freqColorsRGB, freqColorsHex);
+        displayJsonOutput(freqColorsHex);
+      }
+    </script>
+  </body>
+</html>
