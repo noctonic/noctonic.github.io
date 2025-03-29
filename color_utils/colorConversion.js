@@ -150,6 +150,27 @@ function maxChromaForLCH(lchArr, tolerance = 0.001) {
 }
 
 
+function hex2rgb(hexStr) {
+  const hex = hexStr.replace(/^#/, '');
+  const r = parseInt(hex.substring(0, 2), 16);
+  const g = parseInt(hex.substring(2, 4), 16);
+  const b = parseInt(hex.substring(4, 6), 16);
+  return [r, g, b];
+}
+
+function rgb2hex(r, g, b) {
+  r = Math.max(0, Math.min(255, Math.round(r)));
+  g = Math.max(0, Math.min(255, Math.round(g)));
+  b = Math.max(0, Math.min(255, Math.round(b)));
+
+  const toHex = (value) => {
+    const hex = value.toString(16);
+    return hex.length === 1 ? '0' + hex : hex;
+  };
+
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`.toUpperCase();
+}
+
 function normalizeLCH(lchArr) {
   const [L, C, H] = lchArr;
   const maxC = maxChromaForLCH([L, 0, H]); 
