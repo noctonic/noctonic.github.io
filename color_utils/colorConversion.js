@@ -1,3 +1,36 @@
+function rgbtohex(rgb) {
+  const [R, G, B] = rgb
+  let r = Math.max(0, Math.min(255, Math.round(R)));
+  let g = Math.max(0, Math.min(255, Math.round(G)));
+  let b = Math.max(0, Math.min(255, Math.round(B)));
+
+  const toHex = (value) => {
+    const hx = value.toString(16);
+    return hx.length === 1 ? '0' + hx : hx;
+  };
+
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`.toUpperCase();
+}
+function hex2rgb(hex) {
+  if (hex.startsWith('#')) {
+    hex = hex.slice(1);
+  }
+
+  if (hex.length === 3) {
+    const r = parseInt(hex[0] + hex[0], 16);
+    const g = parseInt(hex[1] + hex[1], 16);
+    const b = parseInt(hex[2] + hex[2], 16);
+    return [r, g, b];
+  } else if (hex.length === 6) {
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+    return [r, g, b];
+  } else {
+    throw new Error(`Invalid hex color: "${hex}"`);
+  }
+}
+
 // Bradford matrix for D65->D50
 const M_D65toD50 = [
   [ 1.0478112,  0.0228866, -0.0501270 ],
@@ -149,7 +182,6 @@ function maxChromaForLCH(lchArr, tolerance = 0.001) {
   return low;
 }
 
-
 function normalizeLCH(lchArr) {
   const [L, C, H] = lchArr;
   const maxC = maxChromaForLCH([L, 0, H]); 
@@ -170,9 +202,111 @@ function denormalizeLCH(lchsArr) {
   return [L, C, H];
 }
 
+function helixPoint(helixParams, t) {
+  const {
+    startZ, endZ, turns, amplitude, direction,
+    initialAngleDeg, scaleX, scaleZ
+  } = helixParams;
+
+  const initialAngle = (initialAngleDeg || 0) * (Math.PI / 180);
+  const z = startZ + (endZ - startZ) * t;
+  const angle = initialAngle + direction * turns * 2.0 * Math.PI * t;
+  const r = amplitude * Math.sin(Math.PI * t);
+
+  return {
+    x: r * Math.cos(angle) * scaleX,
+    y: r * Math.sin(angle) * scaleZ,
+    z: z
+  };
+}
+
+function buildArcLengthTable(helixParams, steps = 2000) {
+  const arcTable = [];
+  arcTable.push({ t: 0, length: 0 });
+
+  let oldPt = helixPoint(helixParams, 0);
+  let lengthSoFar = 0;
+
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    const newPt = helixPoint(helixParams, t);
+    const dx = newPt.x - oldPt.x;
+    const dy = newPt.y - oldPt.y;
+    const dz = newPt.z - oldPt.z;
+    const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+
+    lengthSoFar += dist;
+    arcTable.push({ t, length: lengthSoFar });
+    oldPt = newPt;
+  }
+  return arcTable;
+}
+
+function findTforArcLength(arcTable, sDesired) {
+  if (sDesired <= 0) return 0;
+  const last = arcTable[arcTable.length - 1].length;
+  if (sDesired >= last) return 1;
+
+  let low = 0;
+  let high = arcTable.length - 1;
+  while (high - low > 1) {
+    const mid = Math.floor((low + high) / 2);
+    if (arcTable[mid].length < sDesired) {
+      low = mid;
+    } else {
+      high = mid;
+    }
+  }
+
+  const s0 = arcTable[low].length;
+  const s1 = arcTable[high].length;
+  const t0 = arcTable[low].t;
+  const t1 = arcTable[high].t;
+  const ratio = (sDesired - s0) / (s1 - s0);
+  return t0 + ratio * (t1 - t0);
+}
+
+function pointToColorHex(x, y, z, maxChromaValue) {
+  const cylBottom = -0.5;
+  const cylHeight = 1.0;
+  const heightVal = z - cylBottom;
+  let L = (heightVal / cylHeight) * 100;
+  L = Math.max(0, Math.min(100, L));
+  let angleDeg = (Math.atan2(y, x) * 180) / Math.PI;
+  if (angleDeg < 0) angleDeg += 360;
+  const distanceVal = Math.sqrt(x*x + y*y);
+  const maxChr = Math.min(maxChromaValue, maxChromaForLCH([L,0, angleDeg]));
+  const chroma = maxChr * Math.min(1, distanceVal);
+  const rgb = lch2rgb(L, chroma, angleDeg);
+  return rgbtohex(rgb);
+}
+
+function getHelixColors(helixParams) {
+  const numColors = helixParams.numColors;
+  const maxChromaValue = helixParams.maxChroma;
+  const arcTable = buildArcLengthTable(helixParams);
+  const totalLength = arcTable[arcTable.length - 1].length;
+  const colors = [];
+
+  if (numColors === 1) {
+    const { x, y, z } = helixPoint(helixParams, 0);
+    colors.push(pointToColorHex(x, y, z, maxChromaValue));
+    return colors;
+  }
+
+  for (let i = 0; i < numColors; i++) {
+    const sDesired = (i * totalLength) / (numColors - 1);
+    const t_i = findTforArcLength(arcTable, sDesired);
+    const { x, y, z } = helixPoint(helixParams, t_i);
+    colors.push(pointToColorHex(x, y, z, maxChromaValue));
+  }
+  return colors;
+}
+
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     rgb2lch,
-    lch2rgb
+    lch2rgb,
+    getHelixColors
   };
 }
