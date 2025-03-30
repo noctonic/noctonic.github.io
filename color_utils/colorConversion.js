@@ -1,4 +1,4 @@
-function rgbtohex(rgb) {
+function rgb2hex(rgb) {
   const [R, G, B] = rgb
   let r = Math.max(0, Math.min(255, Math.round(R)));
   let g = Math.max(0, Math.min(255, Math.round(G)));
@@ -11,6 +11,7 @@ function rgbtohex(rgb) {
 
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`.toUpperCase();
 }
+
 function hex2rgb(hex) {
   if (hex.startsWith('#')) {
     hex = hex.slice(1);
@@ -31,7 +32,6 @@ function hex2rgb(hex) {
   }
 }
 
-// Bradford matrix for D65->D50
 const M_D65toD50 = [
   [ 1.0478112,  0.0228866, -0.0501270 ],
   [ 0.0295424,  0.9904844, -0.0170491 ],
@@ -44,21 +44,24 @@ const M_D50toD65 = [
   [  0.0122982, -0.0204830,  1.3299098 ]
 ];
 
-function bradfordAdaptXYZtoD50(x, y, z) {
+function bradfordAdaptXYZtoD50(xyz) {
+  const [x, y, z] = xyz;
   const X = x*M_D65toD50[0][0] + y*M_D65toD50[0][1] + z*M_D65toD50[0][2];
   const Y = x*M_D65toD50[1][0] + y*M_D65toD50[1][1] + z*M_D65toD50[1][2];
   const Z = x*M_D65toD50[2][0] + y*M_D65toD50[2][1] + z*M_D65toD50[2][2];
   return [X, Y, Z];
 }
 
-function bradfordAdaptXYZtoD65(x, y, z) {
+function bradfordAdaptXYZtoD65(xyz) {
+  const [x, y, z] = xyz;
   const X = x * M_D50toD65[0][0] + y * M_D50toD65[0][1] + z * M_D50toD65[0][2];
   const Y = x * M_D50toD65[1][0] + y * M_D50toD65[1][1] + z * M_D50toD65[1][2];
   const Z = x * M_D50toD65[2][0] + y * M_D50toD65[2][1] + z * M_D50toD65[2][2];
   return [X, Y, Z];
 }
 
-function rgb2xyz(r, g, b) {
+function rgb2xyz(rgb) {
+  let [r, g, b] = rgb;
   r /= 255;
   g /= 255;
   b /= 255;
@@ -74,7 +77,8 @@ function rgb2xyz(r, g, b) {
   return [x, y, z];
 }
 
-function xyz2rgb(x, y, z) {
+function xyz2rgb(xyz) {
+  let [x, y, z] = xyz;
   x /= 100;
   y /= 100;
   z /= 100;
@@ -94,7 +98,8 @@ function xyz2rgb(x, y, z) {
   return [Math.round(r), Math.round(g), Math.round(b)];
 }
 
-function xyz2lab(x, y, z,refX = 95.047, refY = 100.0, refZ = 108.883) {
+function xyz2lab(xyz,refX = 95.047, refY = 100.0, refZ = 108.883) {
+  let [x, y, z] = xyz;
   x /= refX;
   y /= refY;
   z /= refZ;
@@ -110,7 +115,8 @@ function xyz2lab(x, y, z,refX = 95.047, refY = 100.0, refZ = 108.883) {
   return [L, a, b];
 }
 
-function lab2xyz(L, a, b, refX = 95.047, refY = 100.0, refZ = 108.883) {
+function lab2xyz(Lab, refX = 95.047, refY = 100.0, refZ = 108.883) {
+  const [L,a,b] = Lab;
   let y = (L + 16) / 116;
   let x = a / 500 + y;
   let z = y - b / 200;
@@ -125,7 +131,8 @@ function lab2xyz(L, a, b, refX = 95.047, refY = 100.0, refZ = 108.883) {
   return [x, y, z];
 }
 
-function lab2lch(L, a, b) {
+function lab2lch(Lab) {
+  const [L,a,b] = Lab;
   const C = Math.sqrt(a * a + b * b);
   let H = Math.atan2(b, a) * 180 / Math.PI;
   if (H < 0) {
@@ -134,31 +141,17 @@ function lab2lch(L, a, b) {
   return [L, C, H];
 }
 
-function lch2lab(L, C, H) {
+function lch2lab(LCH) {
+  const [L,C,H] = LCH;
   const Hr = H * Math.PI / 180;
   const a = C * Math.cos(Hr);
   const b = C * Math.sin(Hr);
   return [L, a, b];
 }
 
-function rgb2lch(r, g, _b) {
-  const [x65, y65, z65] = rgb2xyz(r, g, _b);
-  const [x50, y50, z50] = bradfordAdaptXYZtoD50(x65, y65, z65);
-  const [l, a, b]   = xyz2lab(x50, y50, z50, 96.422, 100.0, 82.521);
-  const [L, C, H] = lab2lch(l, a, b);
-  return [L, C, H];
-}
-function lch2rgb(L, C, H) {
-  const [l, a, b] = lch2lab(L, C, H);
-  const [x50, y50, z50] = lab2xyz(l, a, b, 96.422, 100.0, 82.521);
-  const [x65, y65, z65] = bradfordAdaptXYZtoD65(x50, y50, z50);
-  const [r, g, _b] = xyz2rgb(x65, y65, z65);
-  return [r, g, _b];
-}
 
-function isLCHInGamut(lchArr) {
-  const [L, C, H] = lchArr;
-  const [r, g, b] = lch2rgb(L, C, H);
+function isLCHInGamut(lch) {
+  const [r, g, b] = lch2rgb(lch);
   return (
     r >= 0 && r <= 255 &&
     g >= 0 && g <= 255 &&
@@ -266,7 +259,8 @@ function findTforArcLength(arcTable, sDesired) {
   return t0 + ratio * (t1 - t0);
 }
 
-function pointToColorHex(x, y, z, maxChromaValue) {
+function pointToColorHex(xyz, maxChromaValue) {
+  const [x,y,z] = xyz;
   const cylBottom = -0.5;
   const cylHeight = 1.0;
   const heightVal = z - cylBottom;
@@ -277,11 +271,40 @@ function pointToColorHex(x, y, z, maxChromaValue) {
   const distanceVal = Math.sqrt(x*x + y*y);
   const maxChr = Math.min(maxChromaValue, maxChromaForLCH([L,0, angleDeg]));
   const chroma = maxChr * Math.min(1, distanceVal);
-  const rgb = lch2rgb(L, chroma, angleDeg);
-  return rgbtohex(rgb);
+  const rgb = lch2rgb([L, chroma, angleDeg]);
+  return rgb2hex(rgb);
+}
+
+function rgb2lch(rgb) {
+  const xyz = rgb2xyz(rgb);
+  const d50 = bradfordAdaptXYZtoD50(xyz);
+  const lab = xyz2lab(d50, 96.422, 100.0, 82.521);
+  const lch = lab2lch(lab);
+  return lch;
+}
+function lch2rgb(lch) {
+  const lab = lch2lab(lch);
+  const xyz = lab2xyz(lab, 96.422, 100.0, 82.521);
+  const d65 = bradfordAdaptXYZtoD65(xyz);
+  const rgb = xyz2rgb(d65);
+  return rgb;
 }
 
 function getHelixColors(helixParams) {
+
+  // helixParams = {
+  // Suggested Ranges:
+  //   startZ:          [-1, 0]
+  //   endZ:            [ 0, 1]
+  //   turns:           [-2, 2]
+  //   amplitude:       [-2, 2]
+  //   direction:       [-1, 1]
+  //   scaleX:          [-1, 1]
+  //   scaleZ:          [-1, 1]
+  //   initialAngleDeg: [ 0, 360]
+  //   maxChroma:       [ 0, 150]
+  //   numColors:       [ 2, 256]
+  //   }
   const numColors = helixParams.numColors;
   const maxChromaValue = helixParams.maxChroma;
   const arcTable = buildArcLengthTable(helixParams);
@@ -290,7 +313,7 @@ function getHelixColors(helixParams) {
 
   if (numColors === 1) {
     const { x, y, z } = helixPoint(helixParams, 0);
-    colors.push(pointToColorHex(x, y, z, maxChromaValue));
+    colors.push(pointToColorHex([x, y, z], maxChromaValue));
     return colors;
   }
 
@@ -298,7 +321,7 @@ function getHelixColors(helixParams) {
     const sDesired = (i * totalLength) / (numColors - 1);
     const t_i = findTforArcLength(arcTable, sDesired);
     const { x, y, z } = helixPoint(helixParams, t_i);
-    colors.push(pointToColorHex(x, y, z, maxChromaValue));
+    colors.push(pointToColorHex([x, y, z], maxChromaValue));
   }
   return colors;
 }
