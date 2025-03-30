@@ -292,7 +292,7 @@
           const r = (key >> 16) & 0xff;
           const g = (key >>  8) & 0xff;
           const b = (key >>  0) & 0xff;
-          const [L, C, H] = rgb2lch(r, g, b);
+          const [L, C, H] = rgb2lch([r, g, b]);
           const [Ln, Cn, Hn] = normalizeLCH([L, C, H]);
 
           colorData.push({
@@ -345,8 +345,8 @@
         }
 
         freqColorsRGB.sort((a, b) => {
-          const [LA] = rgb2lch(a[0], a[1], a[2]);
-          const [LB] = rgb2lch(b[0], b[1], b[2]);
+          const [LA] = rgb2lch([a[0], a[1], a[2]]);
+          const [LB] = rgb2lch([b[0], b[1], b[2]]);
           return LA - LB;
         });
 
