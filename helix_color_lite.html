@@ -27,6 +27,12 @@
         margin-bottom: 20px;
       }
 
+      .distance-value {
+        float: right;
+        font-size: 0.9em;
+        color: #bbb;
+      }
+
       .controls {
         display: flex;
         flex-wrap: wrap;
@@ -129,6 +135,7 @@
           <input type="range" id="direction" min="-1" max="1" step="0.01" value="-1" />
           <span id="directionVal" class="slider-value">-1</span>
         </div>
+
         <div class="control-group">
           <label for="scaleX">Ellipse X:</label>
           <input type="range" id="scaleX" min="0.1" max="3" step="0.01" value="1" />
@@ -146,11 +153,13 @@
           <input type="range" id="initialAngle" min="0" max="360" step="0.1" value="0" />
           <span id="initialAngleVal" class="slider-value">0</span>
         </div>
+
         <div class="control-group">
           <label for="maxChroma">Max Chroma:</label>
-          <input type="range" id="maxChroma" min="1" max="150" step="1" value="60" />
+          <input type="range" id="maxChroma" min="1" max="400" step="1" value="60" />
           <span id="maxChromaVal" class="slider-value">60</span>
         </div>
+
         <div class="control-group">
           <label for="numColors"># Colors:</label>
           <input
@@ -164,7 +173,36 @@
         </div>
       </div>
 
+      <h2>
+        Standard
+        <span id="standardDistance" class="distance-value"></span>
+      </h2>
       <div id="colorsOutput" class="colors-container"></div>
+
+      <h2>
+        Protanopia
+        <span id="protanopiaDistance" class="distance-value"></span>
+      </h2>
+      <div id="protanopiaOutput" class="colors-container"></div>
+
+      <h2>
+        Deuteranopia
+        <span id="deuteranopiaDistance" class="distance-value"></span>
+      </h2>
+      <div id="deuteranopiaOutput" class="colors-container"></div>
+
+      <h2>
+        Tritanopia
+        <span id="tritanopiaDistance" class="distance-value"></span>
+      </h2>
+      <div id="tritanopiaOutput" class="colors-container"></div>
+
+      <div style="text-align: center; margin-top: 20px;">
+        <label for="cvdSeverity">CVD Severity:</label>
+        <input type="range" id="cvdSeverity" min="0" max="1" step="0.01" value="1">
+        <span id="cvdSeverityVal" class="slider-value">1</span>
+      </div>
+
       <textarea
         id="jsonOutput"
         class="json-output"
@@ -172,291 +210,8 @@
       ></textarea>
     </div>
 
+    <script src="./color_utils/colorConversion.js"></script>
     <script>
-
-      function lchToLabD50(L, C, hDeg) {
-        const hRad = (hDeg * Math.PI) / 180;
-        return {
-          L: L,
-          a: C * Math.cos(hRad),
-          b: C * Math.sin(hRad)
-        };
-      }
-
-      function labD50ToXYZD50({ L, a, b }) {
-        const delta = 6 / 29;
-        function finv(t) {
-          return (t > delta)
-            ? t ** 3
-            : 3 * delta**2 * (t - 4/29);
-        }
-
-        const fy = (L + 16) / 116;
-        const fx = fy + a/500;
-        const fz = fy - b/200;
-
-        const Xw = 96.422, Yw = 100.000, Zw = 82.521;
-
-        const xr = finv(fx);
-        const yr = finv(fy);
-        const zr = finv(fz);
-
-        return [
-          (Xw * xr) / 100,
-          (Yw * yr) / 100,
-          (Zw * zr) / 100
-        ];
-      }
-
-      const whiteX_D50 = 96.422;
-      const whiteY_D50 = 100.000;
-      const whiteZ_D50 = 82.521;
-
-      const whiteX_D65 = 95.047;
-      const whiteY_D65 = 100.0;
-      const whiteZ_D65 = 108.883;
-
-      // Bradford matrix
-      const M_Bradford = [
-        [ 0.8951,  0.2664, -0.1614 ],
-        [-0.7502,  1.7135,  0.0367 ],
-        [ 0.0389, -0.0685,  1.0296 ]
-      ];
-
-      const M_Bradford_inv = [
-        [  0.9869929, -0.1470543,  0.1599627 ],
-        [ -0.2764111,  1.2348378,  0.0416411 ],
-        [  0.0000000,  0.0000000,  0.9184327 ]
-      ];
-
-      function multiplyMatrixVec(M, [x, y, z]) {
-        return [
-          M[0][0]*x + M[0][1]*y + M[0][2]*z,
-          M[1][0]*x + M[1][1]*y + M[1][2]*z,
-          M[2][0]*x + M[2][1]*y + M[2][2]*z
-        ];
-      }
-
-      function bradfordAdaptXYZtoD65([X_d50, Y_d50, Z_d50]) {
-        const [L_A, M_A, S_A] = multiplyMatrixVec(M_Bradford, [X_d50, Y_d50, Z_d50]);
-        const [L_w_D50, M_w_D50, S_w_D50] = multiplyMatrixVec(
-          M_Bradford, 
-          [whiteX_D50, whiteY_D50, whiteZ_D50]
-        );
-        const [L_w_D65, M_w_D65, S_w_D65] = multiplyMatrixVec(
-          M_Bradford,
-          [whiteX_D65, whiteY_D65, whiteZ_D65]
-        );
-
-        const scaleL = L_w_D65 / L_w_D50;
-        const scaleM = M_w_D65 / M_w_D50;
-        const scaleS = S_w_D65 / S_w_D50;
-
-        const L_adapted = L_A * scaleL;
-        const M_adapted = M_A * scaleM;
-        const S_adapted = S_A * scaleS;
-
-        return multiplyMatrixVec(M_Bradford_inv, [L_adapted, M_adapted, S_adapted]);
-      }
-
-      function xyzD50toD65([X_d50, Y_d50, Z_d50]) {
-        return bradfordAdaptXYZtoD65([X_d50, Y_d50, Z_d50]);
-      }
-
-      function xyzD65ToSrgb([X, Y, Z]) {
-        const R_lin =  3.2404542 * X - 1.5371385 * Y - 0.4985314 * Z;
-        const G_lin = -0.9692660 * X + 1.8760108 * Y + 0.0415560 * Z;
-        const B_lin =  0.0556434 * X - 0.2040259 * Y + 1.0572252 * Z;
-
-        const R = gammaEncode_sRGB(R_lin);
-        const G = gammaEncode_sRGB(G_lin);
-        const B = gammaEncode_sRGB(B_lin);
-
-        return { r: R, g: G, b: B };
-      }
-
-      function gammaEncode_sRGB(u) {
-        return (u <= 0.0031308)
-          ? 12.92 * u
-          : 1.055 * Math.pow(u, 1/2.4) - 0.055;
-      }
-
-      function lchToSrgb(L, C, hDeg) {
-        const lab = lchToLabD50(L, C, hDeg);
-        const xyzD50 = labD50ToXYZD50(lab);
-        const xyzD65 = xyzD50toD65(xyzD50);
-        const rgb    = xyzD65ToSrgb(xyzD65);
-        return rgb;
-      }
-
-      function isInGamut(rgb) {
-        return (
-          rgb.r >= 0 && rgb.r <= 1 &&
-          rgb.g >= 0 && rgb.g <= 1 &&
-          rgb.b >= 0 && rgb.b <= 1
-        );
-      }
-
-      function computeMaxChroma(L, h,maxChromaValue, epsilon = 0.01) {
-        let low = 0;
-        let high = maxChromaValue;
-        while (high - low > epsilon) {
-          const mid = (low + high) / 2;
-          const rgb = lchToSrgb(L, mid, h);
-          if (isInGamut(rgb)) {
-            low = mid;
-          } else {
-            high = mid;
-          }
-        }
-        return low;
-      }
-
-      function clamp(x, mn, mx){ 
-        return (x < mn) ? mn : (x > mx) ? mx : x; 
-      }
-
-      function rgbToHex({ r, g, b }) {
-        const rr = clamp(Math.round(r*255), 0, 255);
-        const gg = clamp(Math.round(g*255), 0, 255);
-        const bb = clamp(Math.round(b*255), 0, 255);
-        return (
-          "#" +
-          ((1 << 24) | (rr << 16) | (gg << 8) | bb)
-            .toString(16)
-            .slice(1)
-            .toUpperCase()
-        );
-      }
-
-      function helixPoint(helixParams, t) {
-        const {
-          startZ,
-          endZ,
-          turns,
-          amplitude,
-          direction,
-          initialAngleDeg,
-          scaleX,
-          scaleZ
-        } = helixParams;
-
-        const initialAngle = (initialAngleDeg || 0) * (Math.PI / 180);
-        const z = startZ + (endZ - startZ) * t;
-        const angle = initialAngle + direction * turns * 2 * Math.PI * t;
-        const r = amplitude * Math.sin(Math.PI * t);
-
-        return {
-          x: r * Math.cos(angle) * scaleX,
-          y: r * Math.sin(angle) * scaleZ,
-          z: z
-        };
-      }
-
-      function buildArcLengthTable(helixParams, NUM_STEPS_FOR_ARCLENGTH = 2000) {
-        const arcTable = [];
-        arcTable.push({ t: 0, length: 0 });
-
-        let oldPt = helixPoint(helixParams, 0);
-        let lengthSoFar = 0;
-
-        for (let i = 1; i <= NUM_STEPS_FOR_ARCLENGTH; i++) {
-          const t = i / NUM_STEPS_FOR_ARCLENGTH;
-          const newPt = helixPoint(helixParams, t);
-
-          const dx = newPt.x - oldPt.x;
-          const dy = newPt.y - oldPt.y;
-          const dz = newPt.z - oldPt.z;
-          const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
-
-          lengthSoFar += dist;
-          arcTable.push({ t: t, length: lengthSoFar });
-
-          oldPt = newPt;
-        }
-
-        return arcTable;
-      }
-
-      function findTforArcLength(arcTable, sDesired) {
-        if (sDesired <= 0) {
-          return 0;
-        }
-        const last = arcTable[arcTable.length - 1].length;
-        if (sDesired >= last) {
-          return 1;
-        }
-
-        let low = 0;
-        let high = arcTable.length - 1;
-        while (high - low > 1) {
-          const mid = Math.floor((low + high) / 2);
-          if (arcTable[mid].length < sDesired) {
-            low = mid;
-          } else {
-            high = mid;
-          }
-        }
-
-        const s0 = arcTable[low].length;
-        const s1 = arcTable[high].length;
-        const t0 = arcTable[low].t;
-        const t1 = arcTable[high].t;
-
-        const ratio = (sDesired - s0) / (s1 - s0);
-        return t0 + ratio*(t1 - t0);
-      }
-
-      function getHelixColors(helixParams, numColors,getHelixColors) {
-        const arcTable = buildArcLengthTable(helixParams);
-
-        const totalLength = arcTable[arcTable.length - 1].length;
-        const colors = [];
-
-        if (numColors === 1) {
-          const { x, y, z } = helixPoint(helixParams, 0);
-          const colorHex = pointToColorHex(x, y, z);
-          colors.push(colorHex);
-          return colors;
-        }
-
-        for (let i = 0; i < numColors; i++) {
-          // target distance along the curve
-          const sDesired = (i * totalLength) / (numColors - 1);
-
-          const t_i = findTforArcLength(arcTable, sDesired);
-
-          const { x, y, z } = helixPoint(helixParams, t_i);
-
-          const colorHex = pointToColorHex(x, y, z,getHelixColors);
-          colors.push(colorHex);
-        }
-
-        return colors;
-      }
-
-      function pointToColorHex(x, y, z,getHelixColors) {
-
-        const cylBottom = -0.5; 
-        const cylHeight = 1.0;
-        const heightVal = z - cylBottom;
-        let L = (heightVal / cylHeight) * 100;
-        L = Math.max(0, Math.min(100, L));
-
-        let angleDeg = (Math.atan2(y, x) * 180) / Math.PI;
-        if (angleDeg < 0) angleDeg += 360;
-
-        const distanceVal = Math.sqrt(x*x + y*y);
-
-        // compute max possible chroma
-        const maxChr = computeMaxChroma(L, angleDeg,getHelixColors);
-        // scale by distance
-        const chroma = maxChr * Math.min(1, distanceVal);
-
-        const rgb = lchToSrgb(L, chroma, angleDeg);
-        return rgbToHex(rgb);
-      }
-
       const startZEl       = document.getElementById("startZ");
       const endZEl         = document.getElementById("endZ");
       const turnsEl        = document.getElementById("turns");
@@ -464,12 +219,12 @@
       const directionEl    = document.getElementById("direction");
       const initialAngleEl = document.getElementById("initialAngle");
       const numColorsEl    = document.getElementById("numColors");
-      const scaleXEl     = document.getElementById("scaleX");
-      const scaleZEl     = document.getElementById("scaleZ");
+      const scaleXEl       = document.getElementById("scaleX");
+      const scaleZEl       = document.getElementById("scaleZ");
       const maxChromaEl    = document.getElementById("maxChroma");
 
-      const scaleXValEl  = document.getElementById("scaleXVal");
-      const scaleZValEl  = document.getElementById("scaleZVal");
+      const scaleXValEl       = document.getElementById("scaleXVal");
+      const scaleZValEl       = document.getElementById("scaleZVal");
       const startZValEl       = document.getElementById("startZVal");
       const endZValEl         = document.getElementById("endZVal");
       const turnsValEl        = document.getElementById("turnsVal");
@@ -477,15 +232,27 @@
       const directionValEl    = document.getElementById("directionVal");
       const initialAngleValEl = document.getElementById("initialAngleVal");
       const maxChromaValEl    = document.getElementById("maxChromaVal");
-      const colorsOutputEl = document.getElementById("colorsOutput");
-      const jsonOutputEl   = document.getElementById("jsonOutput");
+
+      const colorsOutputEl      = document.getElementById("colorsOutput");
+      const protanopiaOutputEl  = document.getElementById("protanopiaOutput");
+      const deuteranopiaOutputEl= document.getElementById("deuteranopiaOutput");
+      const tritanopiaOutputEl  = document.getElementById("tritanopiaOutput");
+      const jsonOutputEl        = document.getElementById("jsonOutput");
+
+      const standardDistanceEl    = document.getElementById("standardDistance");
+      const protanopiaDistanceEl  = document.getElementById("protanopiaDistance");
+      const deuteranopiaDistanceEl= document.getElementById("deuteranopiaDistance");
+      const tritanopiaDistanceEl  = document.getElementById("tritanopiaDistance");
+
+      const cvdSeverityEl    = document.getElementById("cvdSeverity");
+      const cvdSeverityValEl = document.getElementById("cvdSeverityVal");
 
       [
-        { slider: startZEl, label: startZValEl },
-        { slider: endZEl, label: endZValEl },
-        { slider: turnsEl, label: turnsValEl },
-        { slider: amplitudeEl, label: amplitudeValEl },
-        { slider: directionEl, label: directionValEl },
+        { slider: startZEl,       label: startZValEl },
+        { slider: endZEl,         label: endZValEl },
+        { slider: turnsEl,        label: turnsValEl },
+        { slider: amplitudeEl,    label: amplitudeValEl },
+        { slider: directionEl,    label: directionValEl },
         { slider: initialAngleEl, label: initialAngleValEl },
         { slider: scaleXEl,       label: scaleXValEl },
         { slider: scaleZEl,       label: scaleZValEl },
@@ -495,6 +262,11 @@
           label.textContent = slider.value;
           updateColors();
         });
+      });
+
+      cvdSeverityEl.addEventListener("input", () => {
+        cvdSeverityValEl.textContent = cvdSeverityEl.value;
+        updateColors();
       });
 
       numColorsEl.addEventListener("input", () => {
@@ -510,24 +282,53 @@
           direction: parseFloat(directionEl.value),
           initialAngleDeg: parseFloat(initialAngleEl.value),
           scaleX: parseFloat(scaleXEl.value),
-          scaleZ: parseFloat(scaleZEl.value)
+          scaleZ: parseFloat(scaleZEl.value),
+          maxChroma: parseFloat(maxChromaEl.value),
+          numColors: parseInt(numColorsEl.value, 10) || 2
         };
-        const n = parseInt(numColorsEl.value, 10) || 1;
-        const maxChromaValue = parseFloat(maxChromaEl.value);
-        const hexColors = getHelixColors(helixParams, n, maxChromaValue);
 
-        colorsOutputEl.innerHTML = "";
-        jsonOutputEl.value = "";
-
-        hexColors.forEach((hex) => {
-          const swatch = document.createElement("div");
-          swatch.className = "color-swatch";
-          swatch.style.backgroundColor = hex;
-          swatch.title = hex;
-          colorsOutputEl.appendChild(swatch);
-        });
+        const hexColors = getHelixColors(helixParams);
 
         jsonOutputEl.value = JSON.stringify(hexColors);
+
+        [
+          colorsOutputEl,
+          protanopiaOutputEl,
+          deuteranopiaOutputEl,
+          tritanopiaOutputEl
+        ].forEach(el => el.innerHTML = "");
+
+        const renderPalette = (colors, container) => {
+          colors.forEach(hex => {
+            const swatch = document.createElement("div");
+            swatch.className = "color-swatch";
+            swatch.style.backgroundColor = hex;
+            swatch.title = hex;
+            container.appendChild(swatch);
+          });
+        };
+
+        renderPalette(hexColors, colorsOutputEl);
+        
+        const cvdSeverity = parseFloat(cvdSeverityEl.value);
+
+        const protanopiaPalette   = simulateColorBlindPalette(hexColors, "protan", cvdSeverity);
+        const deuteranopiaPalette = simulateColorBlindPalette(hexColors, "deutan", cvdSeverity);
+        const tritanopiaPalette   = simulateColorBlindPalette(hexColors, "tritan", cvdSeverity);
+
+        renderPalette(protanopiaPalette,   protanopiaOutputEl);
+        renderPalette(deuteranopiaPalette, deuteranopiaOutputEl);
+        renderPalette(tritanopiaPalette,   tritanopiaOutputEl);
+
+        const stdMinDist  = getMinimumPerceptualDistance(hexColors);
+        const protMinDist = getMinimumPerceptualDistance(protanopiaPalette);
+        const deutMinDist = getMinimumPerceptualDistance(deuteranopiaPalette);
+        const triMinDist  = getMinimumPerceptualDistance(tritanopiaPalette);
+
+        standardDistanceEl.textContent    = "Min CAM16 Δ: " + stdMinDist.toFixed(2);
+        protanopiaDistanceEl.textContent  = "Min CAM16 Δ: " + protMinDist.toFixed(2);
+        deuteranopiaDistanceEl.textContent= "Min CAM16 Δ: " + deutMinDist.toFixed(2);
+        tritanopiaDistanceEl.textContent  = "Min CAM16 Δ: " + triMinDist.toFixed(2);
       }
 
       updateColors();
