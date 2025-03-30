@@ -326,10 +326,315 @@ function getHelixColors(helixParams) {
   return colors;
 }
 
+//CAM16 adapted from https://observablehq.com/@jrus/cam16
+function rgb2cam16(rgb,
+  {
+    whitepoint = 'D65',
+    adapting_luminance = 40,
+    background_luminance = 20,
+    surround = 'average',
+    discounting = false
+  } = {}
+) {
+
+  const pow  = Math.pow;
+  const sqrt = Math.sqrt;
+  const sgn  = x => (x > 0) - (x < 0);
+  const lerp = (a, b, t) => (1 - t)*a + t*b;
+  const clip = (lo, hi, v) => Math.min(Math.max(v, lo), hi);
+
+  function degrees(rad) {
+    const deg = rad * 180/Math.PI;
+    return deg - 360 * Math.floor(deg/360);
+  }
+
+  const standard_whitepoints = {
+    A:   [109.850, 100,    35.585],
+    B:   [ 99.090, 100,    85.324],
+    C:   [ 98.074, 100,   118.232],
+    E:   [100.000, 100,   100.000],
+    D50: [ 96.422, 100,    82.521],
+    D55: [ 95.682, 100,    92.149],
+    D65: [ 95.047, 100,   108.883],
+    D75: [ 94.972, 100,   122.638],
+    F2:  [ 99.186, 100,    67.393],
+    F7:  [ 95.041, 100,   108.747],
+    F11: [100.962, 100,    64.350],
+  };
+
+  const XYZ_w = Array.isArray(whitepoint)
+    ? whitepoint.slice()
+    : standard_whitepoints[whitepoint] || standard_whitepoints.D65;
+
+  const L_A = adapting_luminance;
+  const Y_b = background_luminance;
+  const Y_w = XYZ_w[1];
+  let s;
+  switch (surround) {
+    case 'dark':    s = 0;        break;
+    case 'dim':     s = 1;        break;
+    case 'average': s = 2;        break;
+    default:        s = +surround;
+  }
+  
+  function surround_c(s) {
+    if (s >= 1) {
+      return lerp(0.59, 0.69, s - 1);
+    } else {
+      return lerp(0.525, 0.59, s);
+    }
+  }
+  const c = surround_c(s);
+  const F = c >= 0.59
+    ? lerp(0.9, 1.0, (c - 0.59)/0.10)
+    : lerp(0.8, 0.9, (c - 0.525)/0.065);
+  const N_c  = F;
+  const N_bb = 0.725 * pow(Y_b/Y_w, -0.2);
+  const N_cb = N_bb;
+
+  const D = discounting
+    ? 1
+    : clip(0, 1, F * (1 - 1/3.6 * Math.exp((-L_A - 42)/92)));
+
+  function M16([X, Y, Z]) {
+    return [
+       0.401288*X + 0.650173*Y - 0.051461*Z,
+      -0.250268*X + 1.204414*Y + 0.045854*Z,
+      -0.002079*X + 0.048952*Y + 0.953127*Z
+    ];
+  }
+
+  function elemMul(a, b) { return a.map((v,i) => v*b[i]); }
+
+  const RGB_w = M16(XYZ_w);
+
+  const D_RGB = RGB_w.map((W_i) => lerp(1, Y_w/W_i, D));
+
+  const k   = 1 / (5*L_A + 1);
+  const F_L = (() => {
+    const k4 = k**4;
+    return k4 * L_A + 0.1*(1 - k4)**2 * pow(5*L_A, 1/3);
+  })();
+  const F_L_4 = pow(F_L, 0.25);
+
+  const n = Y_b / Y_w;
+  const z = 1.48 + sqrt(n);
+
+  function adaptChannel(C) {
+    const x = pow(F_L * Math.abs(C)*0.01, 0.42);
+    return sgn(C) * 400*x / (x + 27.13);
+  }
+
+  const [R_w, G_w, B_w] = elemMul(RGB_w, D_RGB).map(adaptChannel);
+  const A_w = N_bb*(2*R_w + G_w + 0.05*B_w);
+
+  function cam16_of_XYZ([X, Y, Z]) {
+    const [Rc, Gc, Bc] = elemMul(M16([X, Y, Z]), D_RGB).map(adaptChannel);
+    const a = Rc + (-12*Gc + Bc)/11;
+    const b = (Rc + Gc - 2*Bc)/9;
+    const h_rad = Math.atan2(b, a);
+    const h = degrees(h_rad);
+
+    const A = N_bb*(2*Rc + Gc + 0.05*Bc);
+
+    const J_root = pow(A / A_w, 0.5*c*z);
+    const J = 100*(J_root*J_root);
+    const Q = (4/c)*J_root*(A_w + 4)*F_L_4;
+
+    const e_t = 0.25*(Math.cos(h_rad + 2) + 3.8);
+    const t   = (50000/13)*N_c*N_cb*e_t * sqrt(a*a + b*b)
+                / (Rc + Gc + 1.05*Bc + 0.305);
+    const alpha = pow(t, 0.9)*pow(1.64 - pow(0.29, n), 0.73);
+    const C = alpha*J_root;
+    const M = C*F_L_4;
+    const s = 50* sqrt((c*alpha)/(A_w + 4));
+
+    return {J, C, h, Q, M, s};
+  }
+
+  const XYZ = rgb2xyz(rgb);
+  return cam16_of_XYZ(XYZ);
+}
+
+function rgb2cam16ucs(rgb, {
+  whitepoint = 'D65',
+  adapting_luminance = 40,
+  background_luminance = 20,
+  surround = 'average',
+  discounting = false
+} = {}) {
+  const cam16 = rgb2cam16(rgb, {
+    whitepoint,
+    adapting_luminance,
+    background_luminance,
+    surround,
+    discounting
+  });
+  const {J, M, h} = cam16;
+  const h_rad = h * Math.PI / 180;
+  const c1 = 0.007;
+  const c2 = 0.0228;
+  const Jp = ((1 + 100*c1) * J) / (1 + c1 * J);
+  const Mp = (1 / c2) * Math.log(1 + c2 * M);
+  const aP = Mp * Math.cos(h_rad);
+  const bP = Mp * Math.sin(h_rad);
+
+  return { 
+    Jp,  // Lightness
+    aP,  // Red/green axis
+    bP   // Yellow/blue axis
+  };
+}
+
+// Code adapted from libDaltonLens https://daltonlens.org (public domain)
+// https://raw.githubusercontent.com/MaPePeR/jsColorblindSimulator/refs/heads/master/brettel_colorblind_simulation.js
+
+function linearRGB_from_sRGB(v)
+{
+    var fv = v / 255.0;
+    if (fv < 0.04045) return fv / 12.92;
+    return Math.pow((fv + 0.055) / 1.055, 2.4);
+}
+
+function sRGB_from_linearRGB(v)
+{
+    if (v <= 0.) return 0;
+    if (v >= 1.) return 255;
+    if (v < 0.0031308) return 0.5 + (v * 12.92 * 255);
+    return 0 + 255 * (Math.pow(v, 1.0 / 2.4) * 1.055 - 0.055);
+}
+
+var sRGB_to_linearRGB_Lookup = Array(256);
+(function () {
+    var i;
+    for (i = 0; i < 256; i++) {
+        sRGB_to_linearRGB_Lookup[i] = linearRGB_from_sRGB(i);
+    }
+
+})();
+
+brettel_params = {
+    protan: {
+        rgbCvdFromRgb_1: [
+            0.14510, 1.20165, -0.34675,
+            0.10447, 0.85316, 0.04237,
+            0.00429, -0.00603, 1.00174
+        ],
+        rgbCvdFromRgb_2: [
+            0.14115, 1.16782, -0.30897,
+            0.10495, 0.85730, 0.03776,
+            0.00431, -0.00586, 1.00155
+        ],
+        separationPlaneNormal: [ 0.00048, 0.00416, -0.00464 ]
+    },
+
+    deutan: {
+        rgbCvdFromRgb_1: [
+            0.36198, 0.86755, -0.22953,
+            0.26099, 0.64512, 0.09389,
+           -0.01975, 0.02686, 0.99289,
+        ],
+        rgbCvdFromRgb_2: [
+            0.37009, 0.88540, -0.25549,
+            0.25767, 0.63782, 0.10451,
+           -0.01950, 0.02741, 0.99209,
+        ],
+        separationPlaneNormal: [ -0.00293, -0.00645, 0.00938 ]
+    },
+
+    tritan: {
+        rgbCvdFromRgb_1: [
+            1.01354, 0.14268, -0.15622,
+           -0.01181, 0.87561, 0.13619,
+            0.07707, 0.81208, 0.11085,
+        ],
+        rgbCvdFromRgb_2: [
+            0.93337, 0.19999, -0.13336,
+            0.05809, 0.82565, 0.11626,
+            -0.37923, 1.13825, 0.24098,
+        ],
+        separationPlaneNormal: [ 0.03960, -0.02831, -0.01129 ]
+    },
+};
+
+function brettel(srgb, t, severity) {
+    // Go from sRGB to linearRGB
+    var rgb = Array(3);
+    rgb[0] = sRGB_to_linearRGB_Lookup[srgb[0]]
+    rgb[1] = sRGB_to_linearRGB_Lookup[srgb[1]]
+    rgb[2] = sRGB_to_linearRGB_Lookup[srgb[2]]
+    
+    var params = brettel_params[t];
+    var separationPlaneNormal = params['separationPlaneNormal'];
+    var rgbCvdFromRgb_1 = params['rgbCvdFromRgb_1'];
+    var rgbCvdFromRgb_2 = params['rgbCvdFromRgb_2'];
+
+    // Check on which plane we should project by comparing wih the separation plane normal.
+    var dotWithSepPlane = rgb[0]*separationPlaneNormal[0] + rgb[1]*separationPlaneNormal[1] + rgb[2]*separationPlaneNormal[2];
+    var rgbCvdFromRgb = (dotWithSepPlane >= 0 ? rgbCvdFromRgb_1 : rgbCvdFromRgb_2);
+
+    // Transform to the full dichromat projection plane.
+    var rgb_cvd = Array(3);
+    rgb_cvd[0] = rgbCvdFromRgb[0]*rgb[0] + rgbCvdFromRgb[1]*rgb[1] + rgbCvdFromRgb[2]*rgb[2];
+    rgb_cvd[1] = rgbCvdFromRgb[3]*rgb[0] + rgbCvdFromRgb[4]*rgb[1] + rgbCvdFromRgb[5]*rgb[2];
+    rgb_cvd[2] = rgbCvdFromRgb[6]*rgb[0] + rgbCvdFromRgb[7]*rgb[1] + rgbCvdFromRgb[8]*rgb[2];
+
+    // Apply the severity factor as a linear interpolation.
+    // It's the same to do it in the RGB space or in the LMS
+    // space since it's a linear transform.
+    rgb_cvd[0] = rgb_cvd[0]*severity + rgb[0]*(1.0-severity);
+    rgb_cvd[1] = rgb_cvd[1]*severity + rgb[1]*(1.0-severity);
+    rgb_cvd[2] = rgb_cvd[2]*severity + rgb[2]*(1.0-severity);
+
+    // Go back to sRGB
+    return ([sRGB_from_linearRGB(rgb_cvd[0]),sRGB_from_linearRGB(rgb_cvd[1]),sRGB_from_linearRGB(rgb_cvd[2])]);
+}
+
+function simulateColorBlindness(rgb, type,severity) {
+  const simRGB = brettel(rgb, type,severity);
+  return simRGB;
+}
+
+function simulateColorBlindPalette(palette, type,severity = 1.0) {
+  return palette.map(hex => {
+    const rgb = hex2rgb(hex);
+    const simulatedRgb = simulateColorBlindness(rgb, type, severity);
+    return rgb2hex(simulatedRgb);
+  });
+}
+
+function getMinimumPerceptualDistance(hexPalette, options = {}) {
+  const camPalette = hexPalette.map(hex => {
+    const rgb = hex2rgb(hex);
+    return rgb2cam16ucs(rgb, options);
+  });
+
+  if (camPalette.length < 2) return 0;
+
+  let minDistance = Infinity;
+
+  for (let i = 0; i < camPalette.length; i++) {
+    for (let j = i + 1; j < camPalette.length; j++) {
+      const d = Math.sqrt(
+        Math.pow(camPalette[i].Jp - camPalette[j].Jp, 2) +
+        Math.pow(camPalette[i].aP - camPalette[j].aP, 2) +
+        Math.pow(camPalette[i].bP - camPalette[j].bP, 2)
+      );
+      if (d < minDistance) {
+        minDistance = d;
+      }
+    }
+  }
+
+  return minDistance;
+}
+
+
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     rgb2lch,
     lch2rgb,
-    getHelixColors
+    getHelixColors,
+    getMinimumPerceptualDistance
   };
 }
