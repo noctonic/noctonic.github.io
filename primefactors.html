@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Prime Factorization Quiz</title>
+  <style>
+    body { 
+      display: flex; 
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      min-height: 100vh;
+      background-color: #f0f2f5;
+    }
+    .sidebar { 
+      width: 250px; 
+      padding: 20px;
+      background-color: #ffffff;
+      box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+    }
+    .main { 
+      flex: 1; 
+      padding: 40px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .answer-btn { 
+      margin: 10px;
+      padding: 15px 30px;
+      font-size: 24px;
+      cursor: pointer;
+      border: none;
+      border-radius: 8px;
+      background-color: #495057;
+      color: white;
+      transition: all 0.2s ease;
+      min-width: 300px;
+      min-height: 75px;
+      white-space: nowrap;
+    }
+    .answer-btn:hover {
+      background-color: #343a40;
+      transform: translateY(-2px);
+    }
+    .correct { 
+      background-color: #28a745 !important; 
+      color: white; 
+    }
+    .incorrect { 
+      background-color: #dc3545 !important; 
+      color: white; 
+    }
+    .timer { 
+      font-size: 24px; 
+      color: #dc3545;
+      font-weight: bold;
+    }
+    #question {
+      font-size: 96px;
+      margin-bottom: 30px;
+      color: #2c3e50;
+    }
+    #user-answer {
+      font-size: 36px;
+      padding: 10px 20px;
+      width: 200px;
+      text-align: center;
+      border: 2px solid #ced4da;
+      border-radius: 8px;
+      margin: 20px 0;
+    }
+    #user-answer:focus {
+      outline: none;
+      border-color: #4dabf7;
+      box-shadow: 0 0 0 3px rgba(77, 171, 247, 0.25);
+    }
+    select, button {
+      width: 100%;
+      padding: 8px;
+      margin: 5px 0;
+      border: 1px solid #ced4da;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    button {
+      background-color: #4dabf7;
+      color: white;
+      border: none;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+    }
+    button:hover {
+      background-color: #339af0;
+    }
+    .sidebar h3 {
+      color: #495057;
+      margin-top: 20px;
+      margin-bottom: 10px;
+    }
+    #number-selection {
+      display: grid;
+      grid-template-columns: auto auto auto;
+      gap: 5px;
+      align-items: center;
+    }
+    #number-selection input[type="checkbox"] {
+      margin-right: 5px;
+    }
+    #answers {
+      display: flex;
+      flex-direction: row;
+      flex-wrap: nowrap;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    #next {
+      margin-top: 20px;
+      padding: 10px 20px;
+      font-size: 18px;
+    }
+  </style>
+</head>
+<body>
+  <div class="sidebar">
+    <h3>Prime Factor Quiz</h3>
+    <p><strong>Current Streak:</strong> <span id="streak">0</span></p>
+    <p id="result" style="font-size:18px; margin-top:20px;"></p>
+  </div>
+
+  <div class="main">
+    <div id="question"></div>
+    <div id="answers">
+      <button id="option0" class="answer-btn"></button>
+      <button id="option1" class="answer-btn"></button>
+      <button id="option2" class="answer-btn"></button>
+    </div>
+  </div>
+
+  <script>
+    let streak = 0;
+    let correctAnswerIndex = 0;
+
+    function getRandomNumber() {
+      return Math.floor(Math.random() * 98) + 2;
+    }
+
+    function isPrime(n) {
+      if (n < 2) return false;
+      for (let i = 2; i <= Math.sqrt(n); i++) {
+        if (n % i === 0) return false;
+      }
+      return true;
+    }
+
+    function primeFactorization(n) {
+      const factors = [];
+      let divisor = 2;
+      while (n > 1) {
+        let count = 0;
+        while (n % divisor === 0) {
+          n /= divisor;
+          count++;
+        }
+        if (count > 0) {
+          factors.push([divisor, count]);
+        }
+        divisor++;
+      }
+      return factors;
+    }
+
+    function factorArrayToString(factorArr) {
+      return factorArr.map(([prime, exp]) => {
+        return exp === 1 ? prime : prime + "<sup>" + exp + "</sup>";
+      }).join(" × ");
+    }
+
+    function generateRandomFactorizationString() {
+      const randomNum = getRandomNumber();
+      if(isPrime(randomNum)) {
+        return "Prime";
+      }
+      return factorArrayToString(primeFactorization(randomNum));
+    }
+
+    function shuffleArray(arr) {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+    }
+
+    function updateQuestion() {
+      const number = getRandomNumber();
+      let correctFactorization;
+      if (isPrime(number)) {
+        correctFactorization = "Prime";
+      } else {
+        correctFactorization = factorArrayToString(primeFactorization(number));
+      }
+
+      const wrong1 = generateRandomFactorizationString();
+      const wrong2 = generateRandomFactorizationString();
+
+      const options = [correctFactorization, wrong1, wrong2];
+      shuffleArray(options);
+
+      correctAnswerIndex = options.indexOf(correctFactorization);
+
+      document.getElementById("question").innerHTML = 
+        "<strong>" + number + "</strong>";
+
+      for (let i = 0; i < 3; i++) {
+        const btn = document.getElementById("option" + i);
+        btn.innerHTML = options[i];
+        btn.classList.remove("correct", "incorrect");
+        btn.disabled = false;
+      }
+      
+      document.getElementById("result").textContent = "";
+    }
+
+    function checkAnswer(event) {
+      const chosenIndex = parseInt(event.target.id.replace("option", ""), 10);
+      
+      if (chosenIndex === correctAnswerIndex) {
+        streak++;
+        document.getElementById("result").textContent = "Correct!";
+      } else {
+        streak = 0;
+        document.getElementById("result").textContent = "Incorrect!";
+      }
+      document.getElementById("streak").textContent = streak;
+
+      for (let i = 0; i < 3; i++) {
+        const btn = document.getElementById("option" + i);
+        if (i === correctAnswerIndex) {
+          btn.classList.add("correct");
+          btn.classList.remove("incorrect");
+        } else {
+          btn.classList.add("incorrect");
+          btn.classList.remove("correct");
+        }
+        btn.disabled = true;
+      }
+      
+      setTimeout(updateQuestion, 1000);
+    }
+
+    for (let i = 0; i < 3; i++) {
+      document.getElementById("option" + i).addEventListener("click", checkAnswer);
+    }
+
+    window.onload = updateQuestion;
+  </script>
+</body>
+</html>
