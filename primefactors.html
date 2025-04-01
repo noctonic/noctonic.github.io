@@ -51,61 +51,17 @@
       background-color: #dc3545 !important; 
       color: white; 
     }
-    .timer { 
-      font-size: 24px; 
-      color: #dc3545;
-      font-weight: bold;
-    }
     #question {
       font-size: 96px;
       margin-bottom: 30px;
       color: #2c3e50;
     }
-    #user-answer {
-      font-size: 36px;
-      padding: 10px 20px;
-      width: 200px;
-      text-align: center;
-      border: 2px solid #ced4da;
-      border-radius: 8px;
-      margin: 20px 0;
+    #streak {
+      font-size: 18px;
     }
-    #user-answer:focus {
-      outline: none;
-      border-color: #4dabf7;
-      box-shadow: 0 0 0 3px rgba(77, 171, 247, 0.25);
-    }
-    select, button {
-      width: 100%;
-      padding: 8px;
-      margin: 5px 0;
-      border: 1px solid #ced4da;
-      border-radius: 4px;
-      font-size: 14px;
-    }
-    button {
-      background-color: #4dabf7;
-      color: white;
-      border: none;
-      cursor: pointer;
-      transition: background-color 0.2s ease;
-    }
-    button:hover {
-      background-color: #339af0;
-    }
-    .sidebar h3 {
-      color: #495057;
+    #result {
+      font-size: 18px;
       margin-top: 20px;
-      margin-bottom: 10px;
-    }
-    #number-selection {
-      display: grid;
-      grid-template-columns: auto auto auto;
-      gap: 5px;
-      align-items: center;
-    }
-    #number-selection input[type="checkbox"] {
-      margin-right: 5px;
     }
     #answers {
       display: flex;
@@ -115,18 +71,13 @@
       gap: 10px;
       margin-top: 20px;
     }
-    #next {
-      margin-top: 20px;
-      padding: 10px 20px;
-      font-size: 18px;
-    }
   </style>
 </head>
 <body>
   <div class="sidebar">
     <h3>Prime Factor Quiz</h3>
     <p><strong>Current Streak:</strong> <span id="streak">0</span></p>
-    <p id="result" style="font-size:18px; margin-top:20px;"></p>
+    <p id="result"></p>
   </div>
 
   <div class="main">
@@ -171,18 +122,24 @@
       return factors;
     }
 
-    function factorArrayToString(factorArr) {
-      return factorArr.map(([prime, exp]) => {
-        return exp === 1 ? prime : prime + "<sup>" + exp + "</sup>";
-      }).join(" × ");
-    }
-
-    function generateRandomFactorizationString() {
-      const randomNum = getRandomNumber();
-      if(isPrime(randomNum)) {
+    function generateRandomFactorizationString(allowPrime = true) {
+      let num = getRandomNumber();
+      if (!allowPrime) {
+        while (isPrime(num)) {
+          num = getRandomNumber();
+        }
+      }
+      if (allowPrime && isPrime(num)) {
         return "Prime";
       }
-      return factorArrayToString(primeFactorization(randomNum));
+      const factors = primeFactorization(num);
+      return factorsToString(factors);
+    }
+
+    function factorsToString(factorArr) {
+      return factorArr
+        .map(([prime, exp]) => (exp === 1 ? prime : prime + "<sup>" + exp + "</sup>"))
+        .join(" × ");
     }
 
     function shuffleArray(arr) {
@@ -195,22 +152,29 @@
     function updateQuestion() {
       const number = getRandomNumber();
       let correctFactorization;
+      let distractor1;
+      let distractor2;
+
       if (isPrime(number)) {
         correctFactorization = "Prime";
+        distractor1 = generateRandomFactorizationString(false); 
+        distractor2 = generateRandomFactorizationString(false);
       } else {
-        correctFactorization = factorArrayToString(primeFactorization(number));
+        correctFactorization = factorsToString(primeFactorization(number));
+        distractor1 = generateRandomFactorizationString(true);
+        distractor2 = generateRandomFactorizationString(true);
+        
+        while (distractor1 === "Prime" && distractor2 === "Prime") {
+          distractor2 = generateRandomFactorizationString(true);
+        }
       }
 
-      const wrong1 = generateRandomFactorizationString();
-      const wrong2 = generateRandomFactorizationString();
-
-      const options = [correctFactorization, wrong1, wrong2];
+      const options = [correctFactorization, distractor1, distractor2];
       shuffleArray(options);
 
       correctAnswerIndex = options.indexOf(correctFactorization);
 
-      document.getElementById("question").innerHTML = 
-        "<strong>" + number + "</strong>";
+      document.getElementById("question").innerHTML = `<strong>${number}</strong>`;
 
       for (let i = 0; i < 3; i++) {
         const btn = document.getElementById("option" + i);
@@ -218,13 +182,13 @@
         btn.classList.remove("correct", "incorrect");
         btn.disabled = false;
       }
-      
+
       document.getElementById("result").textContent = "";
     }
 
     function checkAnswer(event) {
       const chosenIndex = parseInt(event.target.id.replace("option", ""), 10);
-      
+
       if (chosenIndex === correctAnswerIndex) {
         streak++;
         document.getElementById("result").textContent = "Correct!";
@@ -238,14 +202,12 @@
         const btn = document.getElementById("option" + i);
         if (i === correctAnswerIndex) {
           btn.classList.add("correct");
-          btn.classList.remove("incorrect");
         } else {
           btn.classList.add("incorrect");
-          btn.classList.remove("correct");
         }
         btn.disabled = true;
       }
-      
+
       setTimeout(updateQuestion, 1000);
     }
 
