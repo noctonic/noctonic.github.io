@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Linear Equations</title>
+  <head>
+  <link rel="preload" href="/fonts/BerkeleyMono-Regular.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/fonts/font.css">
+  </head>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      height: 100%;
+    }
+
+    body {
+      display: flex;
+      min-height: 100vh;
+      font-family: 'Berkeley Mono', monospace;
+      background-color: #f0f2f5;
+    }
+
+    .sidebar {
+      width: 300px;
+      height: 100vh;
+      overflow-y: auto;
+      background-color: #ffffff;
+      box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+      display: flex;
+      flex-direction: column;
+      box-sizing: border-box;
+      padding: 20px;
+    }
+
+    .main {
+      flex: 1; 
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    #question {
+      font-size: 96px;
+      margin-bottom: 30px;
+      color: #2c3e50;
+      text-align: center;
+    }
+    #message {
+      margin: 0.5em 0;
+      font-weight: bold;
+      color: #dc3545;
+      text-align: center;
+      min-height: 1.2em;
+    }
+    .history {
+      margin-top: 20px;
+      border-top: 1px solid #ccc;
+      padding-top: 10px;
+    }
+    .puzzle-title {
+      margin-top: 0.5em;
+      margin-bottom: 0.25em;
+      font-weight: bold;
+    }
+    .step {
+      margin-bottom: 8px;
+      color: #495057;
+    }
+
+    .button-row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .opBtn, .numBtn {
+      border: none;
+      border-radius: 8px;
+      font-size: 24px;
+      cursor: pointer;
+      color: white;
+      background-color: #495057;
+      padding: 12px 20px;
+      transition: background-color 0.2s ease, transform 0.2s ease;
+    }
+    .opBtn:hover, .numBtn:hover {
+      background-color: #343a40;
+      transform: translateY(-2px);
+    }
+
+    .correct {
+      background-color: #28a745 !important; 
+      color: white;
+    }
+    .incorrect {
+      background-color: #dc3545 !important;
+      color: white;
+    }
+    .selected {
+      background-color: #6c757d !important;
+    }
+
+    .fraction {
+      display: inline-block;
+      vertical-align: middle;
+      text-align: center;
+      margin: 0 3px;
+      font-size: 0.75em;
+    }
+    .fraction .top {
+      display: block;
+      border-bottom: 1px solid #000;
+      padding: 0 4px;
+    }
+    .fraction .bottom {
+      display: block;
+      padding: 0 4px;
+    }
+
+    .green-op {
+      color: green;
+      font-weight: bold;
+      margin: 0 5px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="sidebar">
+    <h3>Solving Steps</h3>
+
+    <div id="history" class="history"></div>
+  </div>
+
+  <div class="main">
+    <div id="question"></div>
+    <div id="message"></div>
+
+    <div class="button-row" id="operationButtons">
+      <button class="opBtn" data-operation="+">+</button>
+      <button class="opBtn" data-operation="-">−</button>
+      <button class="opBtn" data-operation="*">×</button>
+      <button class="opBtn" data-operation="/">÷</button>
+    </div>
+
+    <div class="button-row" id="numberButtons"></div>
+  </div>
+
+  <script>
+
+    const variablePool = ["x","y","z","p","q","r","m","t"];
+
+    function gcd(a, b) {
+      a = Math.abs(a);
+      b = Math.abs(b);
+      while(b !== 0){
+        let t = b;
+        b = a % b;
+        a = t;
+      }
+      return a;
+    }
+
+    function reduceFraction(fr){
+      if(fr.num === 0) return { num: 0, den: 1 };
+      let g = gcd(fr.num, fr.den);
+      let newNum = fr.num / g, newDen = fr.den / g;
+      if(newDen < 0){
+        newDen = -newDen;
+        newNum = -newNum;
+      }
+      return { num: newNum, den: newDen };
+    }
+
+    function fractionAdd(a, b){
+      let num = a.num * b.den + b.num * a.den;
+      let den = a.den * b.den;
+      return reduceFraction({ num, den });
+    }
+    function fractionSub(a, b){
+      return fractionAdd(a, { num: -b.num, den: b.den });
+    }
+    function fractionMul(a, b){
+      let num = a.num * b.num, den = a.den * b.den;
+      return reduceFraction({ num, den });
+    }
+    function fractionDiv(a, b){
+      let num = a.num * b.den, den = a.den * b.num;
+      return reduceFraction({ num, den });
+    }
+
+    function fractionToString(fr){
+      let r = reduceFraction(fr);
+      if(r.den === 1) return r.num.toString();
+      return r.num + "/" + r.den;
+    }
+    function fractionToHTML(fr){
+      let r = reduceFraction(fr);
+      if(r.den === 1) return r.num.toString();
+      return `
+        <span class="fraction">
+          <span class="top">${r.num}</span>
+          <span class="bottom">${r.den}</span>
+        </span>
+      `;
+    }
+
+    function parseFractionString(str){
+      if(str.includes("/")){
+        let [n, d] = str.split("/");
+        return reduceFraction({ num: parseInt(n, 10), den: parseInt(d, 10) });
+      } else {
+        return { num: parseInt(str, 10), den: 1 };
+      }
+    }
+
+    function intFraction(n){
+      return { num: n, den: 1 };
+    }
+
+    function getRandomInt(min, max){
+      return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    function getRandomFraction(){
+      let den = getRandomInt(1,5);
+      return { num: 1, den: den };
+    }
+
+    let puzzleCount = 0;
+    let variableChar = "x"; 
+    let aFrac, bFrac, cFrac; 
+    let flipSides = false;
+    let solutionSteps = [];
+    let currentStepIndex = 0;
+    let selectedOpBtn = null, selectedNumBtn = null;
+
+    const questionDiv = document.getElementById("question");
+    const messageDiv  = document.getElementById("message");
+    const historyDiv  = document.getElementById("history");
+    const numberButtonsDiv = document.getElementById("numberButtons");
+    const opButtons = document.querySelectorAll(".opBtn");
+
+    const normalColor = "#495057", 
+          selectedColor = "#6c757d",
+          correctColor = "#28a745",
+          incorrectColor = "#dc3545";
+
+    let useXOverDen = true;
+
+    function renderLeftSide(aF, bF){
+      if(aF.num === 0) return fractionToHTML(bF);
+
+      let isOneOverDen = (aF.num === 1 && aF.den !== 1);
+
+      if(aF.num === 1 && aF.den === 1){
+        return buildExpr("x", bF);
+      } else if(isOneOverDen){
+        let den = aF.den;
+        let varPart;
+        if(useXOverDen){
+          varPart = "x ÷ " + den;
+        } else {
+          varPart = fractionToHTML({num: 1, den: den}) + " x";
+        }
+        return buildExpr(varPart, bF);
+      } else {
+        let aHTML = fractionToHTML(aF);
+        let axPart = aHTML + variableChar;
+        return buildExpr(axPart, bF);
+      }
+    }
+
+    function buildExpr(axString, bF){
+      if(bF.num === 0){
+        return axString;
+      } else if(bF.num > 0){
+        return axString + " + " + fractionToHTML(bF);
+      } else {
+        let negB = { num: -bF.num, den: bF.den };
+        return axString + " - " + fractionToHTML(negB);
+      }
+    }
+
+    function updateEquationDisplay(){
+      let leftExpr = renderLeftSide(aFrac, bFrac);
+      let rightExpr = fractionToHTML(cFrac);
+      if(!flipSides){
+        questionDiv.innerHTML = `${leftExpr} = ${rightExpr}`;
+      } else {
+        questionDiv.innerHTML = `${rightExpr} = ${leftExpr}`;
+      }
+    }
+
+    let rawSteps = [];
+
+    function createPuzzle(){
+      puzzleCount++;
+      currentStepIndex = 0;
+      messageDiv.textContent = "";
+
+      variableChar = variablePool[getRandomInt(0, variablePool.length - 1)];
+
+      aFrac = getRandomFraction();
+      bFrac = intFraction(getRandomInt(-10,10));
+      cFrac = intFraction(getRandomInt(-10,10));
+
+      flipSides = (Math.random() < 0.5);
+      useXOverDen = (Math.random() < 0.5);
+
+      rawSteps = [];
+
+      if(bFrac.num !== 0){
+        let signOp = (bFrac.num > 0) ? '-' : '+';
+        let oppositeB = { num: Math.abs(bFrac.num), den: bFrac.den };
+        rawSteps.push({ operation: signOp, frac: oppositeB });
+      }
+
+      if(aFrac.den !== 1){
+        let rec = { num: aFrac.den, den: 1 };
+        rawSteps.push({ operation: '*', frac: rec });
+      }
+
+      let puzzleLabel = document.createElement("div");
+      puzzleLabel.className = "puzzle-title";
+      puzzleLabel.textContent = `Puzzle #${puzzleCount} (${variableChar}): a=${fractionToString(aFrac)}, b=${fractionToString(bFrac)}, c=${fractionToString(cFrac)}`;
+      historyDiv.appendChild(puzzleLabel);
+
+      if(rawSteps.length === 0){
+        messageDiv.textContent = "Already solved! No steps needed.";
+      }
+
+      updateEquationDisplay();
+      buildSolutionSteps();
+      buildNumberButtons();
+    }
+
+    function applyOneStep(A, B, C, op, frac){
+      switch(op){
+        case '+':
+          B = fractionAdd(B, frac);
+          C = fractionAdd(C, frac);
+          break;
+        case '-':
+          B = fractionSub(B, frac);
+          C = fractionSub(C, frac);
+          break;
+        case '*':
+          A = fractionMul(A, frac);
+          B = fractionMul(B, frac);
+          C = fractionMul(C, frac);
+          break;
+        case '/':
+          A = fractionDiv(A, frac);
+          B = fractionDiv(B, frac);
+          C = fractionDiv(C, frac);
+          break;
+      }
+      AFrac = A; BFrac = B; CFrac = C;
+    }
+
+    function buildSolutionSteps(){
+      solutionSteps = [];
+      for(let st of rawSteps){
+        solutionSteps.push({
+          operation: st.operation,
+          number: fractionToString(st.frac)
+        });
+      }
+    }
+
+    function buildNumberButtons(){
+      numberButtonsDiv.innerHTML = "";
+      let needed = new Set();
+      for(let st of solutionSteps){
+        needed.add(st.number);
+      }
+      for(let val of needed){
+        let btn = document.createElement("button");
+        btn.className = "numBtn";
+        btn.style.backgroundColor = normalColor;
+        btn.textContent = val;
+        btn.setAttribute("data-number", val);
+        btn.addEventListener("click", ()=> handleUserSelection(null, btn));
+        numberButtonsDiv.appendChild(btn);
+      }
+    }
+
+    function isCorrectStep(op, numStr){
+      if(currentStepIndex >= solutionSteps.length) return false;
+      let correct = solutionSteps[currentStepIndex];
+      return (op === correct.operation && numStr === correct.number);
+    }
+
+    function applyAlgebraStep(op, numStr){
+      let valF = parseFractionString(numStr);
+      switch(op){
+        case '+':
+          bFrac = fractionAdd(bFrac, valF);
+          cFrac = fractionAdd(cFrac, valF);
+          break;
+        case '-':
+          bFrac = fractionSub(bFrac, valF);
+          cFrac = fractionSub(cFrac, valF);
+          break;
+        case '*':
+          aFrac = fractionMul(aFrac, valF);
+          bFrac = fractionMul(bFrac, valF);
+          cFrac = fractionMul(cFrac, valF);
+          break;
+        case '/':
+          aFrac = fractionDiv(aFrac, valF);
+          bFrac = fractionDiv(bFrac, valF);
+          cFrac = fractionDiv(cFrac, valF);
+          break;
+      }
+    }
+
+    opButtons.forEach(opBtn => {
+      opBtn.style.backgroundColor = normalColor;
+      opBtn.addEventListener("click", ()=>{
+        handleUserSelection(opBtn, null);
+      });
+    });
+
+    function handleUserSelection(opBtn, numBtn){
+      if(opBtn){
+        if(selectedOpBtn && selectedOpBtn !== opBtn){
+          resetButton(selectedOpBtn);
+        }
+        selectedOpBtn = opBtn;
+        highlightButton(selectedOpBtn, selectedColor);
+      }
+      if(numBtn){
+        if(selectedNumBtn && selectedNumBtn !== numBtn){
+          resetButton(selectedNumBtn);
+        }
+        selectedNumBtn = numBtn;
+        highlightButton(selectedNumBtn, selectedColor);
+      }
+      if(selectedOpBtn && selectedNumBtn){
+        attemptStep();
+      }
+    }
+
+    function attemptStep(){
+      let op = selectedOpBtn.getAttribute("data-operation");
+      let numS = selectedNumBtn.getAttribute("data-number");
+      if(isCorrectStep(op, numS)){
+        highlightButton(selectedOpBtn, correctColor);
+        highlightButton(selectedNumBtn, correctColor);
+
+        let oldLeft = renderLeftSide(aFrac, bFrac);
+        let oldRight = fractionToHTML(cFrac);
+
+        applyAlgebraStep(op, numS);
+
+        let newLeft = renderLeftSide(aFrac, bFrac);
+        let newRight = fractionToHTML(cFrac);
+        let opSpan = `<span class="green-op">${op} ${numS}</span>`;
+
+        let stepElem = document.createElement("div");
+        stepElem.className = "step";
+        stepElem.innerHTML = `
+          <strong>Step ${currentStepIndex + 1}:</strong><br>
+          ${oldLeft} ${opSpan} = ${oldRight} ${opSpan}<br>
+          => ${newLeft} = ${newRight}
+        `;
+        historyDiv.appendChild(stepElem);
+
+        currentStepIndex++;
+        updateEquationDisplay();
+        messageDiv.textContent = "";
+
+        if(currentStepIndex >= solutionSteps.length){
+          messageDiv.textContent = "Puzzle solved! Next puzzle in 2s...";
+          setTimeout(() => createPuzzle(), 2000);
+        }
+      } else {
+        highlightButton(selectedOpBtn, incorrectColor);
+        highlightButton(selectedNumBtn, incorrectColor);
+        messageDiv.textContent = "Incorrect step. Try again!";
+      }
+
+      setTimeout(()=>{
+        resetButton(selectedOpBtn);
+        resetButton(selectedNumBtn);
+        selectedOpBtn = null;
+        selectedNumBtn = null;
+      }, 1000);
+    }
+
+    function highlightButton(btn, color){
+      btn.style.backgroundColor = color;
+    }
+    function resetButton(btn){
+      if(!btn) return;
+      btn.style.backgroundColor = normalColor;
+    }
+
+    window.onload = () => createPuzzle();
+  </script>
+</body>
+</html>
