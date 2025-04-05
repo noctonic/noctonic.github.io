@@ -3,10 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <title>Linear Equations</title>
-  <head>
   <link rel="preload" href="/fonts/BerkeleyMono-Regular.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="/fonts/font.css">
-  </head>
+  <link rel="stylesheet" href="/fonts/fonts.css">
   <style>
     html, body {
       margin: 0;
@@ -126,16 +124,14 @@
       font-weight: bold;
       margin: 0 5px;
     }
+
   </style>
 </head>
 <body>
-
-  <div class="sidebar">
-    <h3>Solving Steps</h3>
-
-    <div id="history" class="history"></div>
-  </div>
-
+<div class="sidebar">
+<span id="variableInstr">x</span>
+  <div id="history" class="history"></div>
+</div>
   <div class="main">
     <div id="question"></div>
     <div id="message"></div>
@@ -152,7 +148,7 @@
 
   <script>
 
-    const variablePool = ["x","y","z","p","q","r","m","t"];
+    const variablePool = ["y","z","p","q","r","m","t"];
 
     function gcd(a, b) {
       a = Math.abs(a);
@@ -258,17 +254,19 @@
       let isOneOverDen = (aF.num === 1 && aF.den !== 1);
 
       if(aF.num === 1 && aF.den === 1){
-        return buildExpr("x", bF);
-      } else if(isOneOverDen){
+        return buildExpr(variableChar, bF);
+      } 
+      else if(isOneOverDen){
         let den = aF.den;
         let varPart;
         if(useXOverDen){
-          varPart = "x ÷ " + den;
+          varPart = variableChar + " ÷ " + den;
         } else {
-          varPart = fractionToHTML({num: 1, den: den}) + " x";
+          varPart = fractionToHTML({num: 1, den: den}) + " " + variableChar;
         }
         return buildExpr(varPart, bF);
-      } else {
+      } 
+      else {
         let aHTML = fractionToHTML(aF);
         let axPart = aHTML + variableChar;
         return buildExpr(axPart, bF);
@@ -304,6 +302,7 @@
       messageDiv.textContent = "";
 
       variableChar = variablePool[getRandomInt(0, variablePool.length - 1)];
+      document.getElementById("variableInstr").textContent =   "Solve for "+variableChar+" one step at a time. Use one button for the operation and another for the number.Keep going until "+variableChar+" is by itself!"
 
       aFrac = getRandomFraction();
       bFrac = intFraction(getRandomInt(-10,10));
