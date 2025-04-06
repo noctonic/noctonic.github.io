@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Side-by-Side JPEG Quant Tables</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 20px;
+    }
+    label {
+      display: inline-block;
+      margin-top: 1em;
+      font-weight: bold;
+    }
+
+    .tables-container {
+      display: flex;
+      gap: 40px;
+      margin: 1em 0;
+      flex-wrap: wrap;
+    }
+    .table-block {
+      text-align: center;
+    }
+    .table-block h2 {
+      margin-bottom: 0.4em;
+    }
+
+    .quant-grid {
+      display: grid;
+      grid-template-columns: repeat(8, 45px);
+      grid-gap: 3px;
+      margin-top: 0.2em;
+      margin-bottom: 0.5em;
+      justify-content: center;
+    }
+    .quant-cell {
+      width: 45px;
+      height: 45px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+      border-radius: 3px;
+    }
+
+    #canvas {
+      display: none;
+    }
+    #outputImage {
+      display: block;
+      margin-top: 1em;
+      max-width: 300px;
+      border: 1px solid #ccc;
+    }
+  </style>
+</head>
+<body>
+
+<h1>JPEG Quant Tables</h1>
+
+<!-- Slider for JPEG Quality -->
+<label for="qualityRange">JPEG Quality: 
+  <span id="qVal">50</span>
+</label><br>
+<input type="range" id="qualityRange" min="1" max="100" value="50" style="width:300px;">
+
+<div class="tables-container">
+  <!-- Y Table -->
+  <div class="table-block">
+    <h2>Y (Luminance)</h2>
+    <div id="yQuantGrid" class="quant-grid"></div>
+  </div>
+
+  <div class="table-block">
+    <h2>UV (Chrominance)</h2>
+    <div id="uvQuantGrid" class="quant-grid"></div>
+  </div>
+</div>
+
+<hr>
+
+<h2>Try Encoding an Image (Optional)</h2>
+<input type="file" id="imgFileInput" accept="image/*">
+<button id="encodeBtn" disabled>Encode &amp; Show JPEG</button>
+
+<canvas id="canvas"></canvas>
+<img id="outputImage" alt="Encoded JPEG" />
+
+<script src="./encoder.js"></script>
+<script>
+const HEATMAP_COLORS = [
+  "#000000","#250017","#380031","#410055","#35007D","#0018A6","#002FCC","#0041EC",
+  "#0050FF","#005DFF","#0068FF","#0071FF","#007AFF","#0081FF","#0088EF","#008ED5",
+  "#0095B9","#009B9B","#00A27B","#00A85B","#00AE39","#00B400","#00B800","#00BC00",
+  "#00BE00","#6DBF00","#A1BE00","#CABD12","#E7BF54","#F8C587","#F8D2B9","#E5E5E5"
+];
+
+const BASE_Y_QT = [
+  16, 11, 10, 16, 24, 40, 51, 61,
+  12, 12, 14, 19, 26, 58, 60, 55,
+  14, 13, 16, 24, 40, 57, 69, 56,
+  14, 17, 22, 29, 51, 87, 80, 62,
+  18, 22, 37, 56, 68,109,103, 77,
+  24, 35, 55, 64, 81,104,113, 92,
+  49, 64, 78, 87,103,121,120,101,
+  72, 92, 95, 98,112,100,103, 99
+];
+const BASE_UV_QT = [
+  17, 18, 24, 47, 99, 99, 99, 99,
+  18, 21, 26, 66, 99, 99, 99, 99,
+  24, 26, 56, 99, 99, 99, 99, 99,
+  47, 66, 99, 99, 99, 99, 99, 99,
+  99, 99, 99, 99, 99, 99, 99, 99,
+  99, 99, 99, 99, 99, 99, 99, 99,
+  99, 99, 99, 99, 99, 99, 99, 99,
+  99, 99, 99, 99, 99, 99, 99, 99
+];
+
+function computeQuantTable(baseTable, quality) {
+  if (quality < 1) quality = 1;
+  if (quality > 100) quality = 100;
+
+  let sf;
+  if (quality < 50) {
+    sf = Math.floor(5000 / quality);
+  } else {
+    sf = Math.floor(200 - quality * 2);
+  }
+
+  const scaled = new Array(64);
+  for (let i = 0; i < 64; i++) {
+    let t = Math.floor((baseTable[i] * sf + 50) / 100);
+    if (t < 1)   t = 1;
+    if (t > 255) t = 255;
+    scaled[i] = t;
+  }
+  return scaled;
+}
+
+function renderQuantGrid(baseTable, quality, containerId) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = "";
+
+  const values = computeQuantTable(baseTable, quality);
+
+  for (let i = 0; i < 64; i++) {
+    const val = values[i];
+    let colorIndex = Math.min(31, Math.floor(val / 8));
+    
+    const cell = document.createElement("div");
+    cell.className = "quant-cell";
+    cell.style.backgroundColor = HEATMAP_COLORS[colorIndex];
+    cell.textContent = val;
+    container.appendChild(cell);
+  }
+}
+
+function updateBothTables(quality) {
+  renderQuantGrid(BASE_Y_QT,  quality, "yQuantGrid");
+  renderQuantGrid(BASE_UV_QT, quality, "uvQuantGrid");
+}
+
+const qualityRange = document.getElementById("qualityRange");
+const qVal         = document.getElementById("qVal");
+
+qualityRange.addEventListener("input", () => {
+  const q = parseInt(qualityRange.value, 10);
+  qVal.textContent = q;
+  updateBothTables(q);
+});
+
+updateBothTables(parseInt(qualityRange.value, 10));
+
+const imgFileInput = document.getElementById("imgFileInput");
+const encodeBtn    = document.getElementById("encodeBtn");
+const canvas       = document.getElementById("canvas");
+const ctx          = canvas.getContext("2d");
+const outputImage  = document.getElementById("outputImage");
+
+let loadedImageData = null;
+
+imgFileInput.addEventListener("change", () => {
+  const file = imgFileInput.files[0];
+  if (!file) {
+    encodeBtn.disabled = true;
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      canvas.width  = img.width;
+      canvas.height = img.height;
+      ctx.drawImage(img, 0, 0);
+      const raw = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      loadedImageData = {
+        data: raw.data,
+        width: raw.width,
+        height: raw.height
+      };
+      encodeBtn.disabled = false;
+    };
+    img.src = reader.result;
+  };
+  reader.readAsDataURL(file);
+});
+
+encodeBtn.addEventListener("click", () => {
+  if (!loadedImageData) return;
+  const q = parseInt(qualityRange.value, 10);
+  const encoded = window["jpeg-js"].encode(loadedImageData, q);
+  const blob = new Blob([encoded.data], { type: "image/jpeg" });
+  outputImage.src = URL.createObjectURL(blob);
+});
+</script>
+</body>
+</html>
