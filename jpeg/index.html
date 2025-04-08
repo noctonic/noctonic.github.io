@@ -3,414 +3,211 @@
 <head>
   <meta charset="utf-8">
   <title>JPEG Compression</title>
-<style>
-  * {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-  }
-  body {
-    font-family: 'monospace', sans-serif;
-    background-color: #1e1e1e;
-    color: #f0f0f0;
-    padding: 20px;
-  }
-  h1, h2 {
-    margin-bottom: 20px;
-    font-weight: 600;
-    font-size: 2rem;
-  }
-  label {
-    display: block;
-    margin-top: 10px;
-    margin-bottom: 6px;
-    font-weight: 500;
-  }
-  .tables-container {
-    display: flex;
-    gap: 40px;
-    margin: 1em 0;
-    flex-wrap: wrap;
-  }
-  .table-block h2 {
-    margin-bottom: 0.4em;
-    color: #f0f0f0;
-  }
-  .quant-grid {
-    display: grid;
-    grid-template-columns: repeat(8, 45px);
-    grid-gap: 3px;
-    margin: 0.2em 0 0.5em;
-  }
-  .quant-cell {
-    width: 45px;
-    height: 45px;
-    display: flex;
-    color: white;
-    font-weight: bold;
-    border-radius: 3px;
-    background-color: #2e2e2e;
-  }
-  .preview-row {
-    margin-top: 1.5em;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 20px;
-  }
-  .preview-column canvas,
-  #originalImage {
-    border: 1px solid #555;
-    display: block;
-    margin-top: 0.5em;
-    margin-bottom: 20px;
-    min-height: 200px;
-    max-height: 200px;
-    image-rendering: pixelated;
-    image-rendering: -moz-crisp-edges;
-    image-rendering: crisp-edges;
-  }
-  #outputImage {
-    margin-bottom: 20px;
-    border: 1px solid #555;
-    display: block;
-    margin-top: 0.5em;
-  }
-  #canvas {
-    display: none;
-  }
-</style>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: 'monospace', sans-serif;
+      background-color: #1e1e1e;
+      color: #f0f0f0;
+      padding: 20px;
+    }
+    h1, h2 {
+      margin-bottom: 20px;
+      font-weight: 600;
+      font-size: 2rem;
+    }
+    label {
+      display: block;
+      margin-top: 10px;
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+    .tables-container {
+      display: flex;
+      gap: 40px;
+      margin: 1em 0;
+      flex-wrap: wrap;
+    }
+    .table-block h2 {
+      margin-bottom: 0.4em;
+      color: #f0f0f0;
+    }
+    .quant-grid {
+      display: grid;
+      grid-template-columns: repeat(8, 45px);
+      grid-gap: 3px;
+      margin: 0.2em 0 0.5em;
+    }
+    .quant-cell {
+      width: 45px;
+      height: 45px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: white;
+      font-weight: bold;
+      border-radius: 3px;
+      background-color: #2e2e2e;
+    }
+    .quant-cell-input {
+      width: 40px;
+      text-align: center;
+      background-color: #2e2e2e;
+      color: #f0f0f0;
+      border: 1px solid #555;
+      border-radius: 3px;
+    }
+    .preview-row {
+      margin-top: 1.5em;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+    .preview-column canvas,
+    #originalImage {
+      border: 1px solid #555;
+      display: block;
+      margin-top: 0.5em;
+      margin-bottom: 20px;
+      min-height: 200px;
+      max-height: 200px;
+      image-rendering: pixelated;
+      image-rendering: -moz-crisp-edges;
+      image-rendering: crisp-edges;
+    }
+    #outputImage {
+      margin-bottom: 20px;
+      border: 1px solid #555;
+      display: block;
+      margin-top: 0.5em;
+    }
+    #canvas {
+      display: none;
+    }
+  </style>
 </head>
 <body>
-<h2>JPEG Compression Demo</h2>
-
-<input type="file" id="imgFileInput" accept="image/*">
-
-<div>
-  <label>Original Image</label>
-  <img id="originalImage" alt="Original (or default) image" />
-</div>
-
-<canvas id="canvas"></canvas>
-<hr>
-
-<label for="subsamplingSelect">Chroma Subsampling:</label>
-<select id="subsamplingSelect">
-  <option value="4:4:4">4:4:4</option>
-  <option value="4:2:2">4:2:2</option>
-  <option value="4:2:0">4:2:0</option>
-</select>
-
-<div class="preview-row">
-  <div class="preview-column">
-    <label>Y (Luminance)</label>
-    <canvas id="canvasY"></canvas>
+  <h2>JPEG Compression Demo</h2>
+  <input type="file" id="imgFileInput" accept="image/*">
+  <div>
+    <label>Original Image</label>
+    <img id="originalImage" alt="Original (or default) image" />
   </div>
-  <div class="preview-column">
-    <label>Cb</label>
-    <canvas id="canvasCb"></canvas>
+  <canvas id="canvas"></canvas>
+  <hr>
+  <label for="subsamplingSelect">Chroma Subsampling:</label>
+  <select id="subsamplingSelect">
+    <option value="4:4:4">4:4:4</option>
+    <option value="4:2:2">4:2:2</option>
+    <option value="4:2:0">4:2:0</option>
+  </select>
+  <div class="preview-row">
+    <div class="preview-column">
+      <label>Y (Luminance)</label>
+      <canvas id="canvasY"></canvas>
+    </div>
+    <div class="preview-column">
+      <label>Cb</label>
+      <canvas id="canvasCb"></canvas>
+    </div>
+    <div class="preview-column">
+      <label>Cr</label>
+      <canvas id="canvasCr"></canvas>
+    </div>
   </div>
-  <div class="preview-column">
-    <label>Cr</label>
-    <canvas id="canvasCr"></canvas>
+  <hr>
+  <div>
+    <label>
+      <input type="checkbox" id="useCustomQuant">
+      Use Custom Quantization Tables
+    </label>
   </div>
-</div>
-<hr>
-
-<label for="qualityRange">
-  JPEG Quality: 
-  <span id="qVal">50</span>
-</label><br>
-<input type="range" id="qualityRange" min="1" max="100" value="50" style="width:300px;">
-
-<div class="tables-container">
-  <div class="table-block">
-    <h2>Y (Luminance)</h2>
-    <div id="yQuantGrid" class="quant-grid"></div>
+  <div id="standardQuantDiv">
+    <label for="qualityRange">
+      JPEG Quality: 
+      <span id="qVal">50</span>
+    </label><br>
+    <input type="range" id="qualityRange" min="1" max="100" value="50" style="width:300px;">
+    <div class="tables-container">
+      <div class="table-block">
+        <h2>Luminance</h2>
+        <div id="yQuantGrid" class="quant-grid"></div>
+      </div>
+      <div class="table-block">
+        <h2>Chrominance</h2>
+        <div id="uvQuantGrid" class="quant-grid"></div>
+      </div>
+    </div>
   </div>
-  <div class="table-block">
-    <h2>UV (Chrominance)</h2>
-    <div id="uvQuantGrid" class="quant-grid"></div>
+
+
+  <div id="customQuantDiv" style="display: none;">
+    <h3>Custom Quantization Table Controls</h3>
+    
+    <label for="quantModeSelect">Mode:</label>
+    <select id="quantModeSelect">
+      <option value="manual">Manual</option>
+      <option value="gradient">Gradient</option>
+      <option value="random">Random</option>
+    </select>
+    <br><br>
+
+    <div>
+      <label id="sliderALabel" for="sliderA">Slider A:</label>
+      <span id="sliderAVal">1</span>
+      <br>
+      <input type="range" id="sliderA" min="1" max="255" value="1" style="width: 200px;">
+    </div>
+    
+    <div>
+      <label id="sliderBLabel" for="sliderB">Slider B:</label>
+      <span id="sliderBVal">255</span>
+      <br>
+      <input type="range" id="sliderB" min="1" max="255" value="255" style="width: 200px;">
+    </div>
+
+    <div>
+      <label id="sliderCLabel" for="sliderC">Slider C:</label>
+      <span id="sliderCVal">128</span>
+      <br>
+      <input type="range" id="sliderC" min="1" max="255" value="128" style="width: 200px;">
+    </div>
+
+    <div>
+      <label id="sliderDLabel" for="sliderD">Slider D:</label>
+      <span id="sliderDVal">50</span>
+      <br>
+      <input type="range" id="sliderD" min="1" max="255" value="50" style="width: 200px;">
+    </div>
+    <br>
+    <button id="customQuantButton">Button</button>
+    
+    <div class="tables-container">
+      <div class="table-block">
+        <h2>Luminance</h2>
+        <div id="customYQuantGrid" class="quant-grid"></div>
+      </div>
+      <div class="table-block">
+        <h2>Chrominance</h2>
+        <div id="customUVQuantGrid" class="quant-grid"></div>
+      </div>
+    </div>
   </div>
-</div>
+  <!-- End Custom Quantization Div -->
 
-<label>JPEG Output</label>
-<img id="outputImage" alt="Encoded JPEG" />
+  <p id="stats" style="margin-bottom:8px;">No stats yet.</p>
+  <br>
+  <button id="feedbackButton">Feedback</button>
+  <label>JPEG Output</label>
+  <canvas id="outputImage"></canvas>
 
-<script src="./encoder.js"></script>
-<script>
-
-const HEATMAP_COLORS = [
-  "#000000","#250017","#380031","#410055","#35007D","#0018A6","#002FCC","#0041EC",
-  "#0050FF","#005DFF","#0068FF","#0071FF","#007AFF","#0081FF","#0088EF","#008ED5",
-  "#0095B9","#009B9B","#00A27B","#00A85B","#00AE39","#00B400","#00B800","#00BC00",
-  "#00BE00","#6DBF00","#A1BE00","#CABD12","#E7BF54","#F8C587","#F8D2B9","#E5E5E5"
-];
-
-const BASE_Y_QT = [
-  16, 11, 10, 16, 24, 40, 51, 61,
-  12, 12, 14, 19, 26, 58, 60, 55,
-  14, 13, 16, 24, 40, 57, 69, 56,
-  14, 17, 22, 29, 51, 87, 80, 62,
-  18, 22, 37, 56, 68,109,103, 77,
-  24, 35, 55, 64, 81,104,113, 92,
-  49, 64, 78, 87,103,121,120,101,
-  72, 92, 95, 98,112,100,103, 99
-];
-const BASE_UV_QT = [
-  17, 18, 24, 47, 99, 99, 99, 99,
-  18, 21, 26, 66, 99, 99, 99, 99,
-  24, 26, 56, 99, 99, 99, 99, 99,
-  47, 66, 99, 99, 99, 99, 99, 99,
-  99, 99, 99, 99, 99, 99, 99, 99,
-  99, 99, 99, 99, 99, 99, 99, 99,
-  99, 99, 99, 99, 99, 99, 99, 99,
-  99, 99, 99, 99, 99, 99, 99, 99
-];
-
-function computeQuantTable(baseTable, quality) {
-  if (quality < 1) quality = 1;
-  if (quality > 100) quality = 100;
-  let sf;
-  if (quality < 50) {
-    sf = Math.floor(5000 / quality);
-  } else {
-    sf = Math.floor(200 - quality * 2);
-  }
-  const scaled = new Array(64);
-  for (let i = 0; i < 64; i++) {
-    let t = Math.floor((baseTable[i] * sf + 50) / 100);
-    if (t < 1)   t = 1;
-    if (t > 255) t = 255;
-    scaled[i] = t;
-  }
-  return scaled;
-}
-
-function renderQuantGrid(baseTable, quality, containerId) {
-  const container = document.getElementById(containerId);
-  container.innerHTML = "";
-  const values = computeQuantTable(baseTable, quality);
-  for (let i = 0; i < 64; i++) {
-    const val = values[i];
-    let colorIndex = Math.min(31, Math.floor(val / 8));
-    const cell = document.createElement("div");
-    cell.className = "quant-cell";
-    cell.style.backgroundColor = HEATMAP_COLORS[colorIndex];
-    cell.textContent = val;
-    container.appendChild(cell);
-  }
-}
-
-function updateBothTables(quality) {
-  renderQuantGrid(BASE_Y_QT, quality, "yQuantGrid");
-  renderQuantGrid(BASE_UV_QT, quality, "uvQuantGrid");
-}
-
-const qualityRange       = document.getElementById("qualityRange");
-const qVal               = document.getElementById("qVal");
-const subsamplingSelect  = document.getElementById("subsamplingSelect");
-const imgFileInput       = document.getElementById("imgFileInput");
-
-const canvas             = document.getElementById("canvas");
-const ctx                = canvas.getContext("2d");
-
-const outputImage        = document.getElementById("outputImage");
-const originalImage      = document.getElementById("originalImage");
-
-let loadedImageData = null;
-
-const defaultBase64 = 
-  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAAXNSR0IArs4c6QAAAMZlWElmTU0AKgAAAAgABgESAAMAAAABAAEAAAEaAAUAAAABAAAAVgEbAAUAAAABAAAAXgEoAAMAAAABAAIAAAExAAIAAAAWAAAAZodpAAQAAAABAAAAfAAAAAAAAAEsAAAAAQAAASwAAAABUGl4ZWxtYXRvciBQcm8gMy42LjE0AAAEkAQAAgAAABQAAACyoAEAAwAAAAEAAQAAoAIABAAAAAEAAAAQoAMABAAAAAEAAAAQAAAAADIwMjU6MDQ6MDYgMTM6NTE6MzEAaUX6OwAAAAlwSFlzAAAuIwAALiMBeKU/dgAAA7NpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IlhNUCBDb3JlIDYuMC4wIj4KICAgPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4KICAgICAgPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIKICAgICAgICAgICAgeG1sbnM6dGlmZj0iaHR0cDovL25zLmFkb2JlLmNvbS90aWZmLzEuMC8iCiAgICAgICAgICAgIHhtbG5zOmV4aWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20vZXhpZi8xLjAvIgogICAgICAgICAgICB4bWxuczp4bXA9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8iPgogICAgICAgICA8dGlmZjpZUmVzb2x1dGlvbj4zMDAwMDAwLzEwMDAwPC90aWZmOllSZXNvbHV0aW9uPgogICAgICAgICA8dGlmZjpYUmVzb2x1dGlvbj4zMDAwMDAwLzEwMDAwPC90aWZmOlhSZXNvbHV0aW9uPgogICAgICAgICA8dGlmZjpSZXNvbHV0aW9uVW5pdD4yPC90aWZmOlJlc29sdXRpb25Vbml0PgogICAgICAgICA8dGlmZjpPcmllbnRhdGlvbj4xPC90aWZmOk9yaWVudGF0aW9uPgogICAgICAgICA8ZXhpZjpQaXhlbFlEaW1lbnNpb24+MTY8L2V4aWY6UGl4ZWxZRGltZW5zaW9uPgogICAgICAgICA8ZXhpZjpQaXhlbFhEaW1lbnNpb24+MTY8L2V4aWY6UGl4ZWxYRGltZW5zaW9uPgogICAgICAgICA8eG1wOk1ldGFkYXRhRGF0ZT4yMDI1LTA0LTA2VDEzOjUyOjQ1LTA0OjAwPC94bXA6TWV0YWRhdGFEYXRlPgogICAgICAgICA8eG1wOkNyZWF0ZURhdGU+MjAyNS0wNC0wNlQxMzo1MTozMS0wNDowMDwveG1wOkNyZWF0ZURhdGU+CiAgICAgICAgIDx4bXA6Q3JlYXRvclRvb2w+UGl4ZWxtYXRvciBQcm8gMy42LjE0PC94bXA6Q3JlYXRvclRvb2w+CiAgICAgIDwvcmRmOkRlc2NyaXB0aW9uPgogICA8L3JkZjpSREY+CjwveDp4bXBtZXRhPgqD4F+JAAAAYUlEQVQoFWNU5H3LQApgIkUxSC3tNbDAnXRGTAHCNnn1AI8gyU5iHDShBPchwg9wIbiPsTIQGrBKQwSBZsGDDhGsQCGIJXA5rHZiCSW4OrhOZMuxaECWxmQT5QdkbSRrAABKlRiRQBRSQAAAAABJRU5ErkJggg==";
-
-function updateEncodedImage() {
-  if (!loadedImageData) return;
-  const quality = parseInt(qualityRange.value, 10);
-  const subsamplingMode = subsamplingSelect.value;
-  const encoded = window["jpeg-js"].encode(loadedImageData, quality, subsamplingMode);
-  const blob = new Blob([encoded.data], { type: "image/jpeg" });
-  outputImage.src = URL.createObjectURL(blob);
-}
-
-function extractYUVPlanes(rgbaData, width, height, subsampling) {
-  let cw = width, ch = height;
-  if (subsampling === '4:2:2') {
-    cw = width >> 1;
-    ch = height;
-  } else if (subsampling === '4:2:0') {
-    cw = width >> 1;
-    ch = height >> 1;
-  }
-  const Y  = new Uint8Array(width * height);
-  const Cb = new Uint8Array(cw * ch);
-  const Cr = new Uint8Array(cw * ch);
-  const stride = width * 4;
-  const clamp = (val, low, high) => val < low ? low : (val > high ? high : val);
-  for (let yPos = 0; yPos < height; yPos++) {
-    for (let xPos = 0; xPos < width; xPos++) {
-      const idx = yPos * stride + (xPos << 2);
-      const r = rgbaData[idx + 0];
-      const g = rgbaData[idx + 1];
-      const b = rgbaData[idx + 2];
-      let yVal = (19595 * r + 38470 * g + 7471 * b + 32768) >> 16;
-      yVal = clamp(yVal, 0, 255);
-      Y[yPos * width + xPos] = yVal;
-    }
-  }
-  if (subsampling === '4:4:4') {
-    for (let yPos = 0; yPos < height; yPos++) {
-      for (let xPos = 0; xPos < width; xPos++) {
-        const idx = yPos * stride + (xPos << 2);
-        const r = rgbaData[idx + 0];
-        const g = rgbaData[idx + 1];
-        const b = rgbaData[idx + 2];
-        let cB = ((-11059 * r - 21709 * g + 32768 * b + 8421375) >> 16);
-        let cR = ((32768 * r - 27439 * g - 5329  * b + 8421375) >> 16);
-        cB = clamp(cB + 128, 0, 255);
-        cR = clamp(cR + 128, 0, 255);
-        const planeIdx = yPos * width + xPos;
-        Cb[planeIdx] = cB;
-        Cr[planeIdx] = cR;
-      }
-    }
-  }
-  else if (subsampling === '4:2:2') {
-    for (let yPos = 0; yPos < height; yPos++) {
-      for (let xPos = 0; xPos < width; xPos += 2) {
-        let sumCb = 0, sumCr = 0;
-        for (let i = 0; i < 2; i++) {
-          const realX = xPos + i;
-          if (realX >= width) break;
-          const idx = yPos * stride + (realX << 2);
-          const r = rgbaData[idx + 0];
-          const g = rgbaData[idx + 1];
-          const b = rgbaData[idx + 2];
-          let tmpCb = ((-11059 * r - 21709 * g + 32768 * b + 8421375) >> 16);
-          let tmpCr = ((32768 * r - 27439 * g - 5329  * b + 8421375) >> 16);
-          sumCb += tmpCb;
-          sumCr += tmpCr;
-        }
-        let cB = clamp((sumCb / 2) + 128, 0, 255);
-        let cR = clamp((sumCr / 2) + 128, 0, 255);
-        const outX = xPos >> 1;
-        const planeIdx = yPos * (width >> 1) + outX;
-        Cb[planeIdx] = cB;
-        Cr[planeIdx] = cR;
-      }
-    }
-  }
-  else {
-    for (let yPos = 0; yPos < height; yPos += 2) {
-      for (let xPos = 0; xPos < width; xPos += 2) {
-        let sumCb = 0, sumCr = 0;
-        for (let yy = 0; yy < 2; yy++) {
-          for (let xx = 0; xx < 2; xx++) {
-            const realX = xPos + xx;
-            const realY = yPos + yy;
-            if (realX >= width || realY >= height) continue;
-            const idx = realY * stride + (realX << 2);
-            const r = rgbaData[idx + 0];
-            const g = rgbaData[idx + 1];
-            const b = rgbaData[idx + 2];
-            let tmpCb = ((-11059 * r - 21709 * g + 32768 * b + 8421375) >> 16);
-            let tmpCr = ((32768 * r - 27439 * g - 5329  * b + 8421375) >> 16);
-            sumCb += tmpCb;
-            sumCr += tmpCr;
-          }
-        }
-        let cB = clamp((sumCb / 4) + 128, 0, 255);
-        let cR = clamp((sumCr / 4) + 128, 0, 255);
-        const outX = xPos >> 1;
-        const outY = yPos >> 1;
-        const planeIdx = outY * (width >> 1) + outX;
-        Cb[planeIdx] = cB;
-        Cr[planeIdx] = cR;
-      }
-    }
-  }
-  return { Y, Cb, Cr };
-}
-
-function drawPlaneGrayscale(plane, planeWidth, planeHeight, canvasElem) {
-  canvasElem.width  = planeWidth;
-  canvasElem.height = planeHeight;
-  const ctx2 = canvasElem.getContext("2d");
-  const imageData = ctx2.createImageData(planeWidth, planeHeight);
-  let out = imageData.data;
-  for (let i = 0; i < planeWidth * planeHeight; i++) {
-    const val = plane[i];
-    const idx = i * 4;
-    out[idx + 0] = val;
-    out[idx + 1] = val;
-    out[idx + 2] = val;
-    out[idx + 3] = 255;
-  }
-  ctx2.putImageData(imageData, 0, 0);
-}
-
-const canvasY  = document.getElementById("canvasY");
-const canvasCb = document.getElementById("canvasCb");
-const canvasCr = document.getElementById("canvasCr");
-
-function updatePlanesPreview() {
-  if (!loadedImageData) return;
-  const subsamplingMode = subsamplingSelect.value;
-  const { data, width, height } = loadedImageData;
-  const { Y, Cb, Cr } = extractYUVPlanes(data, width, height, subsamplingMode);
-  drawPlaneGrayscale(Y, width, height, canvasY);
-  let cw = width, ch = height;
-  if (subsamplingMode === '4:2:2') {
-    cw = width >> 1;
-    ch = height;
-  } else if (subsamplingMode === '4:2:0') {
-    cw = width >> 1;
-    ch = height >> 1;
-  }
-  drawPlaneGrayscale(Cb, cw, ch, canvasCb);
-  drawPlaneGrayscale(Cr, cw, ch, canvasCr);
-  updateEncodedImage();
-}
-
-qualityRange.addEventListener("input", () => {
-  const q = parseInt(qualityRange.value, 10);
-  qVal.textContent = q;
-  updateBothTables(q);
-  updateEncodedImage();
-});
-
-subsamplingSelect.addEventListener("change", updatePlanesPreview);
-
-function loadImageFromSrc(src) {
-  const img = new Image();
-  img.onload = () => {
-    originalImage.src = src;
-    canvas.width = img.width;
-    canvas.height = img.height;
-    ctx.drawImage(img, 0, 0);
-    const raw = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    loadedImageData = {
-      data: raw.data,
-      width: raw.width,
-      height: raw.height
-    };
-    updatePlanesPreview();
-  };
-  img.src = src;
-}
-
-document.addEventListener("DOMContentLoaded", () => {
-  loadImageFromSrc(defaultBase64);
-});
-
-imgFileInput.addEventListener("change", () => {
-  const file = imgFileInput.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    loadImageFromSrc(reader.result);
-  };
-  reader.readAsDataURL(file);
-});
-updateBothTables(50)
-</script>
+  
+  <script src="./encoder.js"></script>
+  <script src="./customQuant.js"></script>
+  <script src="./app.js"></script>
 </body>
 </html>
