@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Graph Prune</title>
+  <script src="./d3.v7.min.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      background: #282c34;
+      color: #ffffff;
+      font-family: 'Montserrat', sans-serif;
+      margin: 0;
+      padding: 20px;
+    }
+    h1, label {
+      color: #ffffff;
+    }
+    h1 {
+      margin-bottom: 20px;
+      font-weight: 600;
+    }
+
+    .row {
+      margin-bottom: 15px;
+    }
+    .info-and-graph {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      margin-top: 10px;
+    }
+
+    textarea {
+      width: 100%;
+      height: 150px;
+      border: 1px solid #444;
+      border-radius: 4px;
+      background-color: #1f2022;
+      color: #ffffff;
+      padding: 10px;
+      font-family: 'Montserrat', sans-serif;
+      resize: vertical;
+    }
+    #stepsInput, #minThresholdInput, #maxThresholdInput {
+      width: 80px;
+      margin: 0 15px 0 5px;
+      padding: 5px;
+      border: 1px solid #444;
+      border-radius: 4px;
+      background: #1f2022;
+      color: #fff;
+    }
+    button {
+      background-color: #61dafb;
+      border: none;
+      border-radius: 4px;
+      color: #000000;
+      padding: 8px 16px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background-color 0.2s ease;
+    }
+    button:hover {
+      background-color: #4ed0f2;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .charts-container {
+      display: flex;
+      flex-wrap: nowrap;
+      gap: 20px;
+      margin-top: 10px;
+      overflow-x: auto;
+      padding-bottom: 5px;
+    }
+
+    .chart {
+      flex: 0 0 auto;
+      border-radius: 4px;
+      background: #1f2022;
+      width: 280px;
+      height: 200px;
+      position: relative;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    }
+
+    .chart-title {
+      font-size: 14px;
+      font-weight: 600;
+      text-align: center;
+      margin-top: 5px;
+      color: #61dafb;
+    }
+
+    .step-controls {
+      margin-top: 10px;
+    }
+
+    .info-box {
+      background: #1f2022;
+      border: 1px solid #444;
+      border-radius: 4px;
+      display: inline-block;
+      padding: 10px;
+      font-family: monospace;
+      white-space: pre;
+      min-width: 180px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    }
+    .info-box strong {
+      color: #61dafb;
+    }
+
+    #graph {
+      border: 1px solid #444;
+      border-radius: 4px;
+      background: #1f2022;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    }
+  </style>
+</head>
+<body>
+
+<h1>Graph Prune</h1>
+
+<div class="row">
+  <label>Adjacency Matrix:</label><br>
+  <textarea id="jsonInput"></textarea>
+</div>
+
+<div class="row">
+  <label>Min Threshold:
+    <input type="number" id="minThresholdInput" step="0.01"/>
+  </label>
+  <label>Max Threshold:
+    <input type="number" id="maxThresholdInput" step="0.01"/>
+  </label>
+  <label>Steps:
+    <input type="number" id="stepsInput" min="2" step="1" value="20"/>
+  </label>
+  <button id="processBtn">Analyze!</button>
+</div>
+
+<div class="charts-container">
+  <div>
+    <div class="chart-title">Communities</div>
+    <div class="chart" id="chart-communities"></div>
+  </div>
+  <div>
+    <div class="chart-title">Modularity</div>
+    <div class="chart" id="chart-modularity"></div>
+  </div>
+  <div>
+    <div class="chart-title">Avg Internal Dist</div>
+    <div class="chart" id="chart-in-dist"></div>
+  </div>
+  <div>
+    <div class="chart-title">Avg External Dist</div>
+    <div class="chart" id="chart-out-dist"></div>
+  </div>
+  <div>
+    <div class="chart-title">Avg Density</div>
+    <div class="chart" id="chart-density"></div>
+  </div>
+  <div>
+    <div class="chart-title">Avg Node Count</div>
+    <div class="chart" id="chart-node-count"></div>
+  </div>
+</div>
+
+<div class="step-controls">
+  <button id="prevBtn" disabled>Prev Threshold</button>
+  <button id="nextBtn" disabled>Next Threshold</button>
+</div>
+
+<div class="info-and-graph">
+  <div id="currentInfo" class="info-box">
+    <div><strong>Current Threshold:</strong> <span id="infoThreshold">N/A</span></div>
+    <div><strong># Communities:</strong> <span id="infoNumComms">N/A</span></div>
+    <div><strong>Modularity:</strong> <span id="infoModularity">N/A</span></div>
+    <div><strong>Avg Internal Dist:</strong> <span id="infoInDist">N/A</span></div>
+    <div><strong>Avg External Dist:</strong> <span id="infoOutDist">N/A</span></div>
+    <div><strong>Avg Density:</strong> <span id="infoDensity">N/A</span></div>
+    <div><strong>Avg Node Count:</strong> <span id="infoNodeCount">N/A</span></div>
+  </div>
+
+  <div id="graph"></div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const MIN_SIZE = 6;
+  const MAX_SIZE = 12;
+  const size = Math.floor(Math.random() * (MAX_SIZE - MIN_SIZE + 1)) + MIN_SIZE;
+
+  const allLetters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const nodes = [];
+  for (let i = 0; i < size; i++) {
+    nodes.push(allLetters[i] || `Node${i+1}`);
+  }
+
+  const matrix = Array.from({length: size}, () => new Array(size).fill(0));
+  for (let i = 0; i < size; i++) {
+    for (let j = i+1; j < size; j++) {
+      const r = 10 * Math.random().toFixed(2);
+      matrix[i][j] = Number(r);
+      matrix[j][i] = Number(r);
+    }
+  }
+
+  const randomGraph = { nodes, matrix };
+  document.getElementById('jsonInput').value = JSON.stringify(randomGraph, null, 2);
+  
+  document.getElementById('processBtn').click();
+});
+</script>
+
+<script type="module">
+export const jLouvain = function() {
+  let edges_ = [];
+  let nodes_ = [];
+  let adj_   = {};
+
+  function init_graph(nodes, edges) {
+    adj_ = {};
+    nodes_ = [...nodes];
+    edges_ = [...edges];
+
+    nodes.forEach(n => {
+      adj_[n] = {};
+    });
+
+    edges.forEach(e => {
+      let w = e.sim || 1;
+      adj_[e.source][e.target] = w;
+      adj_[e.target][e.source] = w;
+    });
+  }
+
+  function run_louvain() {
+    let nodeDegree = {};
+    let totalWeight = 0;
+    nodes_.forEach(n => {
+      let wSum = 0;
+      for (let neigh in adj_[n]) {
+        wSum += adj_[n][neigh];
+      }
+      nodeDegree[n] = wSum;
+      totalWeight += wSum;
+    });
+    totalWeight /= 2;
+
+    let partition = {};
+    nodes_.forEach(n => partition[n] = n);
+
+    let mod = modularity(partition);
+    let newMod = mod;
+    let improvement = true;
+
+    while (improvement) {
+      mod = newMod;
+      improvement = false;
+
+      nodes_.forEach(node => {
+        let bestCommunity = partition[node];
+        let bestIncrease = 0;
+        let nodeComm = partition[node];
+
+        partition[node] = -1;
+
+        let neighComms = {};
+        for (let neighbor in adj_[node]) {
+          let w = adj_[node][neighbor];
+          let nc = partition[neighbor];
+          neighComms[nc] = (neighComms[nc] || 0) + w;
+        }
+
+        let deg = nodeDegree[node];
+
+        for (let [comm, wSum] of Object.entries(neighComms)) {
+          let gain = delta_modularity(
+            node, comm, wSum, deg, partition, nodeDegree, totalWeight
+          );
+          if (gain > bestIncrease) {
+            bestIncrease = gain;
+            bestCommunity = comm;
+          }
+        }
+
+        partition[node] = bestCommunity;
+        if (bestCommunity !== nodeComm) {
+          improvement = true;
+        }
+      });
+      newMod = modularity(partition);
+      if (newMod <= mod) {
+        improvement = false;
+      }
+    }
+    return partition;
+
+    function modularity(part) {
+      let m2 = 2 * totalWeight;
+      let inc = 0;
+      for (let i of nodes_) {
+        for (let j of nodes_) {
+          if (part[i] === part[j]) {
+            let w = adj_[i][j] || 0;
+            inc += w - (nodeDegree[i] * nodeDegree[j] / m2);
+          }
+        }
+      }
+      return inc / m2;
+    }
+
+    function delta_modularity(node, comm, wSum, deg, part, nodeDeg, m) {
+      let commDegSum = 0;
+      for (let n of nodes_) {
+        if (part[n] === comm) {
+          commDegSum += nodeDeg[n];
+        }
+      }
+      return wSum - (deg * commDegSum / (2 * m));
+    }
+  }
+
+  return function() {
+    return {
+      nodes: function(n) { nodes_ = n; return this; },
+      edges: function(e) { edges_ = e; return this; },
+      run: function() {
+        init_graph(nodes_, edges_);
+        let result = run_louvain();
+        return result;
+      }
+    };
+  };
+};
+
+export function computeModularity(nodes, edges, partition) {
+  let adj = {};
+  let nodeDeg = {};
+  nodes.forEach(n => { 
+    adj[n] = {}; 
+    nodeDeg[n] = 0; 
+  });
+  let totalW = 0;
+  edges.forEach(e => {
+    let w = e.sim;
+    adj[e.source][e.target] = w;
+    adj[e.target][e.source] = w;
+    nodeDeg[e.source] += w;
+    nodeDeg[e.target] += w;
+    totalW += w;
+  });
+  totalW /= 2;
+  let m2 = 2 * totalW;
+  let inc = 0;
+  for (let i of nodes) {
+    for (let j of nodes) {
+      if (partition[i] === partition[j]) {
+        let w = adj[i][j] || 0;
+        inc += w - (nodeDeg[i] * nodeDeg[j] / m2);
+      }
+    }
+  }
+  return inc / m2;
+}
+
+export function computeInOutDistances(nodes, edges, partition) {
+  let distAdj = {};
+  nodes.forEach(n => distAdj[n] = {});
+  edges.forEach(e => {
+    distAdj[e.source][e.target] = e.distance;
+    distAdj[e.target][e.source] = e.distance;
+  });
+  let inSum = 0, inCount = 0, outSum = 0, outCount = 0;
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i+1; j < nodes.length; j++) {
+      let n1 = nodes[i], n2 = nodes[j];
+      let d = distAdj[n1][n2];
+      if (d === undefined) continue;
+      if (partition[n1] === partition[n2]) {
+        inSum += d; 
+        inCount++;
+      } else {
+        outSum += d; 
+        outCount++;
+      }
+    }
+  }
+  return {
+    avgInDist: inCount ? (inSum / inCount) : NaN,
+    avgOutDist: outCount ? (outSum / outCount) : NaN
+  };
+}
+
+export function computeAvgDensity(nodes, edges, partition) {
+  let commMap = {};
+  for (let n of nodes) {
+    let c = partition[n];
+    if (!commMap[c]) commMap[c] = [];
+    commMap[c].push(n);
+  }
+
+  let adj = {};
+  nodes.forEach(n => adj[n] = {});
+  edges.forEach(e => {
+    adj[e.source][e.target] = true;
+    adj[e.target][e.source] = true;
+  });
+
+  let densities = [];
+  for (let c in commMap) {
+    let mem = commMap[c];
+    if (mem.length < 2) {
+      densities.push(0);
+      continue;
+    }
+    let subEdges = 0;
+    for (let i = 0; i < mem.length; i++) {
+      for (let j = i+1; j < mem.length; j++) {
+        if (adj[mem[i]][mem[j]]) {
+          subEdges++;
+        }
+      }
+    }
+    let possible = mem.length * (mem.length - 1) / 2;
+    densities.push(subEdges / possible);
+  }
+  if (!densities.length) return NaN;
+  return densities.reduce((a,b) => a + b, 0) / densities.length;
+}
+
+export function computeAvgNodeCount(nodes, partition) {
+  let commMap = {};
+  for (let n of nodes) {
+    let c = partition[n];
+    if (!commMap[c]) commMap[c] = [];
+    commMap[c].push(n);
+  }
+  let sizes = Object.values(commMap).map(arr => arr.length);
+  if (!sizes.length) return NaN;
+  let sumSizes = sizes.reduce((a,b) => a + b, 0);
+  return sumSizes / sizes.length;
+}
+
+
+let metricsOverThreshold = [];  
+let currentIndex = 0;
+
+document.getElementById('processBtn').addEventListener('click', () => {
+  let rawData;
+  try {
+    rawData = JSON.parse(document.getElementById('jsonInput').value);
+  } catch(e) {
+    alert("Invalid JSON: " + e);
+    return;
+  }
+
+  if (!Array.isArray(rawData.nodes) || !Array.isArray(rawData.matrix)) {
+    alert("JSON must have 'nodes' array and 'matrix' array.");
+    return;
+  }
+
+  const nodeIds = rawData.nodes;
+  const matrix = rawData.matrix;
+  const n = nodeIds.length;
+
+  if (matrix.length !== n || matrix.some(row => row.length !== n)) {
+    alert("Matrix must be NxN matching the number of nodes.");
+    return;
+  }
+
+  let edges = [];
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      edges.push({
+        source: nodeIds[i],
+        target: nodeIds[j],
+        distance: matrix[i][j]
+      });
+    }
+  }
+
+  let uniqueDistances = Array.from(new Set(edges.map(e => e.distance)));
+  uniqueDistances.sort((a, b) => b - a);
+
+  let userMinDist = parseFloat(document.getElementById('minThresholdInput').value);
+  let userMaxDist = parseFloat(document.getElementById('maxThresholdInput').value);
+
+  let realMin = !isNaN(userMinDist) ? userMinDist : d3.min(uniqueDistances);
+  let realMax = !isNaN(userMaxDist) ? userMaxDist : d3.max(uniqueDistances);
+
+  let filteredDistances = uniqueDistances.filter(d => d <= realMax && d >= realMin);
+
+  let stepCount = parseInt(document.getElementById('stepsInput').value, 10);
+  if (!stepCount || stepCount < 2) {
+    stepCount = 2;
+  }
+
+  let thresholds = [];
+  if (filteredDistances.length <= stepCount) {
+    thresholds = filteredDistances;
+  } else {
+    for (let i = 0; i < stepCount; i++) {
+      let fraction = i / (stepCount - 1);
+      let idx = Math.round(fraction * (filteredDistances.length - 1));
+      thresholds.push(filteredDistances[idx]);
+    }
+  }
+
+  metricsOverThreshold = [];
+  for (let t of thresholds) {
+    let filteredEdges = edges
+      .filter(e => e.distance < t)
+      .map(e => ({
+        source: e.source,
+        target: e.target,
+        distance: e.distance,
+        sim: 1 / (1 + e.distance)
+      }));
+
+    let partition = runLouvain(nodeIds, filteredEdges);
+    let numComms = new Set(Object.values(partition)).size;
+    let mod = computeModularity(nodeIds, filteredEdges, partition);
+    let { avgInDist, avgOutDist } = computeInOutDistances(nodeIds, filteredEdges, partition);
+    let avgDensity = computeAvgDensity(nodeIds, filteredEdges, partition);
+    let avgNodeCount = computeAvgNodeCount(nodeIds, partition);
+
+    metricsOverThreshold.push({
+      threshold: t,
+      edges: filteredEdges,
+      numComms,
+      mod,
+      inDist: avgInDist,
+      outDist: avgOutDist,
+      density: avgDensity,
+      avgNodeCount
+    });
+  }
+
+  renderCharts(metricsOverThreshold);
+
+  currentIndex = 0;
+  document.getElementById('prevBtn').disabled = false;
+  document.getElementById('nextBtn').disabled = false;
+  showCurrentThreshold();
+});
+
+document.getElementById('prevBtn').addEventListener('click', () => {
+  if (currentIndex > 0) {
+    currentIndex--;
+    showCurrentThreshold();
+  }
+});
+
+document.getElementById('nextBtn').addEventListener('click', () => {
+  if (currentIndex < metricsOverThreshold.length - 1) {
+    currentIndex++;
+    showCurrentThreshold();
+  }
+});
+function drawGraph(nodeIds, edges, partition) {
+  d3.select("#graph").selectAll("svg").remove();
+
+  const width = 700;
+  const height = 500;
+
+  let svg = d3.select("#graph")
+    .append("svg")
+    .attr("width", width)
+    .attr("height", height);
+
+  let idxMap = {};
+  nodeIds.forEach((id, i) => (idxMap[id] = i));
+
+  let d3nodes = nodeIds.map((id) => ({
+    id: id,
+    group: partition[id]
+  }));
+
+  let d3edges = edges.map((e) => ({
+    source: idxMap[e.source],
+    target: idxMap[e.target],
+    distance: e.distance
+  }));
+
+  let minD = d3.min(d3edges, (d) => d.distance) || 0;
+  let maxD = d3.max(d3edges, (d) => d.distance) || 1;
+  let distScale = d3.scaleLinear().domain([minD, maxD]).range([30, 150]);
+
+  let simulation = d3
+    .forceSimulation(d3nodes)
+    .force(
+      "link",
+      d3
+        .forceLink(d3edges)
+        .distance((d) => distScale(d.distance))
+        .strength(1)
+    )
+    .force("charge", d3.forceManyBody().strength(-80))
+    .force("center", d3.forceCenter(width / 2, height / 2));
+
+  let link = svg
+    .selectAll(".link")
+    .data(d3edges)
+    .enter()
+    .append("line")
+    .attr("class", "link")
+    .style("stroke", "#999");
+
+  let color = d3.scaleOrdinal(d3.schemeCategory10);
+
+  let nodeRadius = 8;
+  let node = svg
+    .selectAll(".node")
+    .data(d3nodes)
+    .enter()
+    .append("circle")
+    .attr("class", "node")
+    .attr("r", nodeRadius)
+    .attr("fill", (d) => color(d.group))
+    .call(
+      d3.drag()
+        .on("start", dragstarted)
+        .on("drag", dragged)
+        .on("end", dragended)
+    );
+
+  let label = svg
+    .selectAll(".nodelabel")
+    .data(d3nodes)
+    .enter()
+    .append("text")
+    .attr("class", "nodelabel")
+    .attr("dy", -10)
+    .attr("text-anchor", "middle")
+    .text((d) => d.id)
+    .style("fill", "#fff");
+
+  simulation.on("tick", () => {
+    link
+      .attr("x1", (d) => d.source.x)
+      .attr("y1", (d) => d.source.y)
+      .attr("x2", (d) => d.target.x)
+      .attr("y2", (d) => d.target.y);
+
+    node
+      .attr("cx", (d) => {
+        d.x = Math.max(nodeRadius, Math.min(width - nodeRadius, d.x));
+        return d.x;
+      })
+      .attr("cy", (d) => {
+        d.y = Math.max(nodeRadius, Math.min(height - nodeRadius, d.y));
+        return d.y;
+      });
+
+    label
+      .attr("x", (d) => {
+        return d.x;
+      })
+      .attr("y", (d) => {
+        return d.y;
+      });
+  });
+
+  function dragstarted(event, d) {
+    if (!event.active) simulation.alphaTarget(0.3).restart();
+    d.fx = d.x;
+    d.fy = d.y;
+  }
+
+  function dragged(event, d) {
+    d.fx = event.x;
+    d.fy = event.y;
+  }
+
+  function dragended(event, d) {
+    if (!event.active) simulation.alphaTarget(0);
+    d.fx = null;
+    d.fy = null;
+  }
+}
+
+function runLouvain(nodes, edges) {
+  let algo = jLouvain()().nodes(nodes).edges(edges);
+  return algo.run();
+}
+
+function showCurrentThreshold() {
+  let rec = metricsOverThreshold[currentIndex];
+  let partition = runLouvain(getAllNodeIds(), rec.edges);
+
+  drawGraph(getAllNodeIds(), rec.edges, partition);
+
+  document.getElementById('infoThreshold').textContent = rec.threshold.toFixed(4);
+  document.getElementById('infoNumComms').textContent = rec.numComms;
+  document.getElementById('infoModularity').textContent = rec.mod.toFixed(4);
+  document.getElementById('infoInDist').textContent = isNaN(rec.inDist) ? "N/A" : rec.inDist.toFixed(4);
+  document.getElementById('infoOutDist').textContent = isNaN(rec.outDist) ? "N/A" : rec.outDist.toFixed(4);
+  document.getElementById('infoDensity').textContent = isNaN(rec.density) ? "N/A" : rec.density.toFixed(4);
+  document.getElementById('infoNodeCount').textContent = isNaN(rec.avgNodeCount) ? "N/A" : rec.avgNodeCount.toFixed(2);
+}
+
+function getAllNodeIds() {
+  let setNodes = new Set();
+  if (metricsOverThreshold.length > 0) {
+    for (let e of metricsOverThreshold[0].edges) {
+      setNodes.add(e.source);
+      setNodes.add(e.target);
+    }
+  }
+  return Array.from(setNodes);
+}
+
+function renderCharts(data) {
+  drawLineChart("#chart-communities", data, "threshold", "numComms", "Communities");
+  drawLineChart("#chart-modularity", data, "threshold", "mod", "Modularity");
+  drawLineChart("#chart-in-dist", data, "threshold", "inDist", "Avg In Dist");
+  drawLineChart("#chart-out-dist", data, "threshold", "outDist", "Avg Out Dist");
+  drawLineChart("#chart-density", data, "threshold", "density", "Avg Density");
+  drawLineChart("#chart-node-count", data, "threshold", "avgNodeCount", "Avg Node Count");
+}
+
+function drawLineChart(container, data, xKey, yKey, yLabel) {
+  d3.select(container).selectAll("svg").remove();
+
+  let dataSorted = [...data].sort((a, b) => b[xKey] - a[xKey]);
+
+  const w = 280, h = 160,
+        margin = { top: 20, right: 20, bottom: 40, left: 45 },
+        innerW = w - margin.left - margin.right,
+        innerH = h - margin.top - margin.bottom;
+
+  let svg = d3.select(container)
+    .append("svg")
+    .attr("width", w)
+    .attr("height", h);
+
+  let g = svg.append("g")
+    .attr("transform", `translate(${margin.left}, ${margin.top})`);
+
+  let xExtent = d3.extent(dataSorted, d => d[xKey]) || [0,1];
+  let [minX, maxX] = xExtent;
+  if (minX === maxX) {
+    minX -= 1; 
+    maxX += 1; 
+  }
+
+  let xScale = d3.scaleLinear()
+    .domain([maxX, minX])
+    .range([0, innerW]);
+
+  let yVals = dataSorted.map(d => d[yKey]).filter(v => isFinite(v));
+  if (!yVals.length) yVals = [0,1];
+  let yMin = d3.min(yVals);
+  let yMax = d3.max(yVals);
+  if (yMin === yMax) {
+    yMin -= 1; 
+    yMax += 1;
+  }
+  let yPad = (yMax - yMin) * 0.05;
+  yMin -= yPad;
+  yMax += yPad;
+
+  let yScale = d3.scaleLinear()
+    .domain([yMin, yMax])
+    .range([innerH, 0]);
+
+  let xAxis = d3.axisBottom(xScale).ticks(4);
+  let yAxis = d3.axisLeft(yScale).ticks(4);
+
+  g.append("g")
+    .attr("transform", `translate(0, ${innerH})`)
+    .call(xAxis)
+    .attr("color", "#ccc");
+
+  g.append("g")
+    .call(yAxis)
+    .attr("color", "#ccc");
+
+  g.append("text")
+    .attr("x", innerW / 2)
+    .attr("y", innerH + 30)
+    .attr("text-anchor", "middle")
+    .attr("font-size", "10px")
+    .attr("fill", "#fff")
+    .text("Threshold");
+
+  g.append("text")
+    .attr("transform", "rotate(-90)")
+    .attr("y", -35)
+    .attr("x", -innerH / 2)
+    .attr("text-anchor", "middle")
+    .attr("font-size", "10px")
+    .attr("fill", "#fff")
+    .text(yLabel);
+
+  g.append("clipPath")
+    .attr("id", "clip-" + container.slice(1))
+    .append("rect")
+    .attr("width", innerW)
+    .attr("height", innerH);
+
+  let chartBody = g.append("g")
+    .attr("clip-path", "url(#clip-" + container.slice(1) + ")");
+
+  let lineGen = d3.line()
+    .x(d => xScale(d[xKey]))
+    .y(d => yScale(isNaN(d[yKey]) ? 0 : d[yKey]));
+
+  chartBody.append("path")
+    .datum(dataSorted)
+    .attr("fill", "none")
+    .attr("stroke", "#61dafb")
+    .attr("stroke-width", 2)
+    .attr("d", lineGen);
+}
+</script>
+
+</body>
+</html>
