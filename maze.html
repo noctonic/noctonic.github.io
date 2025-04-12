@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Maze Generator</title>
+  <link rel="preload" href="/fonts/BerkeleyMono-Regular.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/fonts/fonts.css">
+  <style>
+    body {
+      background-color: #121212;
+      color: #f5f5f5;
+      font-family: 'Berkeley Mono', monospace;
+      margin: 0;
+      padding: 0;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 20px auto;
+      max-width: 800px; 
+    }
+
+    h1 {
+      color: #f5f5f5;
+      margin-bottom: 0.5em;
+    }
+
+    .top-controls,
+    .bottom-controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 1em;
+      margin-top: 1em;
+    }
+
+    label {
+      font-weight: bold;
+      margin-right: 5px;
+    }
+
+    input,
+    select {
+      background-color: #2c2c2c;
+      border: 1px solid #444;
+      color: #f5f5f5;
+      padding: 4px 6px;
+      border-radius: 4px;
+    }
+
+    button {
+      background-color: #3a3a3a;
+      border: 1px solid #555;
+      color: #ffffff;
+      padding: 5px 10px;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+    button:hover {
+      background-color: #555;
+    }
+
+    canvas {
+      border: 2px solid #888;
+      background-color: #1e1e1e;
+      display: block;
+      margin: 10 auto;
+    }
+
+    #status {
+      margin-top: 10px;
+      font-size: 1.1em;
+      color: #fff;
+      min-height: 1.2em;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+  <h1>Maze Generator</h1>
+
+  <div class="top-controls">
+    <label for="mazeSize">Maze Size:</label>
+    <input type="number" id="mazeSize" value="20" min="2" max="100" />
+
+    <label for="numObstacles">Obstacles:</label>
+    <input type="number" id="numObstacles" value="30" min="0" />
+
+    <button onclick="createMaze()">Generate Maze</button>
+  </div>
+
+  <canvas id="mazeCanvas" width="600" height="600"></canvas>
+
+  <div class="bottom-controls">
+    <label for="algoSelect">Algorithm:</label>
+    <select id="algoSelect">
+      <option value="dfsGen">Depth First</option>
+      <option value="bfsGen">Breadth First</option>
+      <option value="dijkstraGen">Dijkstra</option>
+      <option value="iddfsGen">Iterative Deepening DFS</option>
+      <option value="randomizedDfsGen">Randomized DFS</option>
+    </select>
+
+    <button onclick="solveMaze()">Solve Maze</button>
+  </div>
+
+  <div id="status"></div>
+
+</div>
+
+<script src="graphlib.js"></script>
+<script>
+let currentGraph = null;
+let mazeGraph = null;
+let currentObstacles = null;
+let currentWalls = null;
+let startCell = null;
+let endCell = null;
+let n = 20;
+
+let canvas, ctx, cellSize;
+let solverIterator = null;
+let solving = false;
+let steps = 0;
+
+function indexToRowCol(index, n) {
+  return {
+    row: Math.floor(index / n),
+    col: index % n
+  };
+}
+
+function rowColToIndex(r, c, n) {
+  return r * n + c;
+}
+
+function initWalls(n) {
+  const walls = [];
+  for (let r = 0; r < n; r++) {
+    walls[r] = [];
+    for (let c = 0; c < n; c++) {
+      walls[r][c] = {
+        top: true,
+        right: true,
+        bottom: true,
+        left: true
+      };
+    }
+  }
+  return walls;
+}
+
+function removeWallsForEdges(mstEdges, n, walls) {
+  mstEdges.forEach(edge => {
+    const from = edge.from_node;
+    const to   = edge.to_node;
+
+    const fr = Math.floor(from / n);
+    const fc = from % n;
+    const tr = Math.floor(to / n);
+    const tc = to % n;
+
+    if (fr === tr) {
+      if (fc < tc) {
+        walls[fr][fc].right = false;
+        walls[tr][tc].left  = false;
+      } else {
+        walls[fr][fc].left  = false;
+        walls[tr][tc].right = false;
+      }
+    }
+    else if (fc === tc) {
+      if (fr < tr) {
+        walls[fr][fc].bottom = false;
+        walls[tr][tc].top    = false;
+      } else {
+        walls[fr][fc].top    = false;
+        walls[tr][tc].bottom = false;
+      }
+    }
+  });
+}
+
+function drawObstacles(ctx, n, size, obstacles) {
+  const cellSize = size / n;
+  ctx.fillStyle = "#444";
+  obstacles.forEach(cellKey => {
+    const [r, c] = cellKey.split(',').map(Number);
+    const x = c * cellSize;
+    const y = r * cellSize;
+    ctx.fillRect(x, y, cellSize, cellSize);
+  });
+}
+
+function drawMaze(ctx, n, size, walls) {
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#f5f5f5';
+
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      const x = c * cellSize;
+      const y = r * cellSize;
+
+      ctx.beginPath();
+
+      if (walls[r][c].top) {
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + cellSize, y);
+      }
+      if (walls[r][c].right) {
+        ctx.moveTo(x + cellSize, y);
+        ctx.lineTo(x + cellSize, y + cellSize);
+      }
+      if (walls[r][c].bottom) {
+        ctx.moveTo(x, y + cellSize);
+        ctx.lineTo(x + cellSize, y + cellSize);
+      }
+      if (walls[r][c].left) {
+        ctx.moveTo(x, y);
+        ctx.lineTo(x, y + cellSize);
+      }
+
+      ctx.stroke();
+    }
+  }
+}
+
+function pickRandomEdge() {
+  return Math.floor(Math.random() * 4);
+}
+
+function oppositeEdge(edge) {
+  switch (edge) {
+    case 0: return 1; // top -> bottom
+    case 1: return 0; // bottom -> top
+    case 2: return 3; // left -> right
+    case 3: return 2; // right -> left
+  }
+}
+
+function pickCellOnEdge(edge, n, obstacles) {
+  let attempts = 0;
+  while (attempts < 1000) {
+    let r, c;
+    switch (edge) {
+      case 0: // top
+        r = 0;
+        c = Math.floor(Math.random() * n);
+        break;
+      case 1: // bottom
+        r = n - 1;
+        c = Math.floor(Math.random() * n);
+        break;
+      case 2: // left
+        c = 0;
+        r = Math.floor(Math.random() * n);
+        break;
+      case 3: // right
+        c = n - 1;
+        r = Math.floor(Math.random() * n);
+        break;
+    }
+    const cellKey = `${r},${c}`;
+    if (!obstacles.has(cellKey)) {
+      return { r, c };
+    }
+    attempts++;
+  }
+  return { r: 0, c: 0 };
+}
+
+function drawStartAndEnd(ctx, start, end) {
+  ctx.fillStyle = "green";
+  ctx.fillRect(start.c * cellSize, start.r * cellSize, cellSize, cellSize);
+
+  ctx.fillStyle = "red";
+  ctx.fillRect(end.c * cellSize, end.r * cellSize, cellSize, cellSize);
+}
+
+function createMaze() {
+  document.getElementById('status').innerText = "";
+  solving = false;
+  solverIterator = null;
+
+  n = parseInt(document.getElementById('mazeSize').value, 10);
+  const numObstacles = parseInt(document.getElementById('numObstacles').value, 10);
+
+  canvas = document.getElementById('mazeCanvas');
+  ctx = canvas.getContext('2d');
+  cellSize = canvas.width / n;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const result = generateGridGraphWithObstacles(n, numObstacles, true);
+  currentGraph = result.graph;
+  currentObstacles = result.obstacles;
+
+  const mstEdges = randomizedKruskals(currentGraph);
+  mazeGraph = new Graph(currentGraph.num_nodes, true);
+  mstEdges.forEach(edge => {
+    mazeGraph.insert_edge(edge.from_node, edge.to_node, edge.weight);
+  });
+
+  currentWalls = initWalls(n);
+  removeWallsForEdges(mstEdges, n, currentWalls);
+
+  drawObstacles(ctx, n, canvas.width, currentObstacles);
+  drawMaze(ctx, n, canvas.width, currentWalls);
+
+  const edgeForStart = pickRandomEdge();
+  const edgeForEnd   = oppositeEdge(edgeForStart);
+  startCell = pickCellOnEdge(edgeForStart, n, currentObstacles);
+  endCell   = pickCellOnEdge(edgeForEnd,   n, currentObstacles);
+
+  drawStartAndEnd(ctx, startCell, endCell);
+}
+
+function colorCell(r, c, fillStyle) {
+  const squareRatio = 0.6;
+  const squareSize = cellSize * squareRatio;
+
+  const maxOffset = cellSize - squareSize;
+  const randomOffsetX = Math.random() * maxOffset;
+  const randomOffsetY = Math.random() * maxOffset;
+
+  const cellX = c * cellSize;
+  const cellY = r * cellSize;
+
+  ctx.fillStyle = fillStyle;
+  ctx.fillRect(cellX + randomOffsetX, cellY + randomOffsetY, squareSize, squareSize);
+
+  drawCellWalls(r, c);
+}
+
+function drawCellWalls(r, c) {
+  const x = c * cellSize;
+  const y = r * cellSize;
+  ctx.beginPath();
+  ctx.strokeStyle = '#f5f5f5';
+  ctx.lineWidth = 2;
+
+  if (currentWalls[r][c].top) {
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + cellSize, y);
+  }
+  if (currentWalls[r][c].right) {
+    ctx.moveTo(x + cellSize, y);
+    ctx.lineTo(x + cellSize, y + cellSize);
+  }
+  if (currentWalls[r][c].bottom) {
+    ctx.moveTo(x, y + cellSize);
+    ctx.lineTo(x + cellSize, y + cellSize);
+  }
+  if (currentWalls[r][c].left) {
+    ctx.moveTo(x, y);
+    ctx.lineTo(x, y + cellSize);
+  }
+  ctx.stroke();
+}
+
+function highlightPath(path, fillStyle = "yellow") {
+  for (const node of path) {
+    const { row, col } = indexToRowCol(node, n);
+    colorCell(row, col, fillStyle);
+  }
+}
+
+function animateSolve() {
+  if (!solverIterator) return;
+
+  const { value, done } = solverIterator.next();
+  if (done) {
+    solving = false;
+    document.getElementById('status').innerText = `Search ended after ${steps} steps.`;
+    return;
+  }
+
+  steps++;
+
+  const { current, parent } = value;
+  const { row, col } = indexToRowCol(current, n);
+
+  colorCell(row, col, "rgba(0, 200, 255, 0.3)");
+
+  const endIdx = rowColToIndex(endCell.r, endCell.c, n);
+  if (current === endIdx) {
+    const path = reconstructPath(parent, rowColToIndex(startCell.r, startCell.c, n), endIdx);
+    if (path) {
+      highlightPath(path, "rgba(255, 255, 0, 0.7)");
+    }
+    solving = false;
+    document.getElementById('status').innerText = `Maze solved in ${steps} steps!`;
+    return;
+  }
+
+  if (solving) {
+    requestAnimationFrame(animateSolve);
+  }
+}
+
+function solveMaze() {
+  if (!mazeGraph || !startCell || !endCell) return;
+  if (solving) return;
+
+  steps = 0;
+  document.getElementById('status').innerText = "";
+
+  const selectedAlgo = document.getElementById('algoSelect').value;
+  const startIdx = rowColToIndex(startCell.r, startCell.c, n);
+
+  switch (selectedAlgo) {
+    case 'dfsGen':
+      solverIterator = dfsGen(mazeGraph, startIdx);
+      break;
+    case 'bfsGen':
+      solverIterator = bfsGen(mazeGraph, startIdx);
+      break;
+    case 'iddfsGen':
+      solverIterator = iddfsGen(mazeGraph, startIdx);
+      break;
+    case 'dijkstraGen':
+      solverIterator = dijkstraGen(mazeGraph, startIdx);
+      break;
+    case 'randomizedDfsGen':
+      solverIterator = randomizedDfsGen(mazeGraph, startIdx);
+      break;
+    default:
+      alert("Unknown solver algorithm selected.");
+      return;
+  }
+
+  solving = true;
+  requestAnimationFrame(animateSolve);
+}
+
+window.onload = () => {
+  createMaze();
+};
+</script>
+</body>
+</html>
