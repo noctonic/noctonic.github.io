@@ -38,11 +38,13 @@
  *    randomizedKruskals(g: Graph) -> Edge[]
  *    findPathWithGenerator(generatorFn: function, graph: Graph, startNode: int, isTarget: function) -> int[]|null
  *    reconstructPath(parentMap: {int:int}, start: int, end: int) -> int[]|null
- *    dfsGen(graph: Graph, startNode: int=0) -> yield { current:int, visited:int[], parent:{int:int} }
- *    bfsGen(graph: Graph, startNode: int=0) -> yield { current:int, visited:int[], parent:{int:int} }
- *    iddfsGen(graph: Graph, startNode: int=0, maxDepth: float=Infinity) -> yield { current:int, visited:int[], parent:{int:int} }
- *    dijkstraGen(graph: Graph, startNode: int=0) -> yield { current:int, visited:int[], parent:{int:int} }
- *    randomizedDfsGen(graph: Graph, startNode: int=0) -> yield { current:int, visited:int[], parent:{int:int} }
+ *    dfsGen(graph: Graph, startNode: int=0) yield { current:int, visited:int[], parent:{int:int} }
+ *    bfsGen(graph: Graph, startNode: int=0) yield { current:int, visited:int[], parent:{int:int} }
+ *    iddfsGen(graph: Graph, startNode: int=0, maxDepth: float=Infinity) yield { current:int, visited:int[], parent:{int:int} }
+ *    dijkstraGen(graph: Graph, startNode: int=0) yield { current:int, visited:int[], parent:{int:int} }
+ *    randomizedDfsGen(graph: Graph, startNode: int=0) yield { current:int, visited:int[], parent:{int:int} }
+ *    leftWallFollowerGen(graph: Graph, startNode: int, endNode: int, n: int) yield { current:int, visited:int[], parent:{int:int} }
+ *    rightWallFollowerGen(graph: Graph, startNode: int, endNode: int, n: int) yield { current:int, visited:int[], parent:{int:int} }
  */
 
 class Node {
@@ -521,3 +523,112 @@ function* randomizedDfsGen(graph, startNode = 0) {
     }
   }
 }
+
+
+function leftOf(d)  { return (d + 3) % 4; }
+function rightOf(d) { return (d + 1) % 4; }
+function backOf(d)  { return (d + 2) % 4; }
+
+function directionDelta(d) {
+  switch (d) {
+    case 0: return { dr: -1, dc: 0 };  // up
+    case 1: return { dr: 0,  dc: 1 };  // right
+    case 2: return { dr: 1,  dc: 0 };  // down
+    case 3: return { dr: 0,  dc:-1 };  // left
+  }
+}
+
+function indexToRowCol(idx, n) {
+  return {
+    row: Math.floor(idx / n),
+    col: (idx % n)
+  };
+}
+
+function rowColToIndex(r, c, n) {
+  return r * n + c;
+}
+
+function* wallflower(graph, startNode,endNode, n, hand = "left") {
+  let direction = 1;
+  let current = startNode;
+  const visited = new Set([current]);
+  const parent = {};
+
+  yield {
+    current,
+    visited: Array.from(visited),
+    parent: { ...parent }
+  };
+
+  function canMove(fromNode, dir) {
+    const { row, col } = indexToRowCol(fromNode, n);
+    const { dr, dc } = directionDelta(dir);
+    const nr = row + dr, nc = col + dc;
+    if (nr < 0 || nr >= n || nc < 0 || nc >= n) {
+      return false;
+    }
+    const toNode = rowColToIndex(nr, nc, n);
+    return graph.is_edge(fromNode, toNode);
+  }
+
+  while (true) {
+    if (hand === "left") {
+      const lDir = leftOf(direction);
+      if (canMove(current, lDir)) {
+        direction = lDir;
+      } else {
+        if (!canMove(current, direction)) {
+          const rDir = rightOf(direction);
+          if (canMove(current, rDir)) {
+            direction = rDir;
+          } else {
+            direction = backOf(direction);
+          }
+        }
+      }
+    } 
+    else {
+      const rDir = rightOf(direction);
+      if (canMove(current, rDir)) {
+        direction = rDir;
+      } else {
+        if (!canMove(current, direction)) {
+          const lDir = leftOf(direction);
+          if (canMove(current, lDir)) {
+            direction = lDir;
+          } else {
+            direction = backOf(direction);
+          }
+        }
+      }
+    }
+
+    const { row, col } = indexToRowCol(current, n);
+    const { dr, dc } = directionDelta(direction);
+    const newR = row + dr, newC = col + dc;
+    const newNode = rowColToIndex(newR, newC, n);
+
+    if (!visited.has(newNode)) {
+      parent[newNode] = current;
+    }
+
+    current = newNode;
+    visited.add(current);
+
+    yield {
+      current,
+      visited: Array.from(visited),
+      parent: { ...parent }
+    };
+  }
+}
+
+function* leftWallFollowerGen(graph, startNode, endNode, n) {
+  yield* wallflower(graph, startNode, endNode, n, "left");
+}
+
+function* rightWallFollowerGen(graph, startNode, endNode, n) {
+  yield* wallflower(graph, startNode, endNode, n, "right");
+}
+
