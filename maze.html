@@ -99,12 +99,14 @@
 
   <div class="bottom-controls">
     <label for="algoSelect">Algorithm:</label>
-    <select id="algoSelect">
-      <option value="dfsGen">Depth First</option>
+    <select id="algoSelect" style="height: auto;">
       <option value="bfsGen">Breadth First</option>
       <option value="dijkstraGen">Dijkstra</option>
       <option value="iddfsGen">Iterative Deepening DFS</option>
       <option value="randomizedDfsGen">Randomized DFS</option>
+      <option value="dfsGen" selected>Depth First</option>
+      <option value="leftWallFollowerGen">Left Wall Follower</option>
+      <option value="rightWallFollowerGen">Right Wall Follower</option> 
     </select>
 
     <button onclick="solveMaze()">Solve Maze</button>
@@ -235,15 +237,6 @@ function pickRandomEdge() {
   return Math.floor(Math.random() * 4);
 }
 
-function oppositeEdge(edge) {
-  switch (edge) {
-    case 0: return 1; // top -> bottom
-    case 1: return 0; // bottom -> top
-    case 2: return 3; // left -> right
-    case 3: return 2; // right -> left
-  }
-}
-
 function pickCellOnEdge(edge, n, obstacles) {
   let attempts = 0;
   while (attempts < 1000) {
@@ -314,7 +307,7 @@ function createMaze() {
   drawMaze(ctx, n, canvas.width, currentWalls);
 
   const edgeForStart = pickRandomEdge();
-  const edgeForEnd   = oppositeEdge(edgeForStart);
+  const edgeForEnd   = pickRandomEdge();
   startCell = pickCellOnEdge(edgeForStart, n, currentObstacles);
   endCell   = pickCellOnEdge(edgeForEnd,   n, currentObstacles);
 
@@ -413,7 +406,7 @@ function solveMaze() {
 
   const selectedAlgo = document.getElementById('algoSelect').value;
   const startIdx = rowColToIndex(startCell.r, startCell.c, n);
-
+  const endIdx = rowColToIndex(endCell.r, endCell.c, n);
   switch (selectedAlgo) {
     case 'dfsGen':
       solverIterator = dfsGen(mazeGraph, startIdx);
@@ -430,8 +423,12 @@ function solveMaze() {
     case 'randomizedDfsGen':
       solverIterator = randomizedDfsGen(mazeGraph, startIdx);
       break;
-    default:
-      alert("Unknown solver algorithm selected.");
+      case 'leftWallFollowerGen':
+        solverIterator = leftWallFollowerGen(mazeGraph, startIdx, endIdx, n);
+        break;
+      case 'rightWallFollowerGen':
+        solverIterator = rightWallFollowerGen(mazeGraph, startIdx, endIdx, n);
+        break;
       return;
   }
 
