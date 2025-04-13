@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Mean, Median, Mode</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, sans-serif;
+      background-color: #1f1f1f;
+      color: #eee;
+      margin: 0;
+      padding: 0;
+      text-align: center;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    h1 {
+      color: #fff;
+      margin-bottom: 0.5em;
+    }
+
+    p, li {
+      font-size: 1rem;
+      line-height: 1.4;
+    }
+
+    #inputData {
+      width: 300px;
+      padding: 6px;
+      border: 1px solid #555;
+      border-radius: 4px;
+      background-color: #2f2f2f;
+      color: #fff;
+      text-align: center;
+    }
+    #inputData:focus {
+      outline: 1px solid #00ffc8;
+    }
+
+    button {
+      margin: 0 5px;
+      padding: 6px 12px;
+      background-color: #00ffc8;
+      color: #1f1f1f;
+      font-weight: bold;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #00d8a9;
+    }
+
+    #chart {
+      background-color: #2a2a2a;
+      border: 1px solid #444;
+      margin-top: 10px;
+      display: block;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    #stats {
+      margin-top: 15px;
+      font-size: 1rem;
+      line-height: 1.4;
+      background-color: #2a2a2a;
+      padding: 10px;
+      border-radius: 4px;
+      border: 1px solid #333;
+      width: fit-content;
+      margin-left: auto;
+      margin-right: auto;
+      text-align: left;
+    }
+
+    .x-axis path,
+    .x-axis line,
+    .y-axis path,
+    .y-axis line {
+      stroke: #ccc;
+    }
+    .axis-label {
+      fill: #ccc;
+      font-size: 0.9em;
+    }
+
+    details {
+      margin-top: 15px;
+      background-color: #2a2a2a;
+      border: 1px solid #333;
+      border-radius: 4px;
+      padding: 10px;
+      width: fit-content;
+      margin: 15px auto 0 auto;
+      text-align: left;
+    }
+    details summary {
+      cursor: pointer;
+      font-size: 1.05rem;
+      font-weight: bold;
+      color: #fff;
+      outline: none;
+    }
+    details summary::-webkit-details-marker {
+      color: #00ffc8;
+    }
+
+    .mean-color   { color: aqua; }
+    .median-color { color: lime; }
+    .mode-color   { color: gold; }
+    .data-color   { color: hotpink; }
+
+    table {
+      border-collapse: collapse;
+      color: #eee;
+      margin: 10px 0;
+    }
+    td, th {
+      border: 1px solid #444;
+      padding: 4px 8px;
+      text-align: center;
+    }
+    th {
+      background-color: #333;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Mean, Median, Mode</h1>
+
+    <p>Enter data as <code>1,2,3,4</code> (1D) or <code>[0,1],[3,4],[6,3]</code> (2D). Try something fun like <code>2,3,4,5,5</code> or <code>[0,1],[0,1],[2,3]</code>.</p>
+    <input type="text" id="inputData" />
+    <button onclick="plotData()">Plot</button>
+    <button onclick="randomizeData()">Random</button>
+
+    <svg id="chart" width="800" height="500"></svg>
+    <div id="stats"></div>
+
+    <details>
+      <summary>Steps & Formulas</summary>
+      <div id="calculationSteps"></div>
+      <hr/>
+      <h3>Formulas Cheat Sheet</h3>
+
+      <p><strong class="mean-color">Mean</strong> (for 1D data)</p>
+      <pre style="color: #ccc;">
+Mean = ( x₁ + x₂ + ... + xₙ ) / n
+      </pre>
+
+      <p><strong class="median-color">Median</strong> (for 1D data)</p>
+      <pre style="color: #ccc;">
+1. Line up all your numbers from smallest to biggest.
+2. If you have an odd number of numbers, the "middle one" in the line is your median.
+3. If you have an even number of numbers, take the two middle numbers, add them together, then divide by 2 to get the median.
+      </pre>
+
+      <p><strong class="mode-color">Mode</strong></p>
+      <pre style="color: #ccc;">
+The value (or values) that appears most frequently.
+      </pre>
+    </details>
+  </div>
+
+  <!-- D3 -->
+  <script src="./d3.v7.min.js"></script>
+  <script>
+    let points = [];
+    let meanPoint, medianPoint, modePoint;
+    let minXVal, maxXVal, minYVal, maxYVal, rangeX, rangeY;
+
+    const svg    = d3.select("#chart");
+    const width  = +svg.attr("width");
+    const height = +svg.attr("height");
+    const margin = { top: 40, right: 40, bottom: 50, left: 60 };
+
+    const gMain = svg.append("g").attr("class", "main-group");
+
+    let xScale = d3.scaleLinear();
+    let yScale = d3.scaleLinear();
+
+    const xAxisG = svg.append("g").attr("class", "x-axis");
+    const yAxisG = svg.append("g").attr("class", "y-axis");
+
+    const xLabel = svg.append("text")
+      .attr("class", "axis-label")
+      .attr("text-anchor", "middle");
+
+    const yLabel = svg.append("text")
+      .attr("class", "axis-label")
+      .attr("text-anchor", "middle")
+      .attr("transform", "rotate(-90)");
+
+    function randomizeData() {
+      const is2D = Math.random() < 0.5; 
+      let pointsArr = [];
+      const n = Math.floor(Math.random() * 6) + 5;
+
+      for (let i = 0; i < n; i++) {
+        const x = (Math.random() * 10 - 5).toFixed(1);
+        const y = (Math.random() * 10 - 5).toFixed(1);
+        if (is2D) {
+          pointsArr.push(`[${x},${y}]`);
+        } else {
+          pointsArr.push(x);
+        }
+      }
+      document.getElementById("inputData").value = pointsArr.join(",");
+      plotData();
+    }
+
+    function plotData() {
+      const rawInput = document.getElementById("inputData").value.trim();
+      if (!rawInput) {
+        alert("Please enter data!");
+        return;
+      }
+
+      points = parseInputData(rawInput);
+      if (points.length === 0) {
+        alert("No valid points found. Check your format.");
+        return;
+      }
+
+      computeStats(points);
+
+      const allXs = points.map(p => p[0]).concat(meanPoint[0], medianPoint[0], modePoint[0]);
+      const allYs = points.map(p => p[1]).concat(meanPoint[1], medianPoint[1], modePoint[1]);
+
+      let minX = d3.min(allXs);
+      let maxX = d3.max(allXs);
+      let minY = d3.min(allYs);
+      let maxY = d3.max(allYs);
+
+      minX -= 0.5; maxX += 0.5;
+      minY -= 0.5; maxY += 0.5;
+
+      if (minX > 0) minX = Math.min(minX, -1);
+      if (maxX < 0) maxX = Math.max(maxX, 1);
+      if (minY > 0) minY = Math.min(minY, -1);
+      if (maxY < 0) maxY = Math.max(maxY, 1);
+
+      xScale.domain([minX, maxX]).range([margin.left, width - margin.right]);
+      yScale.domain([minY, maxY]).range([height - margin.bottom, margin.top]);
+
+      xAxisG
+        .attr("transform", `translate(0, ${height - margin.bottom})`)
+        .call(d3.axisBottom(xScale));
+
+      yAxisG
+        .attr("transform", `translate(${margin.left}, 0)`)
+        .call(d3.axisLeft(yScale));
+
+      xLabel
+        .attr("x", width / 2)
+        .attr("y", height - 10)
+        .text("X-Axis");
+
+      yLabel
+        .attr("x", -(height / 2))
+        .attr("y", 20)
+        .text("Y-Axis");
+
+      drawPointsAndZeroAxes(minX, maxX, minY, maxY);
+
+      displayStats(points);
+      displayCalculationSteps(points);
+    }
+
+    function parseInputData(str) {
+      if (str.includes("[") && str.includes("]")) {
+        const pairRegex = /\[\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\]/g;
+        let match;
+        const pts = [];
+        while ((match = pairRegex.exec(str)) !== null) {
+          const x = parseFloat(match[1]);
+          const y = parseFloat(match[2]);
+          pts.push([x, y]);
+        }
+        return pts;
+      } else {
+        const nums = str.split(",").map(n => parseFloat(n));
+        const valid = nums.filter(n => !isNaN(n));
+        return valid.map(xVal => [xVal, 0]);
+      }
+    }
+
+    function drawPointsAndZeroAxes(minX, maxX, minY, maxY) {
+      gMain.selectAll("*").remove();
+
+      if (minX <= 0 && maxX >= 0) {
+        gMain.append("line")
+          .attr("x1", xScale(0))
+          .attr("x2", xScale(0))
+          .attr("y1", yScale(minY))
+          .attr("y2", yScale(maxY))
+          .attr("stroke", "#999")
+          .attr("stroke-width", 1);
+      }
+
+      if (minY <= 0 && maxY >= 0) {
+        gMain.append("line")
+          .attr("y1", yScale(0))
+          .attr("y2", yScale(0))
+          .attr("x1", xScale(minX))
+          .attr("x2", xScale(maxX))
+          .attr("stroke", "#999")
+          .attr("stroke-width", 1);
+      }
+
+      if (meanPoint) {
+        gMain.append("circle")
+          .attr("cx", xScale(meanPoint[0]))
+          .attr("cy", yScale(meanPoint[1]))
+          .attr("r", 16)
+          .attr("fill", "aqua")
+          .attr("fill-opacity", 0.8);
+      }
+
+      if (medianPoint) {
+        gMain.append("circle")
+          .attr("cx", xScale(medianPoint[0]))
+          .attr("cy", yScale(medianPoint[1]))
+          .attr("r", 12)
+          .attr("fill", "lime")
+          .attr("fill-opacity", 0.8);
+      }
+
+      if (modePoint) {
+        gMain.append("circle")
+          .attr("cx", xScale(modePoint[0]))
+          .attr("cy", yScale(modePoint[1]))
+          .attr("r", 8)
+          .attr("fill", "gold")
+          .attr("fill-opacity", 0.9);
+      }
+
+      gMain.selectAll(".data-point")
+        .data(points)
+        .enter()
+        .append("circle")
+        .attr("class", "data-point")
+        .attr("cx", d => xScale(d[0]))
+        .attr("cy", d => yScale(d[1]))
+        .attr("r", 5)
+        .attr("fill", "hotpink")
+        .attr("fill-opacity", 0.7);
+    }
+
+    function computeStats(pts) {
+      meanPoint = computeMean(pts);
+      medianPoint = computeMedian(pts);
+      modePoint   = computeMode(pts);
+
+      const xs = pts.map(p => p[0]);
+      const ys = pts.map(p => p[1]);
+
+      minXVal = d3.min(xs);
+      maxXVal = d3.max(xs);
+      minYVal = d3.min(ys);
+      maxYVal = d3.max(ys);
+
+      rangeX = maxXVal - minXVal;
+      rangeY = maxYVal - minYVal;
+    }
+
+    function computeMean(pts) {
+      let sumX = 0, sumY = 0;
+      for (let p of pts) {
+        sumX += p[0];
+        sumY += p[1];
+      }
+      const n = pts.length;
+      return [sumX / n, sumY / n];
+    }
+
+    function computeMedian(pts) {
+      const n = pts.length;
+      const xs = pts.map(p => p[0]).sort((a, b) => a - b);
+      const ys = pts.map(p => p[1]).sort((a, b) => a - b);
+
+      let medianX, medianY;
+      if (n % 2 === 1) {
+        medianX = xs[(n - 1) / 2];
+        medianY = ys[(n - 1) / 2];
+      } else {
+        const i = n / 2;
+        medianX = (xs[i - 1] + xs[i]) / 2;
+        medianY = (ys[i - 1] + ys[i]) / 2;
+      }
+      return [medianX, medianY];
+    }
+
+    function computeMode(pts) {
+      const freq = {};
+      let maxCount = 0;
+      let modeP = null;
+      for (let p of pts) {
+        const key = p.join(",");
+        freq[key] = (freq[key] || 0) + 1;
+        if (freq[key] > maxCount) {
+          maxCount = freq[key];
+          modeP = p;
+        }
+      }
+      return modeP;
+    }
+
+    function displayStats(pts) {
+      const statsDiv = document.getElementById("stats");
+
+      function fmt(val) {
+        return isNaN(val) ? "N/A" : val.toFixed(2);
+      }
+      function fmtPoint(pt) {
+        return pt ? `(${fmt(pt[0])}, ${fmt(pt[1])})` : "N/A";
+      }
+
+      statsDiv.innerHTML = `
+        <strong>Total Data Points (n):</strong> ${pts.length}<br/>
+        <strong><span class="mean-color">Mean</span>:</strong> ${fmtPoint(meanPoint)}<br/>
+        <strong><span class="median-color">Median</span>:</strong> ${fmtPoint(medianPoint)}<br/>
+        <strong><span class="mode-color">Mode</span>:</strong> ${fmtPoint(modePoint)}<br/><br/>
+
+        <strong>Min (X):</strong> ${fmt(minXVal)} &nbsp;|&nbsp;
+        <strong>Max (X):</strong> ${fmt(maxXVal)} &nbsp;|&nbsp;
+        <strong>Range (X):</strong> ${fmt(rangeX)} <br/>
+        <strong>Min (Y):</strong> ${fmt(minYVal)} &nbsp;|&nbsp;
+        <strong>Max (Y):</strong> ${fmt(maxYVal)} &nbsp;|&nbsp;
+        <strong>Range (Y):</strong> ${fmt(rangeY)}<br/>
+      `;
+    }
+
+    function displayCalculationSteps(pts) {
+      const stepsDiv = document.getElementById("calculationSteps");
+
+      const n = pts.length;
+      const xs = pts.map(p => p[0]);
+      const ys = pts.map(p => p[1]);
+
+      const sumX = xs.reduce((a, b) => a + b, 0);
+      const sumY = ys.reduce((a, b) => a + b, 0);
+
+      const sortedX = [...xs].sort((a, b) => a - b);
+      const sortedY = [...ys].sort((a, b) => a - b);
+
+      const freqMap = {};
+      pts.forEach(p => {
+        const key = p.join(",");
+        freqMap[key] = (freqMap[key] || 0) + 1;
+      });
+
+      let freqRows = `<tr><th>Point</th><th>Count</th></tr>`;
+      Object.keys(freqMap).forEach(k => {
+        freqRows += `<tr><td>${k}</td><td>${freqMap[k]}</td></tr>`;
+      });
+
+      stepsDiv.innerHTML = `
+        <h3>Step-by-Step Calculations</h3>
+
+        <h4 class="mean-color">Mean</h4>
+        <p>Sum of X: ${sumX.toFixed(2)} &nbsp; Sum of Y: ${sumY.toFixed(2)}<br/>
+        Number of points (n) = ${n}<br/>
+        Mean(X) = Sum(X) / n = ${(sumX/n).toFixed(2)}<br/>
+        Mean(Y) = Sum(Y) / n = ${(sumY/n).toFixed(2)}</p>
+
+        <h4 class="median-color">Median</h4>
+        <p>Sorted X: [${sortedX.join(", ")}]<br/>
+        Sorted Y: [${sortedY.join(", ")}]<br/>
+        (We find the middle number if n is odd, or the average of the two middle numbers if n is even.)</p>
+
+        <h4 class="mode-color">Mode</h4>
+        <p>Frequency of each (x,y) pair:</p>
+        <table>${freqRows}</table>
+        <p>The mode is the point with the highest frequency.</p>
+      `;
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      randomizeData();
+    });
+  </script>
+</body>
+</html>
