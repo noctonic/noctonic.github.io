@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>WebUSB Enumeration</title>
+    <style>
+      body {
+        background-color: #000;
+        color: #0f0;
+        font-family: "Lucida Console", Courier, monospace;
+        margin: 2rem;
+      }
+
+      h1 {
+        color: #0f0;
+        font-size: 2rem;
+        text-shadow: 0 0 7px #0f0;
+        margin-bottom: 1rem;
+      }
+
+      button {
+        background-color: #000;
+        color: #0f0;
+        border: 1px solid #0f0;
+        font-family: inherit;
+        padding: 0.5rem 1rem;
+        margin-bottom: 1rem;
+        margin-right: 1rem;
+        cursor: pointer;
+        transition: 
+          box-shadow 0.3s ease,
+          color 0.3s ease,
+          background-color 0.3s ease;
+      }
+
+      button:hover {
+        box-shadow: 0 0 10px #0f0;
+        background-color: #0f0;
+        color: #000;
+      }
+
+      pre {
+        background-color: #000;
+        color: #0f0;
+        border: 1px solid #0f0;
+        padding: 1rem;
+        margin-top: 1rem;
+        overflow: auto;
+        box-shadow: inset 0 0 10px #0f0;
+      }
+
+      .flicker:hover {
+        animation: flicker 1.5s infinite alternate;
+      }
+
+      @keyframes flicker {
+        from {
+          opacity: 1;
+          text-shadow: 0 0 7px #0f0;
+        }
+        to {
+          opacity: 0.8;
+          text-shadow: 0 0 10px #0f0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <h1 class="flicker">WebUSB Enumeration</h1>
+
+    <button id="requestButton">Request &amp; Enumerate USB Device</button>
+    <br />
+    <button id="listButton">List Granted Devices</button>
+
+    <pre id="log"></pre>
+
+    <script>
+      const requestButton = document.getElementById('requestButton');
+      const listButton = document.getElementById('listButton');
+      const logArea = document.getElementById('log');
+
+      function log(msg) {
+        logArea.textContent += msg + '\n';
+      }
+      function clearLog() {
+        logArea.textContent = '';
+      }
+
+      function toHex(value, pad = 2) {
+        return '0x' + value.toString(16).toUpperCase().padStart(pad, '0');
+      }
+
+      async function readDeviceDescriptor(device) {
+        const DEVICE_DESC_SIZE = 18;
+        const result = await device.controlTransferIn(
+          {
+            requestType: 'standard',
+            recipient: 'device',
+            request: 0x06,
+            value: (0x01 << 8) | 0x00,
+            index: 0
+          },
+          DEVICE_DESC_SIZE
+        );
+        if (result.status !== 'ok') {
+          throw new Error('Control transfer failed: ' + result.status);
+        }
+        const data = new DataView(result.data.buffer);
+        return {
+          bLength: data.getUint8(0),
+          bDescriptorType: data.getUint8(1),
+          bcdUSB: data.getUint16(2, true),
+          bDeviceClass: data.getUint8(4),
+          bDeviceSubClass: data.getUint8(5),
+          bDeviceProtocol: data.getUint8(6),
+          bMaxPacketSize0: data.getUint8(7),
+          idVendor: data.getUint16(8, true),
+          idProduct: data.getUint16(10, true),
+          bcdDevice: data.getUint16(12, true),
+          iManufacturer: data.getUint8(14),
+          iProduct: data.getUint8(15),
+          iSerialNumber: data.getUint8(16),
+          bNumConfigurations: data.getUint8(17)
+        };
+      }
+
+      async function readConfigurationDescriptor(device) {
+        let result = await device.controlTransferIn(
+          {
+            requestType: 'standard',
+            recipient: 'device',
+            request: 0x06,
+            value: (0x02 << 8) | 0x00,
+            index: 0
+          },
+          9
+        );
+        if (result.status !== 'ok') {
+          throw new Error('Control transfer failed: ' + result.status);
+        }
+        const header = new DataView(result.data.buffer);
+        const wTotalLength = header.getUint16(2, true);
+
+        result = await device.controlTransferIn(
+          {
+            requestType: 'standard',
+            recipient: 'device',
+            request: 0x06,
+            value: (0x02 << 8) | 0x00,
+            index: 0
+          },
+          wTotalLength
+        );
+        if (result.status !== 'ok') {
+          throw new Error('Control transfer (full config) failed: ' + result.status);
+        }
+        return new Uint8Array(result.data.buffer);
+      }
+
+      async function enumerateDevice(device) {
+        clearLog();
+        await device.open();
+        log('Device opened.');
+        log(`VendorID:  ${toHex(device.vendorId, 4)}, ProductID: ${toHex(device.productId, 4)}`);
+        log(`Manufacturer Name: ${device.manufacturerName || '(none read yet)'}`);
+        log(`Product Name:      ${device.productName || '(none read yet)'}`);
+        log(`Serial Number:     ${device.serialNumber || '(none read yet)'}`);
+        log('');
+
+        try {
+          const devDesc = await readDeviceDescriptor(device);
+          log('--- Device Descriptor (raw) ---');
+          log(`bLength:         ${devDesc.bLength}`);
+          log(`bDescriptorType: ${devDesc.bDescriptorType}`);
+          log(`bcdUSB:          0x${devDesc.bcdUSB.toString(16)}`);
+          log(`bDeviceClass:    0x${devDesc.bDeviceClass.toString(16)}`);
+          log(`bDeviceSubClass: 0x${devDesc.bDeviceSubClass.toString(16)}`);
+          log(`bDeviceProtocol: 0x${devDesc.bDeviceProtocol.toString(16)}`);
+          log(`bMaxPacketSize0: ${devDesc.bMaxPacketSize0}`);
+          log(`idVendor:        ${toHex(devDesc.idVendor, 4)}`);
+          log(`idProduct:       ${toHex(devDesc.idProduct, 4)}`);
+          log(`bcdDevice:       0x${devDesc.bcdDevice.toString(16)}`);
+          log(`iManufacturer:   ${devDesc.iManufacturer}`);
+          log(`iProduct:        ${devDesc.iProduct}`);
+          log(`iSerialNumber:   ${devDesc.iSerialNumber}`);
+          log(`bNumConfigurations: ${devDesc.bNumConfigurations}`);
+          log('');
+        } catch (e) {
+          log('Could not read device descriptor: ' + e.message);
+          log('');
+        }
+
+        try {
+          const configDesc = await readConfigurationDescriptor(device);
+          log('--- Configuration Descriptor (raw) ---');
+          let hexStr = '';
+          for (let i = 0; i < configDesc.length; i++) {
+            hexStr += configDesc[i].toString(16).padStart(2, '0') + ' ';
+            if ((i + 1) % 16 === 0) hexStr += '\n';
+          }
+          log(hexStr.trimEnd());
+          log('');
+        } catch (e) {
+          log('Could not read configuration descriptor: ' + e.message);
+          log('');
+        }
+
+        if (!device.configuration) {
+          await device.selectConfiguration(1);
+          log('Selected configuration #1.');
+        }
+
+        try {
+          await device.claimInterface(0);
+          log('Claimed interface #0');
+        } catch (err) {
+          log('Could not claim interface #0: ' + err.message);
+        }
+        log('');
+
+        if (device.configuration) {
+          log('--- WebUSB Parsed Configuration ---');
+          log(`Active Configuration: ${device.configuration.configurationValue}`);
+          for (const iface of device.configuration.interfaces) {
+            log(`Interface #${iface.interfaceNumber}:`);
+            for (const alt of iface.alternates) {
+              log(`  Alternate Setting: ${alt.alternateSetting}`);
+              log(`  Class/Subclass/Protocol: ${alt.interfaceClass}/${alt.interfaceSubclass}/${alt.interfaceProtocol}`);
+              for (const ep of alt.endpoints) {
+                log(`    Endpoint ${ep.endpointNumber}: ${ep.direction} ${ep.type}`);
+              }
+            }
+            log('');
+          }
+        } else {
+          log('No active configuration found.');
+        }
+
+        log('Done enumerating device.');
+      }
+
+      requestButton.addEventListener('click', async () => {
+        clearLog();
+        try {
+          const device = await navigator.usb.requestDevice({ filters: [] });
+          log(`Selected device: ${device.productName} (${device.manufacturerName})`);
+          await enumerateDevice(device);
+        } catch (error) {
+          log(`Error / No device selected: ${error.message}`);
+        }
+      });
+
+      listButton.addEventListener('click', async () => {
+        clearLog();
+        try {
+          const devices = await navigator.usb.getDevices();
+          if (devices.length === 0) {
+            log('No devices currently granted access.');
+            return;
+          }
+          log('Already granted devices:');
+          for (const device of devices) {
+            log(`- ${device.productName} (VendorID=${toHex(device.vendorId,4)}, ProductID=${toHex(device.productId,4)})`);
+          }
+        } catch (error) {
+          log(`Error listing devices: ${error}`);
+        }
+      });
+    </script>
+  </body>
+</html>
