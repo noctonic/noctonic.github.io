@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Lua</title>
+
+<!-- your own CSS with the window chrome, colours, sizing -->
+<link rel="stylesheet" href="./lua.css">
+
+<!-- CodeMirror core + Lua mode + Solarized theme -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/lua/lua.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/solarized.min.css">
+
+</head>
+<body>
+  <h1>Lua</h1>
+
+  <!-- Editor window with chrome -->
+  <div class="editor-window">
+    <div class="editor-bar">
+      <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+      <span class="title">Lua Editor</span>
+    </div>
+    <div class="editor-body">
+      <textarea id="src"></textarea>
+    </div>
+  </div>
+
+  <button id="run">▶ Run (Ctrl/⌘-Enter)</button>
+  <button id="download">⤓ Download project (.zip)</button>
+
+  <!-- Terminal output window -->
+  <div class="terminal">
+    <div class="terminal-bar">
+      <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+      <span class="title">Lua Console</span>
+    </div>
+    <pre id="log" class="terminal-body"></pre>
+  </div>
+
+<script type="module">
+/* ---------- external deps ---------------------------------------- */
+import JSZip      from "https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm";
+import { LuaFactory } from "https://cdn.jsdelivr.net/npm/wasmoon@1.16.0/+esm";
+
+/* ---------- 1. fetch the library map produced by build-libs.js ---- */
+const MODULE_MAP = await fetch("./lib/modules.json")
+  .then(r => r.ok ? r.json()
+                  : Promise.reject("modules.json missing — run npm run build"));
+
+/* ---------- 2. create Wasmoon engine ------------------------------ */
+const lua = await new LuaFactory(
+  "https://cdn.jsdelivr.net/npm/wasmoon@1.16.0/dist/glue.wasm"
+).createEngine();
+
+/* ---------- 3. embed the map + searcher inside Lua ---------------- */
+lua.global.set("MODULE_MAP", MODULE_MAP);
+await lua.doString(`
+  table.insert(package.searchers, function(mod)
+    local src = MODULE_MAP[mod]
+    if not src then return nil, "no module '"..mod.."'" end
+    local loader, err = load(src, "="..mod..".lua")
+    return loader, mod
+  end)
+`);
+
+/* ---------- 4. CodeMirror ---------------------------------------- */
+const editor = CodeMirror.fromTextArea(document.getElementById("src"), {
+  mode:"text/x-lua", lineNumbers:true, indentUnit:4, tabSize:4,
+  autofocus:true, theme:"solarized dark"
+});
+editor.addKeyMap({ "Ctrl-Enter": runLua, "Cmd-Enter": runLua });
+
+/* ---------- 5. print → terminal ---------------------------------- */
+const logEl = document.getElementById("log");
+lua.global.set("print", (...a)=>{ logEl.textContent += a.join(" ") + "\n"; });
+
+/* ---------- 6. Run ------------------------------------------------ */
+async function runLua(){
+  logEl.textContent = "";
+  try { await lua.doString(editor.getValue()); }
+  catch(e){ logEl.textContent = String(e); }
+}
+document.getElementById("run").onclick = runLua;
+addEventListener("keydown", e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key==="Enter") runLua();
+});
+
+/* ---------- 7. Download bundle ----------------------------------- */
+function collectDeps(entryMods, out=new Set()){
+  for(const m of entryMods){
+    if(out.has(m)||!MODULE_MAP[m]) continue;
+    out.add(m);
+    const nested = [...MODULE_MAP[m].matchAll(/require\s*\(\s*['"]([^'"]+)['"]\s*\)/g)]
+                 .map(n=>n[1]);
+    collectDeps(nested,out);
+  }
+  return out;
+}
+async function downloadBundle(){
+  const zip = new JSZip();
+  const code= editor.getValue();
+  zip.file("main.lua", code);
+
+  const first = [...code.matchAll(/require\s*\(\s*['"]([^'"]+)['"]\s*\)/g)].map(m=>m[1]);
+  for(const mod of collectDeps(first))
+    zip.file(`${mod}.lua`, MODULE_MAP[mod]);
+
+  const blob= await zip.generateAsync({type:"blob"});
+  const url = URL.createObjectURL(blob);
+  const a   = Object.assign(document.createElement("a"),{
+              href:url, download:"lua-project.zip", style:"display:none"});
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1e3);
+}
+document.getElementById("download").onclick = downloadBundle;
+
+/* ---------- 8. starter snippet ----------------------------------- */
+editor.setValue(`local date = require("date")\nprint("today:", date():fmt("%F"))`);
+</script>
+
+
+</body>
+</html>
