@@ -4,10 +4,7 @@
 <meta charset="utf-8" />
 <title>Lua</title>
 
-<!-- your own CSS with the window chrome, colours, sizing -->
 <link rel="stylesheet" href="./lua.css">
-
-<!-- CodeMirror core + Lua mode + Solarized theme -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/lua/lua.min.js"></script>
@@ -17,7 +14,6 @@
 <body>
   <h1>Lua</h1>
 
-  <!-- Editor window with chrome -->
   <div class="editor-window">
     <div class="editor-bar">
       <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
@@ -31,7 +27,6 @@
   <button id="run">▶ Run (Ctrl/⌘-Enter)</button>
   <button id="download">⤓ Download project (.zip)</button>
 
-  <!-- Terminal output window -->
   <div class="terminal">
     <div class="terminal-bar">
       <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
@@ -41,21 +36,16 @@
   </div>
 
 <script type="module">
-/* ---------- external deps ---------------------------------------- */
 import JSZip      from "https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm";
 import { LuaFactory } from "https://cdn.jsdelivr.net/npm/wasmoon@1.16.0/+esm";
-
-/* ---------- 1. fetch the library map produced by build-libs.js ---- */
 const MODULE_MAP = await fetch("./lib/modules.json")
   .then(r => r.ok ? r.json()
                   : Promise.reject("modules.json missing — run npm run build"));
 
-/* ---------- 2. create Wasmoon engine ------------------------------ */
 const lua = await new LuaFactory(
   "https://cdn.jsdelivr.net/npm/wasmoon@1.16.0/dist/glue.wasm"
 ).createEngine();
 
-/* ---------- 3. embed the map + searcher inside Lua ---------------- */
 lua.global.set("MODULE_MAP", MODULE_MAP);
 await lua.doString(`
   table.insert(package.searchers, function(mod)
@@ -66,18 +56,15 @@ await lua.doString(`
   end)
 `);
 
-/* ---------- 4. CodeMirror ---------------------------------------- */
 const editor = CodeMirror.fromTextArea(document.getElementById("src"), {
   mode:"text/x-lua", lineNumbers:true, indentUnit:4, tabSize:4,
   autofocus:true, theme:"solarized dark"
 });
 editor.addKeyMap({ "Ctrl-Enter": runLua, "Cmd-Enter": runLua });
 
-/* ---------- 5. print → terminal ---------------------------------- */
 const logEl = document.getElementById("log");
 lua.global.set("print", (...a)=>{ logEl.textContent += a.join(" ") + "\n"; });
 
-/* ---------- 6. Run ------------------------------------------------ */
 async function runLua(){
   logEl.textContent = "";
   try { await lua.doString(editor.getValue()); }
@@ -88,7 +75,6 @@ addEventListener("keydown", e=>{
   if((e.ctrlKey||e.metaKey)&&e.key==="Enter") runLua();
 });
 
-/* ---------- 7. Download bundle ----------------------------------- */
 function collectDeps(entryMods, out=new Set()){
   for(const m of entryMods){
     if(out.has(m)||!MODULE_MAP[m]) continue;
@@ -117,7 +103,6 @@ async function downloadBundle(){
 }
 document.getElementById("download").onclick = downloadBundle;
 
-/* ---------- 8. starter snippet ----------------------------------- */
 editor.setValue(`local date = require("date")\nprint("today:", date():fmt("%F"))`);
 </script>
 

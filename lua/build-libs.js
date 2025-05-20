@@ -1,5 +1,5 @@
 // Walk ./lib, read every *.lua file, and emit public/lib/modules.json
-// Usage:  node build-libs.js           (runs in < 100 ms for hundreds of files)
+// Usage:  node build-libs.js
 
 import { readdir, readFile, writeFile, mkdir } from "fs/promises";
 import { join, parse, posix } from "path";
