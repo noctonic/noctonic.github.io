@@ -25,16 +25,17 @@
 
 </main>
 
-<script src="./coi-serviceworker.js"></script>
+<script src="/lua-playground/coi-serviceworker.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xterm@5.1.0/lib/xterm.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xterm-pty@0.9.4/index.js"></script>
-<script src="./src/stack.js"></script>
-<script src="./worker.js"></script>
+<script src="/lua-playground/src/stack.js"></script>
+<script src="/lua-playground/worker.js"></script>
 <script>
+  console.log(location.origin)
   startWasi(
     "terminal-lua-wasi",
-    "./src/worker.js" + location.search,
-    location.origin + "/containers/lua-wasi",
+    "/lua-playground/src/worker.js" + location.search,
+    location.origin + "/lua-playground/containers/lua-wasi",
     3
   );
 </script>

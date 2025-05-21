@@ -18,8 +18,8 @@ function startWasi(elemId, workerFileName, workerImageNamePrefix, workerImageChu
     var nwStack;
     var netParam = getNetParam();
     if (!netParam || netParam.mode != 'none') {
-        stackWorker = new Worker("./src/stack-worker.js"+location.search);
-        nwStack = newStack(worker, workerImageNamePrefix, workerImageChunks, stackWorker, location.origin + "/src/c2w-net-proxy.wasm");
+        stackWorker = new Worker("/lua-playground/src/stack-worker.js"+location.search);
+        nwStack = newStack(worker, workerImageNamePrefix, workerImageChunks, stackWorker, location.origin + "/lua-playground/src/c2w-net-proxy.wasm");
     }
     if (!nwStack) {
         worker.postMessage({type: "init", imagename: workerImageNamePrefix, chunks: workerImageChunks});

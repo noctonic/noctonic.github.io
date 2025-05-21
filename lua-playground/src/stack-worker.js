@@ -1,7 +1,7 @@
-importScripts(location.origin + "/src/browser_wasi_shim/index.js");
-importScripts(location.origin + "/src/browser_wasi_shim/wasi_defs.js");
-importScripts(location.origin + "/src/worker-util.js");
-importScripts(location.origin + "/src/wasi-util.js");
+importScripts(location.origin + "/lua-playground" + "/src/browser_wasi_shim/index.js");
+importScripts(location.origin + "/lua-playground" + "/src/browser_wasi_shim/wasi_defs.js");
+importScripts(location.origin + "/lua-playground" + "/src/worker-util.js");
+importScripts(location.origin + "/lua-playground" + "/src/wasi-util.js");
 
 onmessage = (msg) => {
     serveIfInitMsg(msg);
