@@ -3,8 +3,10 @@ var stackWorker;
 
 function startWasi(elemId, workerFileName, workerImageNamePrefix, workerImageChunks) {
     const xterm = new Terminal({
+        rows:8,
+        cols:160,
         fontFamily: '"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace',
-        fontSize: 14,
+        fontSize: 20,
         theme: {
             background: '#002b36',
             foreground: '#00d265',

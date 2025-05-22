@@ -69,7 +69,7 @@ button:hover{filter:brightness(1.15);}
   box-shadow:0 6px 12px rgba(0,0,0,.45);
   overflow:hidden;
   margin-top:2rem;
-  height:55vh;
+  height:25vh;
 }
 .terminal-bar{background:#073642;padding:0.35rem 0.6rem;display:flex;align-items:center;gap:0.4rem;font-size:.75rem;font-weight:600;color:#93a1a1;letter-spacing:.04em;user-select:none;}
 .dot{width:0.8rem;height:0.8rem;border-radius:50%;display:inline-block;}
@@ -334,4 +334,7 @@ button:hover{filter:brightness(1.15);}
   box-shadow: none !important;
   filter: none !important;
   text-shadow: none !important;
+}
+.editor-body .CodeMirror pre {
+  font-size: 20px !important;
 }
