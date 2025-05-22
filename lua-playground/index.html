@@ -4,11 +4,11 @@
   <title>Lua IDE</title>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <link rel="stylesheet" href="./codemirror.min.css">
+  <link rel="stylesheet" href="./solarized.min.css">
   <link rel="stylesheet" href="./lua.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/solarized.min.css">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/lua/lua.min.js"></script>
+  <script src="./codemirror.min.js"></script>
+  <script src="./lua.min.js"></script>
 </head>
 <body>
 
@@ -46,11 +46,11 @@
   </p>
 
 
-<script src="/lua-playground/coi-serviceworker.js"></script>
+<script src="./coi-serviceworker.js"></script>
 <script src="./xterm.min.js"></script>
 <script src="./index.js"></script>
-<script src="/lua-playground/src/stack.js"></script>
-<script src="/lua-playground/worker.js"></script>
+<script src="./src/stack.js"></script>
+<script src="./worker.js"></script>
 <script type="module">
   console.log(location.origin);
   const { master, slave } = startWasi(

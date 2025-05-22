@@ -1,4 +1,4 @@
-importScripts("https://cdn.jsdelivr.net/npm/xterm-pty@0.9.4/workerTools.js");
+importScripts("../workerTools.js");
 importScripts(location.origin + "/lua-playground" + "/src/browser_wasi_shim/index.js");
 importScripts(location.origin + "/lua-playground" + "/src/browser_wasi_shim/wasi_defs.js");
 importScripts(location.origin + "/lua-playground" + "/src/worker-util.js");

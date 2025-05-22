@@ -1,6 +1,6 @@
 // CodeMirror IDE integration for Lua playground
 
-import JSZip from 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm';
+import JSZip from './jszip.js';
 
 let editor;
 let master;
