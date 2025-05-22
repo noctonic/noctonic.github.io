@@ -216,7 +216,7 @@ function getNetParam() {
             };
         }
     }
-    return null;
+    return {mode: 'none'};
 }
 
 function genmac(){

@@ -1,0 +1,337 @@
+:root{
+  --page-bg:#1b1d1e;
+  --page-fg:#d0d0d0;
+  --accent:#268bd2;
+}
+body{
+  max-width: 1400px;
+  background:var(--page-bg);
+  color:var(--page-fg);
+  font-family:system-ui,sans-serif;
+  margin:2rem auto;
+}
+h1{color:var(--accent);margin-bottom:1rem;}
+
+.examples-toggle{
+  position:fixed;
+  left:0;
+  top:0;
+  margin:1rem;
+  z-index:1000;
+}
+
+#example-panel{
+  position:fixed;
+  left:0;
+  top:4rem;
+  bottom:4rem;
+  width:200px;
+  background:#002b36;
+  padding:1rem;
+  box-shadow:2px 0 5px rgba(0,0,0,.45);
+  transform:translateX(-100%);
+  transition:transform .3s;
+  overflow-y:auto;
+  z-index:900;
+}
+
+#example-panel.open{transform:translateX(0);}
+#example-panel ul{list-style:none;padding:0;margin:0;}
+#example-panel li{margin:0.25rem 0;}
+#example-panel a{color:var(--accent);text-decoration:none;cursor:pointer;}
+#example-panel a:hover{text-decoration:underline;}
+
+button{background:var(--accent);color:#fff;border:none;padding:.45rem .9rem;margin-top:.6rem;font-weight:600;cursor:pointer;}
+button:hover{filter:brightness(1.15);}
+
+.editor-window{background:#002b36;border-radius:8px;box-shadow:0 6px 12px rgba(0,0,0,.45);overflow:hidden;margin-bottom:1.2rem;}
+.editor-bar{background:#073642;padding:0.35rem 0.6rem;display:flex;align-items:center;gap:0.4rem;font-size:.75rem;font-weight:600;color:#93a1a1;letter-spacing:.04em;user-select:none;}
+.editor-bar .dot{width:0.8rem;height:0.8rem;border-radius:50%;display:inline-block;}
+.editor-bar .red{background:#dc322f;}
+.editor-bar .yellow{background:#b58900;}
+.editor-bar .green{background:#859900;}
+.editor-bar .title{margin-left:.4rem;}
+.editor-body{
+  height:50vh;
+}
+.editor-body .CodeMirror{
+  height:100%;
+  border:none;
+  font-family:monospace;
+}
+.editor-body .CodeMirror{height:100%;border:none;font-family:monospace;}
+
+.cm-s-solarized.CodeMirror{background:#002b36;}
+
+.terminal{
+  background:#002b36;
+  border-radius:8px;
+  box-shadow:0 6px 12px rgba(0,0,0,.45);
+  overflow:hidden;
+  margin-top:2rem;
+  height:55vh;
+}
+.terminal-bar{background:#073642;padding:0.35rem 0.6rem;display:flex;align-items:center;gap:0.4rem;font-size:.75rem;font-weight:600;color:#93a1a1;letter-spacing:.04em;user-select:none;}
+.dot{width:0.8rem;height:0.8rem;border-radius:50%;display:inline-block;}
+.red{background:#dc322f;}
+.yellow{background:#b58900;}
+.green{background:#859900;}
+.title{margin-left:.4rem;}
+.terminal-body{
+  height:100%;
+  overflow:hidden;
+  padding:0;
+  background:transparent;
+  color:#00d265;
+  font-family:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+  font-size:0.87rem;
+  line-height:1.35;
+  white-space:pre-wrap;
+}
+.cm-s-solarized span::selection,.cm-s-solarized.CodeMirror ::selection{background:#586e75;color:#fdf6e3;}
+
+
+.terminal-body {
+  position: relative;
+  overflow: hidden;
+}
+.terminal-body .xterm {
+  position: absolute !important;
+  top: 0; left: 0;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  box-sizing: border-box;
+}
+
+
+.terminal-body .xterm-viewport {
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+.terminal .xterm-viewport::-webkit-scrollbar {
+  width: 0;
+  background: transparent;
+}
+
+
+.xterm {
+    cursor: text;
+    position: relative;
+    user-select: none;
+    -ms-user-select: none;
+    -webkit-user-select: none;
+}
+
+.xterm.focus,
+.xterm:focus {
+    outline: none;
+}
+
+.xterm .xterm-helpers {
+    position: absolute;
+    top: 0;
+    /**
+     * The z-index of the helpers must be higher than the canvases in order for
+     * IMEs to appear on top.
+     */
+    z-index: 5;
+}
+
+.xterm .xterm-helper-textarea {
+    padding: 0;
+    border: 0;
+    margin: 0;
+    /* Move textarea out of the screen to the far left, so that the cursor is not visible */
+    position: absolute;
+    opacity: 0;
+    left: -9999em;
+    top: 0;
+    width: 0;
+    height: 0;
+    z-index: -5;
+    /** Prevent wrapping so the IME appears against the textarea at the correct position */
+    white-space: nowrap;
+    overflow: hidden;
+    resize: none;
+}
+
+.xterm .composition-view {
+    /* TODO: Composition position got messed up somewhere */
+    background: var(--page-bg, #002b36);
+    color: #FFF;
+    display: none;
+    position: absolute;
+    white-space: nowrap;
+    z-index: 1;
+}
+
+.xterm .composition-view.active {
+    display: block;
+}
+
+.xterm .xterm-viewport {
+    /* On OS X this is required in order for the scroll bar to appear fully opaque */
+    background-color: var(--page-bg, #002b36);
+    overflow-y: scroll;
+    cursor: default;
+    position: absolute;
+    right: 0;
+    left: 0;
+    top: 0;
+    bottom: 0;
+}
+
+.xterm .xterm-screen {
+    position: relative;
+}
+
+.xterm .xterm-screen canvas {
+    position: absolute;
+    left: 0;
+    top: 0;
+}
+
+.xterm .xterm-scroll-area {
+    visibility: hidden;
+}
+
+.xterm-char-measure-element {
+    display: inline-block;
+    visibility: hidden;
+    position: absolute;
+    top: 0;
+    left: -9999em;
+    line-height: normal;
+}
+
+.xterm.enable-mouse-events {
+    /* When mouse events are enabled (eg. tmux), revert to the standard pointer cursor */
+    cursor: default;
+}
+
+.xterm.xterm-cursor-pointer,
+.xterm .xterm-cursor-pointer {
+    cursor: pointer;
+}
+
+.xterm.column-select.focus {
+    /* Column selection mode */
+    cursor: crosshair;
+}
+
+.xterm .xterm-accessibility,
+.xterm .xterm-message {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 10;
+    color: transparent;
+}
+
+.xterm .live-region {
+    position: absolute;
+    left: -9999px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+}
+
+.xterm-dim {
+    opacity: 0.5;
+}
+
+.xterm-underline-1 { text-decoration: underline; }
+.xterm-underline-2 { text-decoration: double underline; }
+.xterm-underline-3 { text-decoration: wavy underline; }
+.xterm-underline-4 { text-decoration: dotted underline; }
+.xterm-underline-5 { text-decoration: dashed underline; }
+
+.xterm-strikethrough {
+    text-decoration: line-through;
+}
+
+.xterm-screen .xterm-decoration-container .xterm-decoration {
+  z-index: 6;
+  position: absolute;
+}
+
+.xterm-decoration-overview-ruler {
+    z-index: 7;
+    position: absolute;
+    top: 0;
+    right: 0;
+    pointer-events: none;
+}
+
+.xterm-decoration-top {
+    z-index: 2;
+    position: relative;
+}
+
+.xterm {
+    font-family: "SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+    font-size: 0.87rem;
+    line-height: 1.35;
+    color: #00d265;
+}
+.xterm .xterm-viewport {
+    background-color: var(--page-bg, #002b36);
+}
+
+.xterm,
+.xterm * {
+  box-sizing: border-box;
+}
+
+.xterm,
+.xterm-viewport,
+.xterm-screen,
+.xterm-screen canvas {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.terminal-body {
+  position: relative; 
+}
+.terminal-body .xterm {
+  position: absolute !important;
+  top: 1% !important;
+  left: 1% !important;
+  width: 98% !important;
+  height: 98% !important;
+}
+
+
+.xterm .xterm-viewport {
+  position: absolute;
+  top: 0; bottom: 0; left: 0; right: 0;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow-y: scroll;
+}
+
+
+.xterm .xterm-screen,
+.xterm .xterm-screen canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+
+.xterm .xterm-viewport::-webkit-scrollbar {
+  width: 0;
+  background: transparent;
+}
+
+.xterm,
+.xterm * {
+  box-shadow: none !important;
+  filter: none !important;
+  text-shadow: none !important;
+}

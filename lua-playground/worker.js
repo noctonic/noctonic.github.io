@@ -2,8 +2,18 @@ var worker;
 var stackWorker;
 
 function startWasi(elemId, workerFileName, workerImageNamePrefix, workerImageChunks) {
-    const xterm = new Terminal();
+    const xterm = new Terminal({
+        fontFamily: '"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace',
+        fontSize: 14,
+        theme: {
+            background: '#002b36',
+            foreground: '#00d265',
+            cursor: '#93a1a1',
+            selection: '#073642',
+        }
+    });
     xterm.open(document.getElementById(elemId));
+
     const { master, slave } = openpty();
     var termios = slave.ioctl("TCGETS");
     termios.iflag &= ~(/*IGNBRK | BRKINT | PARMRK |*/ ISTRIP | INLCR | IGNCR | ICRNL | IXON);
@@ -25,6 +35,7 @@ function startWasi(elemId, workerFileName, workerImageNamePrefix, workerImageChu
         worker.postMessage({type: "init", imagename: workerImageNamePrefix, chunks: workerImageChunks});
     }
     new TtyServer(slave).start(worker, nwStack);
+    return { master, slave };
 }
 
 function getNetParam() {
@@ -38,5 +49,5 @@ function getNetParam() {
             };
         }
     }
-    return null;
+    return {mode: 'none'};
 }

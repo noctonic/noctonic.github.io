@@ -1,0 +1,4 @@
+{
+  "example.lua": "print(\"hello world\")\n",
+  "strings.lua": "local phrase = \"My name is \"\nlocal name = \"John Doe\"\nprint(phrase .. name)"
+}
