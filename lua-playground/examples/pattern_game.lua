@@ -23,5 +23,7 @@ while not win do
     
     if not win then
         print("Nope, try again.")
+    else
+        print("You Win!!!")
     end
 end
