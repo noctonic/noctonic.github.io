@@ -57,29 +57,34 @@
       align-items: flex-start;
       padding: 0 20px;
     }
-    #table {
+    #left-column {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      width: 500px;
+    }
+    #table, #definitions {
       background: #2a2a3e;
       border-radius: 8px;
       padding: 15px;
       box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
-      max-height: 740px;
-      overflow-y: auto;
     }
     table {
       width: 100%;
       border-collapse: collapse;
+      font-size: 13px;
     }
     th, td {
       border: 1px solid #44445a;
-      padding: 8px 12px;
-      text-align: center;
-      font-size: 13px;
+      padding: 6px 10px;
+      text-align: left;
       color: #e0e0e0;
     }
     th {
       background: #3f3f60;
       font-weight: 500;
       letter-spacing: 0.5px;
+      text-align: center;
     }
     tr:nth-child(even) td {
       background: #2e2e44;
@@ -88,23 +93,11 @@
       background: #32324a;
     }
     #plot {
-      width: 700px;
-      height: 700px;
+      width: 815px;
+      height: 815px;
       background: #1e1e2f;
       border-radius: 8px;
       box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
-    }
-    /* Scrollbar styling for the table container */
-    #table::-webkit-scrollbar {
-      width: 6px;
-    }
-    #table::-webkit-scrollbar-track {
-      background: #2a2a3e;
-      border-radius: 3px;
-    }
-    #table::-webkit-scrollbar-thumb {
-      background: #555575;
-      border-radius: 3px;
     }
   </style>
 </head>
@@ -115,234 +108,294 @@
     <label for="x">X:</label>
     <input type="number" id="x" value="1" step="any" />
     <label for="y">Y:</label>
-    <input type="number" id="y" value="1" step="any" />
+    <input type="number" id="y" value="0" step="any" />
     <label for="z">Z:</label>
     <input type="number" id="z" value="0" step="any" />
   </div>
 
   <div id="container">
-    <div id="table"></div>
+    <div id="left-column">
+      <div id="table"></div>
+
+      <div id="definitions">
+        <h3 style="text-align:center; margin-bottom:10px; color:#ffffff;">Definitions</h3>
+        <table>
+          <tr>
+            <th>Term</th>
+            <th>Definition</th>
+          </tr>
+          <tr>
+            <td><strong>Vector</strong></td>
+            <td>v = (v₁,…,vₙ)</td>
+          </tr>
+          <tr>
+            <td><strong>Magnitude</strong></td>
+            <td>‖v‖ = √(v₁² + v₂² + … + vₙ²)</td>
+          </tr>
+          <tr>
+            <td><strong>Dot Product</strong></td>
+            <td>u·v = u₁v₁ + u₂v₂ + … + uₙvₙ</td>
+          </tr>
+          <tr>
+            <td><strong>Angle</strong></td>
+            <td>cos θ = (u·v)/(‖u‖‖v‖)</td>
+          </tr>
+          <tr>
+            <td><strong>Unit Vector (Direction)</strong></td>
+            <td>v̂ = v/‖v‖</td>
+          </tr>
+          <tr>
+            <td><strong>Orthogonal</strong></td>
+            <td>u·v = 0 (θ = 90° )</td>
+          </tr>
+          <tr>
+            <td><strong>Parallel</strong></td>
+            <td>v = αu with α > 0 (θ = 0°).</td>
+          </tr>
+          <tr>
+            <td><strong>Anti-parallel</strong></td>
+            <td>v = βu with β < 0 (θ = 180°).</td>
+          </tr>
+          <tr>
+            <td><strong>Cosine Similarity</strong></td>
+            <td>(u·v)/(‖u‖·‖v‖)</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
     <div id="plot"></div>
   </div>
 
-  <script>
-    function magnitude(v) {
-      return Math.sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
-    }
+<script>
+  function magnitude(v) {
+    return Math.sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+  }
 
-    function normalize(v) {
-      const mag = magnitude(v);
-      if (mag === 0) return [0, 0, 0];
-      return [v[0] / mag, v[1] / mag, v[2] / mag];
-    }
+  function normalize(v) {
+    const mag = magnitude(v);
+    if (mag === 0) return [0, 0, 0];
+    return [v[0] / mag, v[1] / mag, v[2] / mag];
+  }
 
-    function cross(a, b) {
-      return [
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0]
+  function cross(a, b) {
+    return [
+      a[1]*b[2] - a[2]*b[1],
+      a[2]*b[0] - a[0]*b[2],
+      a[0]*b[1] - a[1]*b[0]
+    ];
+  }
+
+  function computeEightOrthogonal(v) {
+    const [x, y, z] = v;
+    if (x === 0 && y === 0 && z === 0) return null;
+
+    const magV = magnitude(v);
+    const e_z = normalize(v);
+
+    let u;
+    if (x !== 0 || y !== 0) {
+      u = [-y, x, 0];
+    } else {
+      u = [1, 0, 0];
+    }
+    let e1 = normalize(u);
+    let e2 = cross(e_z, e1);
+    e2 = normalize(e2);
+
+    const orths = [];
+    for (let i = 0; i < 8; i++) {
+      const theta = (2 * Math.PI * i) / 8;
+      const ux = Math.cos(theta);
+      const uy = Math.sin(theta);
+      const u_vec = [
+        ux * e1[0] + uy * e2[0],
+        ux * e1[1] + uy * e2[1],
+        ux * e1[2] + uy * e2[2]
       ];
+      orths.push([
+        u_vec[0] * magV,
+        u_vec[1] * magV,
+        u_vec[2] * magV
+      ]);
+    }
+    return orths;
+  }
+
+  function plotVectors() {
+    const x = parseFloat(document.getElementById('x').value);
+    const y = parseFloat(document.getElementById('y').value);
+    const z = parseFloat(document.getElementById('z').value);
+    const v = [x, y, z];
+
+    if (x === 0 && y === 0 && z === 0) {
+      document.getElementById('table').innerHTML = '';
+      Plotly.purge('plot');
+      return;
     }
 
-    function computeEightOrthogonal(v) {
-      const [x, y, z] = v;
-      if (x === 0 && y === 0 && z === 0) return null;
-
-      const magV = magnitude(v);
-      const e_z = normalize(v);
-
-      let u;
-      if (x !== 0 || y !== 0) {
-        u = [-y, x, 0];
-      } else {
-        u = [1, 0, 0];
-      }
-      let e1 = normalize(u);
-      let e2 = cross(e_z, e1);
-      e2 = normalize(e2);
-
-      const orths = [];
-      for (let i = 0; i < 8; i++) {
-        const theta = (2 * Math.PI * i) / 8;
-        const ux = Math.cos(theta);
-        const uy = Math.sin(theta);
-        const u_vec = [
-          ux * e1[0] + uy * e2[0],
-          ux * e1[1] + uy * e2[1],
-          ux * e1[2] + uy * e2[2]
-        ];
-        orths.push([
-          u_vec[0] * magV,
-          u_vec[1] * magV,
-          u_vec[2] * magV
-        ]);
-      }
-      return orths;
+    const opp = [-x, -y, -z];
+    const orths = computeEightOrthogonal(v);
+    if (!orths) {
+      document.getElementById('table').innerHTML = '';
+      Plotly.purge('plot');
+      return;
     }
 
-    function plotVectors() {
-      const x = parseFloat(document.getElementById('x').value);
-      const y = parseFloat(document.getElementById('y').value);
-      const z = parseFloat(document.getElementById('z').value);
-      const v = [x, y, z];
+    const vectors = [v, opp, ...orths];
+    const names = [
+      'Original',
+      'Opposite',
+      'Ortho 1',
+      'Ortho 2',
+      'Ortho 3',
+      'Ortho 4',
+      'Ortho 5',
+      'Ortho 6',
+      'Ortho 7',
+      'Ortho 8'
+    ];
+    const colors = [
+      '#4fc3f7',
+      '#f67280',
+      '#76c893','#76c893','#76c893','#76c893','#76c893','#76c893','#76c893','#76c893'
+    ];
 
-      if (x === 0 && y === 0 && z === 0) {
-        document.getElementById('table').innerHTML = '';
-        Plotly.purge('plot');
-        return;
-      }
+    const allComps = [];
+    const data = [];
 
-      const opp = [-x, -y, -z];
-      const orths = computeEightOrthogonal(v);
-      if (!orths) {
-        document.getElementById('table').innerHTML = '';
-        Plotly.purge('plot');
-        return;
-      }
+    for (let i = 0; i < vectors.length; i++) {
+      const [vx, vy, vz] = vectors[i];
+      const mag = magnitude(vx === undefined ? [0,0,0] : [vx, vy, vz]);
+      allComps.push(vx, vy, vz);
 
-      const vectors = [v, opp, ...orths];
-      const names = [
-        'Original',
-        'Opposite',
-        'Orthogonal 1',
-        'Orthogonal 2',
-        'Orthogonal 3',
-        'Orthogonal 4',
-        'Orthogonal 5',
-        'Orthogonal 6',
-        'Orthogonal 7',
-        'Orthogonal 8'
-      ];
-      const colors = [
-        '#4fc3f7',
-        '#f67280',
-        '#76c893','#76c893','#76c893','#76c893','#76c893','#76c893','#76c893','#76c893'
-      ];
-
-      const magV = magnitude(v);
-
-      const coneTraces = [];
-      const px = [], py = [], pz = [], pColor = [], pText = [];
-      const allComps = [];
-
-      for (let i = 0; i < vectors.length; i++) {
-        const [vx, vy, vz] = vectors[i];
-        allComps.push(vx, vy, vz);
-
-        coneTraces.push({
-          type: 'cone',
-          x: [0],
-          y: [0],
-          z: [0],
-          u: [vx],
-          v: [vy],
-          w: [vz],
-          colorscale: [[0, colors[i]], [1, colors[i]]],
-          showscale: false,
-          sizemode: 'absolute',
-          sizeref: 0.5,
-          anchor: 'tail',
-          hovertext: [
-            `${names[i]} Vector: (${vx.toFixed(2)}, ${vy.toFixed(2)}, ${vz.toFixed(2)})`
-          ],
-          hoverinfo: 'text'
-        });
-
-        px.push(vx);
-        py.push(vy);
-        pz.push(vz);
-        pColor.push(colors[i]);
-        pText.push(
-          `${names[i]} Point: (${vx.toFixed(2)}, ${vy.toFixed(2)}, ${vz.toFixed(2)})`
-        );
-      }
-
-      const pointTrace = {
+      const fractionBeforeHead = 0.9;
+      const shaftEnd = [vx * fractionBeforeHead, vy * fractionBeforeHead, vz * fractionBeforeHead];
+      const shaftTrace = {
         type: 'scatter3d',
-        mode: 'markers',
-        x: px,
-        y: py,
-        z: pz,
-        marker: {
-          size: 5,
-          color: pColor,
-          symbol: 'circle',
-          opacity: 0.9
+        mode: 'lines',
+        x: [0, shaftEnd[0]],
+        y: [0, shaftEnd[1]],
+        z: [0, shaftEnd[2]],
+        line: {
+          color: colors[i],
+          width: 4
         },
-        hovertext: pText,
+        hoverinfo: 'none',
+        showlegend: false
+      };
+      data.push(shaftTrace);
+
+      const arrowHeadLength = 0.1 * mag;
+      const ux = vx / mag;
+      const uy = vy / mag;
+      const uz = vz / mag;
+      const headTrace = {
+        type: 'cone',
+        x: [shaftEnd[0]],
+        y: [shaftEnd[1]],
+        z: [shaftEnd[2]],
+        u: [ux * arrowHeadLength],
+        v: [uy * arrowHeadLength],
+        w: [uz * arrowHeadLength],
+        colorscale: [[0, colors[i]], [1, colors[i]]],
+        showscale: false,
+        sizemode: 'absolute',
+        sizeref: arrowHeadLength * 0.5,
+        anchor: 'tail',
+        hovertext: [`${names[i]} Vector: (${vx.toFixed(2)}, ${vy.toFixed(2)}, ${vz.toFixed(2)})`],
         hoverinfo: 'text',
-        name: 'Endpoints'
+        showlegend: false
       };
-
-      const data = coneTraces.concat(pointTrace);
-
-      const maxComp = Math.max(...allComps.map(c => Math.abs(c))) * 1.2;
-      const layout = {
-        paper_bgcolor: '#1e1e2f',
-        plot_bgcolor: '#1e1e2f',
-        scene: {
-          xaxis: {
-            range: [-maxComp, maxComp],
-            title: { text: 'X', font: { color: '#e0e0e0' } },
-            tickcolor: '#8888aa',
-            gridcolor: '#444455',
-            zerolinecolor: '#8888aa'
-          },
-          yaxis: {
-            range: [-maxComp, maxComp],
-            title: { text: 'Y', font: { color: '#e0e0e0' } },
-            tickcolor: '#8888aa',
-            gridcolor: '#444455',
-            zerolinecolor: '#8888aa'
-          },
-          zaxis: {
-            range: [-maxComp, maxComp],
-            title: { text: 'Z', font: { color: '#e0e0e0' } },
-            tickcolor: '#8888aa',
-            gridcolor: '#444455',
-            zerolinecolor: '#8888aa'
-          },
-          bgcolor: '#1e1e2f',
-          aspectmode: 'cube',
-            camera: {
-              eye: { x: 0, y: 0, z: 2 },
-              up:  { x: 0, y: 1, z: 0 }
-            }
-        },
-        margin: { l: 10, r: 10, b: 10, t: 10 }
-      };
-
-      Plotly.newPlot('plot', data, layout, { displayModeBar: false });
-
-      let tableHTML = '<table>';
-      tableHTML += '<tr><th>Name</th><th>X</th><th>Y</th><th>Z</th><th>Magnitude</th><th>Cosine Sim</th><th>Cosine Dist</th></tr>';
-      for (let i = 0; i < vectors.length; i++) {
-        const [vx, vy, vz] = vectors[i];
-        const magU = magnitude(vectors[i]);
-        let cosSim = 0;
-        if (magV !== 0 && magU !== 0) {
-          cosSim = (v[0]*vx + v[1]*vy + v[2]*vz) / (magV * magU);
-        }
-        const cosDist = 1 - cosSim;
-        tableHTML += `<tr>
-                        <td style="color:${colors[i]}; font-weight:500;">${names[i]}</td>
-                        <td>${vx.toFixed(2)}</td>
-                        <td>${vy.toFixed(2)}</td>
-                        <td>${vz.toFixed(2)}</td>
-                        <td>${magU.toFixed(2)}</td>
-                        <td>${cosSim.toFixed(2)}</td>
-                        <td>${cosDist.toFixed(2)}</td>
-                      </tr>`;
-      }
-      tableHTML += '</table>';
-      document.getElementById('table').innerHTML = tableHTML;
+      data.push(headTrace);
     }
 
-    ['x', 'y', 'z'].forEach(id => {
-      document.getElementById(id).addEventListener('input', plotVectors);
+    const px = [], py = [], pz = [], pColor = [], pText = [];
+    for (let i = 0; i < vectors.length; i++) {
+      const [vx, vy, vz] = vectors[i];
+      px.push(vx);
+      py.push(vy);
+      pz.push(vz);
+      pColor.push(colors[i]);
+      pText.push(`${names[i]} Point: (${vx.toFixed(2)}, ${vy.toFixed(2)}, ${vz.toFixed(2)})`);
+    }
+    data.push({
+      type: 'scatter3d',
+      mode: 'markers',
+      x: px,
+      y: py,
+      z: pz,
+      marker: {
+        size: 4,
+        color: pColor,
+        symbol: 'circle',
+        opacity: 0.9
+      },
+      hovertext: pText,
+      hoverinfo: 'text',
+      name: 'Endpoints'
     });
 
-    plotVectors();
-  </script>
+    const maxComp = Math.max(...allComps.map(c => Math.abs(c))) * 1.2;
+    const layout = {
+      paper_bgcolor: '#1e1e2f',
+      plot_bgcolor: '#1e1e2f',
+      scene: {
+        xaxis: {
+          range: [-maxComp, maxComp],
+          title: { text: 'X', font: { color: '#e0e0e0' } },
+          tickcolor: '#8888aa', gridcolor: '#444455', zerolinecolor: '#8888aa'
+        },
+        yaxis: {
+          range: [-maxComp, maxComp],
+          title: { text: 'Y', font: { color: '#e0e0e0' } },
+          tickcolor: '#8888aa', gridcolor: '#444455', zerolinecolor: '#8888aa'
+        },
+        zaxis: {
+          range: [-maxComp, maxComp],
+          title: { text: 'Z', font: { color: '#e0e0e0' } },
+          tickcolor: '#8888aa', gridcolor: '#444455', zerolinecolor: '#8888aa'
+        },
+        bgcolor: '#1e1e2f',
+        aspectmode: 'cube',
+        camera: { eye: { x: 0, y: 0, z: 2 }, up: { x: 0, y: 1, z: 0 } }
+      },
+      margin: { l: 10, r: 10, b: 10, t: 10 }
+    };
+
+    Plotly.newPlot('plot', data, layout, { displayModeBar: false });
+
+    let tableHTML = '<table>';
+    tableHTML += '<tr><th>Name</th><th>X</th><th>Y</th><th>Z</th><th>Magnitude</th><th>Cosine Sim</th><th>Cosine Dist</th></tr>';
+    for (let i = 0; i < vectors.length; i++) {
+      const [vx, vy, vz] = vectors[i];
+      const magU = magnitude(vectors[i]);
+      let cosSim = 0;
+      if (magU !== 0) {
+        cosSim = (v[0]*vx + v[1]*vy + v[2]*vz) / (magnitude(v) * magU);
+      }
+      const cosDist = 1 - cosSim;
+      tableHTML += `<tr>
+                      <td style="color:${colors[i]}; font-weight:500;">${names[i]}</td>
+                      <td>${vx.toFixed(2)}</td>
+                      <td>${vy.toFixed(2)}</td>
+                      <td>${vz.toFixed(2)}</td>
+                      <td>${magU.toFixed(2)}</td>
+                      <td>${cosSim.toFixed(2)}</td>
+                      <td>${cosDist.toFixed(2)}</td>
+                    </tr>`;
+    }
+    tableHTML += '</table>';
+    document.getElementById('table').innerHTML = tableHTML;
+  }
+
+  ['x', 'y', 'z'].forEach(id => {
+    document.getElementById(id).addEventListener('input', plotVectors);
+  });
+
+  plotVectors();
+</script>
+
+
 </body>
 </html>
