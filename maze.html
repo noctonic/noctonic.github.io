@@ -100,6 +100,7 @@
   <div class="bottom-controls">
     <label for="algoSelect">Algorithm:</label>
     <select id="algoSelect" style="height: auto;">
+      <option value="floodFillGen">Flood Fill</option>
       <option value="bfsGen">Breadth First</option>
       <option value="dijkstraGen">Dijkstra</option>
       <option value="iddfsGen">Iterative Deepening DFS</option>
@@ -408,6 +409,9 @@ function solveMaze() {
   const startIdx = rowColToIndex(startCell.r, startCell.c, n);
   const endIdx = rowColToIndex(endCell.r, endCell.c, n);
   switch (selectedAlgo) {
+    case 'floodFillGen':
+      solverIterator = floodFillGen(mazeGraph, startIdx);
+      break;
     case 'dfsGen':
       solverIterator = dfsGen(mazeGraph, startIdx);
       break;

@@ -632,3 +632,30 @@ function* rightWallFollowerGen(graph, startNode, endNode, n) {
   yield* wallflower(graph, startNode, endNode, n, "right");
 }
 
+function* floodFillGen(graph, startNode = 0) {
+  const visited = new Set();
+  const stack = [startNode];
+  const parent = {};
+
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!visited.has(current)) {
+      visited.add(current);
+
+      yield {
+        current,
+        visited: Array.from(visited),
+        parent: { ...parent }
+      };
+
+      const edges = graph.nodes[current].get_edge_list();
+      for (const edge of edges) {
+        const neighbor = edge.to_node;
+        if (!visited.has(neighbor)) {
+          parent[neighbor] = current;
+          stack.push(neighbor);
+        }
+      }
+    }
+  }
+}
