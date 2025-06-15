@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mask Cards</title>
+  <style>
+    body {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      margin: 0;
+      font-family: monospace;
+    }
+    #controls {
+      padding: 10px;
+      background: #f0f0f0;
+      border-bottom: 1px solid #ccc;
+      display: flex;
+      gap: 20px;
+      align-items: center;
+    }
+    #display {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      font-size: 4em;
+      padding: 20px;
+      overflow: hidden;
+      white-space: pre-wrap;
+    }
+    #display span {
+      display: inline-block;
+      margin-right: 0.5em;
+    }
+    #display span:last-child {
+      margin-right: 0;
+    }
+
+    .pixelated { filter: url(#px08); }
+
+    @keyframes depixelate {
+      0%   { filter: url(#px08); }
+      15%  { filter: url(#px07); }
+      30%  { filter: url(#px06); }
+      45%  { filter: url(#px05); }
+      60%  { filter: url(#px04); }
+      75%  { filter: url(#px03); }
+      90%  { filter: url(#px02); }
+      100% { filter: none; }
+    }
+    .pixelate { animation: depixelate 0.8s steps(1) forwards; }
+
+    #toggleArea {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      background: #f9f9f9;
+      border-top: 1px solid #ccc;
+    }
+    #toggleBtn {
+      width: 100%;
+      padding: 10px;
+      background: #eee;
+      border: none;
+      cursor: pointer;
+      font-family: monospace;
+    }
+    #textContainer {
+      display: none;
+      padding: 10px;
+    }
+    textarea {
+      width: 100%;
+      height: 100px;
+      font-family: monospace;
+    }
+  </style>
+</head>
+<body>
+  <div id="controls">
+    <label>Preset:
+      <select id="presetSelect">
+        <option value="">Custom</option>
+      </select>
+    </label>
+    <label>Delay &amp; Hold (ms):
+      <input type="range" id="delaySlider" min="100" max="3000" step="100" value="800">
+    </label>
+    <span id="delayLabel">800</span>
+    <label>Font Size (em):
+      <input type="range" id="fontSlider" min="1" max="5" step="0.1" value="4">
+    </label>
+    <span id="fontLabel">4</span>
+  </div>
+
+  <svg style="position:absolute;width:0;height:0;overflow:hidden;">
+    <filter id="px08">
+      <feFlood x="0.5" y="0.5" width="1" height="1"/>
+      <feComposite width="8" height="8"/>
+      <feTile result="cells"/>
+      <feComposite in="SourceGraphic" in2="cells" operator="in"/>
+      <feMorphology operator="dilate" radius="4"/>
+    </filter>
+    <filter id="px07">
+      <feFlood x="0.4375" y="0.4375" width="1" height="1"/>
+      <feComposite width="7" height="7"/>
+      <feTile result="cells"/>
+      <feComposite in="SourceGraphic" in2="cells" operator="in"/>
+      <feMorphology operator="dilate" radius="3.5"/>
+    </filter>
+    <filter id="px06">
+      <feFlood x="0.6667" y="0.6667" width="1" height="1"/>
+      <feComposite width="6" height="6"/>
+      <feTile result="cells"/>
+      <feComposite in="SourceGraphic" in2="cells" operator="in"/>
+      <feMorphology operator="dilate" radius="3"/>
+    </filter>
+    <filter id="px05">
+      <feFlood x="0.2" y="0.2" width="1" height="1"/>
+      <feComposite width="5" height="5"/>
+      <feTile result="cells"/>
+      <feComposite in="SourceGraphic" in2="cells" operator="in"/>
+      <feMorphology operator="dilate" radius="2.5"/>
+    </filter>
+    <filter id="px04">
+      <feFlood x="0.25" y="0.25" width="1" height="1"/>
+      <feComposite width="4" height="4"/>
+      <feTile result="cells"/>
+      <feComposite in="SourceGraphic" in2="cells" operator="in"/>
+      <feMorphology operator="dilate" radius="2"/>
+    </filter>
+    <filter id="px03">
+      <feFlood x="0.3333" y="0.3333" width="1" height="1"/>
+      <feComposite width="3" height="3"/>
+      <feTile result="cells"/>
+      <feComposite in="SourceGraphic" in2="cells" operator="in"/>
+      <feMorphology operator="dilate" radius="1.5"/>
+    </filter>
+    <filter id="px02">
+      <feFlood x="0.5" y="0.5" width="1" height="1"/>
+      <feComposite width="2" height="2"/>
+      <feTile result="cells"/>
+      <feComposite in="SourceGraphic" in2="cells" operator="in"/>
+      <feMorphology operator="dilate" radius="1"/>
+    </filter>
+  </svg>
+
+  <div id="display"></div>
+
+  <div id="toggleArea">
+    <button id="toggleBtn">Show/Hide Textbox</button>
+    <div id="textContainer">
+      <textarea id="textInput">The quick brown fox jumps over the lazy dog.
+To be or not to be, that is the question.
+A journey of a thousand miles begins with a single step.
+All that glitters is not gold.</textarea>
+    </div>
+  </div>
+
+  <script src="presets.js"></script>
+  <script>
+    const presetSelect = document.getElementById('presetSelect');
+    Object.keys(window.presets).forEach(key => {
+      const opt = document.createElement('option');
+      opt.value = key;
+      opt.textContent = key.replace(/_/g, ' ');
+      presetSelect.appendChild(opt);
+    });
+  </script>
+
+  <script>
+    const delaySlider   = document.getElementById('delaySlider');
+    const delayLabel    = document.getElementById('delayLabel');
+    const fontSlider    = document.getElementById('fontSlider');
+    const fontLabel     = document.getElementById('fontLabel');
+    const display       = document.getElementById('display');
+    const toggleBtn     = document.getElementById('toggleBtn');
+    const textContainer = document.getElementById('textContainer');
+    const textInput     = document.getElementById('textInput');
+
+    const blocklist = new Set(['the','a','is','of','to','=']);
+
+    let shuffledLines = [], lineIndex = 0;
+
+    function shuffleArray(arr) {
+      const a = arr.slice();
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+    function updateFilters(scale) {
+      const defs = [
+        { id: 'px08', cell: 8, radius: 4 },
+        { id: 'px07', cell: 7, radius: 3.5 },
+        { id: 'px06', cell: 6, radius: 3 },
+        { id: 'px05', cell: 5, radius: 2.5 },
+        { id: 'px04', cell: 4, radius: 2 },
+        { id: 'px03', cell: 3, radius: 1.5 },
+        { id: 'px02', cell: 2, radius: 1 }
+      ];
+      defs.forEach(d => {
+        const f = document.getElementById(d.id);
+        if (!f) return;
+        const comp = f.querySelector('feComposite[width][height]');
+        if (comp) {
+          comp.setAttribute('width',  d.cell * scale);
+          comp.setAttribute('height', d.cell * scale);
+        }
+        const morph = f.querySelector('feMorphology');
+        if (morph) {
+          morph.setAttribute('radius', d.radius * scale);
+        }
+      });
+    }
+
+    presetSelect.addEventListener('change', () => {
+      const val = presetSelect.value;
+      if (window.presets[val]) {
+        textInput.value = window.presets[val].join('\n');
+        shuffledLines = [];
+      }
+    });
+
+    delaySlider.addEventListener('input', () => {
+      delayLabel.textContent = delaySlider.value;
+    });
+
+    fontSlider.addEventListener('input', () => {
+      fontLabel.textContent = fontSlider.value;
+      display.style.fontSize = fontSlider.value + 'em';
+      const px = parseFloat(getComputedStyle(display).fontSize);
+      updateFilters(px / 32);
+    });
+
+    toggleBtn.addEventListener('click', () => {
+      textContainer.style.display =
+        textContainer.style.display === 'none' ? 'block' : 'none';
+    });
+
+    function cycleDemo() {
+      const lines = textInput.value
+        .split('\n')
+        .map(l => l.trim())
+        .filter(Boolean);
+      if (!lines.length) return;
+
+      if (shuffledLines.length !== lines.length) {
+        shuffledLines = shuffleArray(lines);
+        lineIndex = 0;
+      }
+
+      const line = shuffledLines[lineIndex++];
+      lineIndex %= shuffledLines.length;
+
+      const isCausal     = Math.random() < 0.5;
+      const delay        = parseInt(delaySlider.value, 10);
+      const animationTime = 800;
+      const hold         = delay;
+      display.innerHTML  = '';
+
+      const words = line.split(' ');
+      let runTime = 0;
+
+      if (isCausal) {
+        words.forEach(word => {
+          const span = document.createElement('span');
+          span.textContent = word;
+          span.classList.add('pixelated');
+          display.appendChild(span);
+        });
+        words.forEach((_, idx) => {
+          setTimeout(() => {
+            const span = display.children[idx];
+            span.classList.remove('pixelated');
+            span.classList.add('pixelate');
+          }, idx * delay);
+        });
+        runTime = words.length * delay;
+      } else {
+        const candidates = words
+          .map((w, i) => ({ w, i }))
+          .filter(o => !blocklist.has(o.w.toLowerCase()));
+        if (candidates.length) {
+          const { i: missingIdx } = candidates[Math.floor(Math.random() * candidates.length)];
+          words.forEach((word, idx) => {
+            const span = document.createElement('span');
+            span.textContent = word;
+            if (idx === missingIdx) span.classList.add('pixelated');
+            display.appendChild(span);
+          });
+          const totalDelay = delay * words.length;
+          setTimeout(() => {
+            const missingEl = display.children[missingIdx];
+            missingEl?.classList.remove('pixelated');
+            missingEl?.classList.add('pixelate');
+          }, totalDelay);
+          runTime = totalDelay;
+        }
+      }
+
+      setTimeout(cycleDemo, runTime + hold + animationTime);
+    }
+
+    window.addEventListener('load', () => {
+      display.style.fontSize = fontSlider.value + 'em';
+      const px = parseFloat(getComputedStyle(display).fontSize);
+      updateFilters(px / 32);
+      cycleDemo();
+    });
+  </script>
+</body>
+</html>
