@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Drag and Drop Progression</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.39/Tone.min.js" crossorigin="anonymous"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 2rem; }
+    header { display: flex; gap: 1rem; justify-content: center; margin-bottom: 1rem; }
+    .slider-group { display: flex; gap: 0.5rem; align-items: center; }
+    label { font-weight: 600; }
+    output { width: 2rem; text-align: right; }
+    #chord-palette { display: flex; gap: 0.5rem; justify-content: center; margin-bottom: 1rem; }
+    .chord-block { width: 40px; height: 40px; border-radius: 4px; cursor: grab; }
+    #play-area { min-height: 120px; border: 2px dashed #aaa; padding: 1rem; display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
+    .play-step { width: 40px; height: 40px; border: 1px solid #666; border-radius: 4px; cursor: pointer; transition: box-shadow 0.2s, border-color 0.2s; }
+    .play-step.playing { box-shadow: 0 0 10px 2px gold; }
+    .play-step.selected-edit { border-color: deeppink; border-width: 2px; }
+    #controls { border: 1px solid #ccc; padding: 1rem; border-radius: 6px; max-width: 400px; margin: auto; }
+    .checkbox-group { display: flex; gap: 0.5rem; margin: 0.5rem 0; flex-wrap: wrap; }
+    .checkbox-group label { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border: 1px solid #666; border-radius: 4px; cursor: pointer; }
+    .slider-wrap { margin: 0.5rem 0; }
+    #transport-controls { text-align: center; margin-top: 1rem; }
+  </style>
+</head>
+<body>
+  <h1 style="text-align:center;">Drag and Drop Progression</h1>
+  <header>
+    <div class="slider-group">
+      <label for="keySlider">Key</label>
+      <input id="keySlider" type="range" min="0" max="11" value="0" />
+      <output id="keyLabel">1</output>
+    </div>
+    <div class="slider-group">
+      <label for="modeSlider">Mode</label>
+      <input id="modeSlider" type="range" min="0" max="6" value="0" />
+      <output id="modeLabel">1</output>
+    </div>
+    <div class="slider-group">
+      <label for="tempoSlider">Tempo</label>
+      <input id="tempoSlider" type="range" min="60" max="400" value="120" />
+      <output id="tempoLabel">120</output>
+    </div>
+  </header>
+
+  <div id="chord-palette">
+    <div class="chord-block" draggable="true" data-deg="1" style="background:#e74c3c;"></div>
+    <div class="chord-block" draggable="true" data-deg="2" style="background:#e67e22;"></div>
+    <div class="chord-block" draggable="true" data-deg="3" style="background:#f1c40f;"></div>
+    <div class="chord-block" draggable="true" data-deg="4" style="background:#2ecc71;"></div>
+    <div class="chord-block" draggable="true" data-deg="5" style="background:#1abc9c;"></div>
+    <div class="chord-block" draggable="true" data-deg="6" style="background:#3498db;"></div>
+    <div class="chord-block" draggable="true" data-deg="7" style="background:#9b59b6;"></div>
+  </div>
+
+  <div id="play-area"></div>
+
+  <div id="controls">
+    <h3>Edit Chord <span id="ctrlDeg">-</span></h3>
+    <div id="noteChecksHigh" class="checkbox-group"></div>
+    <div id="noteChecksLow" class="checkbox-group"></div>
+    <div class="slider-wrap">
+      <label>Inversion <output id="invLabel">0</output></label>
+      <input id="invSlider" type="range" min="0" max="6" value="0" />
+    </div>
+    <div class="slider-wrap">
+      <label>Octave <output id="octLabel">4</output></label>
+      <input id="octSlider" type="range" min="3" max="7" value="4" />
+    </div>
+    <div class="slider-wrap">
+      <label>Pattern</label>
+      <select id="patternSelect">
+        <option value="block">Block</option>
+        <option value="arpeggio">Arpeggio</option>
+      </select>
+    </div>
+    <div class="slider-wrap">
+      <label>Bassline</label>
+      <select id="bassSelect">
+        <option value="none">None</option>
+        <option value="root5">Root & Fifth</option>
+        <option value="root">Root</option>
+        <option value="octave">Octave</option>
+        <option value="walking">Walking</option>
+        <option value="random">Random</option>
+        <option value="syncopated">Syncopated</option>
+      </select>
+    </div>
+    <button id="deleteBtn">Delete</button>
+  </div>
+
+  <div id="transport-controls">
+    <button id="startBtn">Start</button>
+    <button id="stopBtn">Stop</button>
+  </div>
+
+  <script>
+    const playArea = document.getElementById('play-area');
+    const keyS = document.getElementById('keySlider');
+    const modeS = document.getElementById('modeSlider');
+    const tempoS = document.getElementById('tempoSlider');
+    const keyL = document.getElementById('keyLabel');
+    const modeL = document.getElementById('modeLabel');
+    const tempoL = document.getElementById('tempoLabel');
+
+
+    keyS.oninput = () => keyL.textContent = +keyS.value + 1;
+    modeS.oninput = () => modeL.textContent = +modeS.value + 1;
+    tempoS.oninput = () => tempoL.textContent = tempoS.value;
+
+    let progression = [];
+    let chordSyn, bassSyn;
+    let selectedIdx = null;
+
+    const MODE_INTERVALS = [
+      [0,2,4,5,7,9,11],
+      [0,2,3,5,7,9,10],
+      [0,1,3,5,7,8,10],
+      [0,2,4,6,7,9,11],
+      [0,2,4,5,7,9,10],
+      [0,2,3,5,7,8,10],
+      [0,1,3,5,6,8,10]
+    ];
+    const OFFSET_MAP = {1:0,3:2,5:4,7:6,9:8,11:10,13:12};
+    const COLOR_MAP = {1:'#e74c3c',2:'#e67e22',3:'#f1c40f',4:'#2ecc71',5:'#1abc9c',6:'#3498db',7:'#9b59b6'};
+    const EXT_COLOR_INDEX = {1:1,3:3,5:5,7:7,9:2,11:4,13:6};
+
+    function initControls() {
+      const highContainer = document.getElementById('noteChecksHigh');
+      const lowContainer  = document.getElementById('noteChecksLow');
+      [1,3,5,7,9,11,13].forEach(deg => {
+        const label = document.createElement('label');
+        label.style.background = COLOR_MAP[EXT_COLOR_INDEX[deg]];
+        const cb = document.createElement('input');
+        cb.type = 'checkbox'; cb.value = deg;
+        cb.onchange = () => {
+          if (cb.checked) {
+            document.querySelector(`#noteChecksLow input[value=\"${deg}\"]`).checked = false;
+          }
+          applyChanges();
+        };
+        label.appendChild(cb);
+        highContainer.appendChild(label);
+        const lowLabel = document.createElement('label');
+        lowLabel.style.background = COLOR_MAP[EXT_COLOR_INDEX[deg]];
+        lowLabel.style.filter = 'brightness(70%)';
+        const lowCb = document.createElement('input');
+        lowCb.type = 'checkbox'; lowCb.value = deg;
+        lowCb.onchange = () => {
+          if (lowCb.checked) {
+            document.querySelector(`#noteChecksHigh input[value=\"${deg}\"]`).checked = false;
+          }
+          applyChanges();
+        };
+        lowLabel.appendChild(lowCb);
+        lowContainer.appendChild(lowLabel);
+      });
+      ['invSlider','octSlider','patternSelect','bassSelect'].forEach(id => {
+        document.getElementById(id).oninput = applyChanges;
+      });
+    }
+
+    document.querySelectorAll('.chord-block').forEach(b => {
+      b.addEventListener('dragstart', e => {
+        e.dataTransfer.setData('text/plain', b.dataset.deg);
+      });
+    });
+    playArea.addEventListener('dragover', e => e.preventDefault());
+
+    playArea.addEventListener('drop', async e => {
+      e.preventDefault();
+      const deg = +e.dataTransfer.getData('text/plain');
+      progression.push({
+        deg,
+        selHigh: [1, 3, 5, 7],
+        selLow: [],
+        inv: 0,
+        octave: 4,
+        pattern: 'arpeggio',
+        bass: 'root5'
+      });
+      openControls(progression.length - 1);
+      render();
+      scheduleChord(progression.length - 1);
+      Tone.Transport.loopEnd = `${progression.length}m`;
+      await Tone.start();
+      if (Tone.Transport.state !== 'started') {
+        Tone.Transport.start();
+      }
+    });
+
+      function render() {
+        playArea.innerHTML = '';
+        progression.forEach((ch, i) => {
+          const el = document.createElement('div');
+          el.className = 'play-step';
+          el.style.background = COLOR_MAP[ch.deg];
+          if (i === selectedIdx) el.classList.add('selected-edit');
+          el.onclick = () => { openControls(i); render(); };
+          playArea.appendChild(el);
+        });
+      }
+
+      function openControls(i) {
+        selectedIdx = i;
+        const ch = progression[i];
+        keyL.textContent = +keyS.value + 1;
+        modeL.textContent = +modeS.value + 1;
+        tempoL.textContent = tempoS.value;
+        document.getElementById('ctrlDeg').textContent = ch.deg;
+        [...document.querySelectorAll('#noteChecksHigh input')].forEach(cb =>
+          cb.checked = ch.selHigh.includes(+cb.value)
+        );
+        [...document.querySelectorAll('#noteChecksLow input')].forEach(cb =>
+          cb.checked = ch.selLow.includes(+cb.value)
+        );
+        document.getElementById('invSlider').value = ch.inv;
+        document.getElementById('octSlider').value = ch.octave;
+        document.getElementById('patternSelect').value = ch.pattern;
+        document.getElementById('bassSelect').value = ch.bass;
+      }
+
+      function applyChanges() {
+        if (selectedIdx === null) return;
+        const hi = [...document.querySelectorAll('#noteChecksHigh input')]
+          .filter(cb => cb.checked)
+          .map(cb => +cb.value);
+        const lo = [...document.querySelectorAll('#noteChecksLow input')]
+          .filter(cb => cb.checked)
+          .map(cb => +cb.value);
+        const inv = +document.getElementById('invSlider').value;
+        const oct = +document.getElementById('octSlider').value;
+        const pat = document.getElementById('patternSelect').value;
+        const bass = document.getElementById('bassSelect').value;
+        Object.assign(progression[selectedIdx], {
+          selHigh: hi,
+          selLow: lo,
+          inv,
+          octave: oct,
+          pattern: pat,
+          bass
+        });
+        render();
+      }
+
+      document.getElementById('deleteBtn').onclick = () => {
+        if (selectedIdx === null) return;
+        progression.splice(selectedIdx, 1);
+        selectedIdx = null;
+        render();
+      };
+
+      document.getElementById('startBtn').onclick = async () => {
+        if (!progression.length) return;
+        await Tone.start();
+        Tone.Transport.cancel();
+        Tone.Transport.bpm.value = +tempoS.value;
+        chordSyn = new Tone.PolySynth(Tone.FMSynth, {
+          harmonicity: 3,
+          modulationIndex: 10,
+          oscillator: { type: 'sine' },
+          envelope: { attack: 0.01, decay: 0.2, sustain: 0.3, release: 0.5 },
+          modulation: { type: 'square' },
+          modulationEnvelope: { attack: 0.2, decay: 0.1, sustain: 0.5, release: 0.2 }
+        }).toDestination();
+
+        bassSyn = new Tone.PolySynth(Tone.Synth).toDestination();
+        progression.forEach((_, i) => scheduleChord(i));
+        Tone.Transport.loop = true;
+        Tone.Transport.loopEnd = `${progression.length}m`;
+        Tone.Transport.start();
+      };
+
+      document.getElementById('stopBtn').onclick = () => {
+        Tone.Transport.stop();
+        if (chordSyn) chordSyn.releaseAll();
+        if (bassSyn) bassSyn.releaseAll();
+      };
+
+      function scheduleChord(index) {
+        const ch = progression[index];
+        const bpm = +tempoS.value;
+        const blockDur = (60 / bpm) * 4;
+        Tone.Transport.schedule((t) => {
+          let degs = Array.from(new Set([...ch.selHigh, ...ch.selLow])).sort((a, b) => a - b);
+          degs = degs.slice(ch.inv).concat(degs.slice(0, ch.inv));
+          const sliceDur = blockDur / degs.length;
+          Tone.Draw.schedule(() => {
+            const el = playArea.children[index];
+            if (el) {
+              el.classList.add('playing');
+              setTimeout(() => el.classList.remove('playing'), blockDur * 1000);
+            }
+          }, t);
+          if (ch.pattern === 'block') {
+            const highs = computeNotes(ch, ch.selHigh).map(n => Tone.Frequency(n, 'midi').toFrequency());
+            const lows  = computeNotes(ch, ch.selLow).map(n => Tone.Frequency(n - 12, 'midi').toFrequency());
+            chordSyn.triggerAttackRelease([...highs, ...lows], blockDur, t);
+          } else {
+            degs.forEach((deg, i) => {
+              const midi = computeNote(ch, deg);
+              const off = i * sliceDur;
+              if (ch.selHigh.includes(deg)) chordSyn.triggerAttackRelease(
+                Tone.Frequency(midi, 'midi').toFrequency(), sliceDur, t + off
+              );
+              if (ch.selLow.includes(deg)) chordSyn.triggerAttackRelease(
+                Tone.Frequency(midi - 12, 'midi').toFrequency(), sliceDur, t + off
+              );
+            });
+          }
+          if (ch.bass !== 'none') {
+            const [rF, fF] = computeBass(ch);
+            const steps = 4;
+            const dur   = blockDur / steps;
+            for (let i = 0; i < steps; i++) {
+              const off = i * dur;
+              let f;
+              switch (ch.bass) {
+                case 'root5':      f = i % 2 ? fF : rF; break;
+                case 'root':       f = rF; break;
+                case 'octave':     f = i % 2 ? rF * 2 : rF; break;
+                case 'walking': {
+                  const notes = computeNotes(ch, [1,3,5,7]).sort((a,b) => a - b);
+                  f = Tone.Frequency(notes[i % notes.length] - 12, 'midi').toFrequency();
+                  break;
+                }
+                case 'random': {
+                  const notes = computeNotes(ch, [1,3,5,7,9]);
+                  f = Tone.Frequency(notes[Math.floor(Math.random() * notes.length)] - 12, 'midi').toFrequency();
+                  break;
+                }
+                case 'syncopated': f = i % 3 === 0 ? rF : fF; break;
+                default:           f = rF;
+              }
+              bassSyn.triggerAttackRelease(f, dur, t + off);
+            }
+          }
+        }, index * blockDur);
+      }
+
+      function computeNotes(ch, sel) {
+        const key  = +keyS.value;
+        const mode = +modeS.value;
+        const base = (ch.octave + 1) * 12 + key;
+        return sel.map(deg => {
+          const idx = (ch.deg - 1) + OFFSET_MAP[deg];
+          return base + MODE_INTERVALS[mode][idx % 7] + Math.floor(idx / 7) * 12;
+        });
+      }
+
+      function computeNote(ch, deg) {
+        return computeNotes(ch, [deg])[0];
+      }
+
+      function computeBass(ch) {
+        const key  = +keyS.value;
+        const mode = +modeS.value;
+        const base = (ch.octave + 1) * 12 + key;
+        const rootMidi = base + MODE_INTERVALS[mode][ch.deg - 1] - 12;
+        const fifthIdx = (ch.deg - 1) + OFFSET_MAP[5];
+        const fifth = base + MODE_INTERVALS[mode][fifthIdx % 7] + Math.floor(fifthIdx / 7) * 12 - 12;
+        return [
+          Tone.Frequency(rootMidi, 'midi').toFrequency(),
+          Tone.Frequency(fifth,   'midi').toFrequency()
+        ];
+      }
+
+      initControls();
+      render();
+    </script>
+</body>
+</html>
