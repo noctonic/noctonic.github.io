@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Procedural Music</title>
+<link rel="stylesheet" href="promusic.css">
+
+</head>
+<body>
+  <h1>Procedural Music</h1>
+  <div id="start-stop">
+    <button id="btn-start">Start</button>
+    <button id="btn-stop">Stop</button>
+  </div>
+
+  <div id="info">Loading...</div>
+  <div>
+    <button id="btn-left">← Key</button>
+    <button id="btn-right">Key →</button>
+    <button id="btn-random">Randomize</button>
+    <button id="btn-loop">Loop: On</button>
+    <button id="btn-up">↑ BPM</button>
+    <button id="btn-down">↓ BPM</button>
+  </div>
+  <script>
+    const W = 2, H = 1;
+    let bpm = 140, loop = true;
+    let currentRoot = Math.floor(Math.random() * 12);
+    let lastProg = [];
+    const keyLetters = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+    const roman = ["I","ii","iii","IV","V","vi","vii°"];
+
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const sampleRate = audioCtx.sampleRate;
+    const tableSize = 4096;
+    const wavetable = new Float32Array(tableSize);
+    const harms = [1.00,0.50,0.30,0.20,0.10];
+    {
+      let sum = harms.reduce((a,b) => a + b, 0);
+      for (let i = 0; i < tableSize; i++) {
+        let phase = i / tableSize, s = 0;
+        harms.forEach((a,h) => s += a * Math.sin(2 * Math.PI * (h+1) * phase));
+        wavetable[i] = (s / sum) * 0.3;
+      }
+    }
+
+    const bufferCache = new Map();
+    function createBuffer(freq, dur = 1) {
+      const len = Math.floor(dur * sampleRate);
+      const buf = audioCtx.createBuffer(1, len, sampleRate);
+      const data = buf.getChannelData(0);
+      let phase = 0, inc = freq * tableSize / sampleRate;
+      for (let i = 0; i < len; i++) {
+        const pos = phase % tableSize;
+        const i0 = Math.floor(pos), f = pos - i0;
+        const s0 = wavetable[i0], s1 = wavetable[(i0+1)%tableSize];
+        data[i] = ((1-f)*s0 + f*s1) * ((len - i)/len);
+        phase += inc;
+      }
+      return buf;
+    }
+    function scheduleBuffer(freq, start, dur = 1) {
+      const key = `${freq}:${dur}`;
+      let buf = bufferCache.get(key);
+      if (!buf) { buf = createBuffer(freq, dur); bufferCache.set(key, buf); }
+      const src = audioCtx.createBufferSource();
+      src.buffer = buf;
+      src.connect(audioCtx.destination);
+      src.start(start);
+      return src;
+    }
+    function midiToFreq(n) { return 440 * Math.pow(2, (n - 69) / 12); }
+    function genScale(root) {
+      const s = [root];
+      [W,W,H,W,W,W,H].forEach(st => { root = (root + st) % 12; s.push(root); });
+      return s;
+    }
+
+    let infoDiv = document.getElementById('info');
+    function updateInfo(prog) {
+      infoDiv.textContent = `Key: ${keyLetters[currentRoot]}  Prog: ${prog.map(i=>roman[i]).join('-')}  BPM: ${bpm}  Loop: ${loop?'On':'Off'}`;
+    }
+
+    let seqTimeout;
+    function generateSequence() {
+      const now = audioCtx.currentTime;
+      const spb = 60 / bpm;
+      const scale = genScale(currentRoot);
+      const prog = Array.from({length:4}, () => Math.floor(Math.random()*7));
+      lastProg = prog;
+      updateInfo(prog);
+      let t = now;
+      const octaveBase = 48;
+      const octaveRange = [0,12,24];
+
+      prog.forEach(ch => {
+        let durationBeats = 8;
+        const rootMidi = scale[ch] + octaveBase - 12;
+        scheduleBuffer(midiToFreq(rootMidi), t, durationBeats*spb);
+        t += spb; durationBeats -= 1;
+        let arp = [-8,-5,-1,0,4,7,11].slice();
+        let voices = [-8,-5,-1,0,4,7,11].slice();
+        if (Math.random()<0.5) arp = [0,2,4,5];
+        arp.sort(() => Math.random()-0.5);
+        voices.sort(() => Math.random()-0.5);
+        if (Math.random()<0.5) {
+          const choice = voices[Math.floor(Math.random()*voices.length)];
+          scheduleBuffer(midiToFreq(scale[ch] + octaveBase + choice), t, durationBeats*spb);
+          const r = 1 + Math.random()/16;
+          t += 2 - r; durationBeats -= r;
+        } else {
+          for (let i=0;i<3;i++) {
+            const v = voices.splice(Math.floor(Math.random()*voices.length),1)[0];
+            const midi = scale[ch] + octaveBase + v + octaveRange[Math.floor(Math.random()*3)];
+            scheduleBuffer(midiToFreq(midi), t, durationBeats*spb);
+          }
+          const r = 1 + Math.random()/16;
+          t += 2 - r; durationBeats -= r;
+        }
+        arp = [-8,-5,-1,0,4,7,11].slice();
+        voices = [-8,-5,-1,0,4,7,11].slice();
+        if (Math.random()<0.5) arp = [0,2,4,5];
+        arp.sort(() => Math.random()-0.5);
+        voices.sort(() => Math.random()-0.5);
+        if (Math.random()<0.5) {
+          for (let i=0;i<3;i++) {
+            const v = voices.splice(Math.floor(Math.random()*voices.length),1)[0];
+            scheduleBuffer(midiToFreq(scale[ch] + octaveBase + v), t, durationBeats*spb);
+          }
+          for (let layer=0; layer<2; layer++) if (Math.random()<0.5) {
+            voices = [-8,-5,-1,0,4,7,11].slice();
+            const r2 = 1 + Math.random()/2;
+            t += r2; durationBeats -= r2;
+            for (let i=0;i<3;i++) {
+              const v = voices.splice(Math.floor(Math.random()*voices.length),1)[0];
+              scheduleBuffer(midiToFreq(scale[ch] + octaveBase + v), t, durationBeats*spb);
+            }
+          }
+        } else {
+          for (let i=0;i<3;i++) {
+            const v = arp.splice(Math.floor(Math.random()*arp.length),1)[0];
+            const midi = scale[ch] + octaveBase + v + octaveRange[Math.floor(Math.random()*3)];
+            scheduleBuffer(midiToFreq(midi), t, durationBeats*spb);
+            const r2 = 0.5 + Math.random()/8;
+            t += r2; durationBeats -= r2;
+          }
+          arp = [-8,-5,-1,0,4,7,11].slice();
+          for (let i=0;i<3;i++) if (Math.random()<0.5) {
+            const v = arp.splice(Math.floor(Math.random()*arp.length),1)[0];
+            scheduleBuffer(midiToFreq(scale[ch] + octaveBase + v), t, durationBeats*spb);
+            const r2 = 0.5 + Math.random()/8;
+            t += r2; durationBeats -= r2;
+          }
+        }
+        t += durationBeats * spb;
+      });
+
+      if (loop) seqTimeout = setTimeout(generateSequence, (t - audioCtx.currentTime)*1000);
+    }
+
+    lastProg = Array.from({length:4}, () => Math.floor(Math.random()*7));
+    updateInfo(lastProg);
+
+    document.getElementById('btn-start').onclick = () => {
+      audioCtx.resume(); generateSequence();
+    };
+    document.getElementById('btn-stop').onclick = () => {
+      clearTimeout(seqTimeout); audioCtx.suspend();
+    };
+    document.getElementById('btn-left').onclick = () => { currentRoot = (currentRoot+11)%12; updateInfo(lastProg); };
+    document.getElementById('btn-right').onclick = () => { currentRoot = (currentRoot+1)%12; updateInfo(lastProg); };
+    document.getElementById('btn-random').onclick = () => { lastProg = Array.from({length:4}, () => Math.floor(Math.random()*7)); updateInfo(lastProg); };
+    document.getElementById('btn-loop').onclick = () => { loop = !loop; document.getElementById('btn-loop').textContent = `Loop: ${loop?'On':'Off'}`; };
+    document.getElementById('btn-up').onclick = () => { bpm += 10; updateInfo(lastProg); };
+    document.getElementById('btn-down').onclick = () => { bpm = Math.max(20, bpm-10); updateInfo(lastProg); };
+  </script>
+</body>
+</html>
