@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chrome to Netscape Cookie Converter</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f5f7fa;
+      color: #333;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+    }
+    .container {
+      background: #fff;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      max-width: 800px;
+      width: 100%;
+    }
+    h1 {
+      margin-top: 0;
+      font-size: 24px;
+      text-align: center;
+      color: #222;
+    }
+    label {
+      font-weight: bold;
+      display: block;
+      margin-bottom: 5px;
+    }
+    input[type="text"], textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ccd0d5;
+      border-radius: 4px;
+      font-size: 14px;
+      margin-bottom: 15px;
+      box-sizing: border-box;
+    }
+    textarea {
+      resize: vertical;
+    }
+    button {
+      background-color: #007bff;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      padding: 10px 20px;
+      font-size: 14px;
+      cursor: pointer;
+      margin-right: 10px;
+    }
+    button:disabled {
+      background-color: #a3aed0;
+      cursor: not-allowed;
+    }
+    .instructions {
+      background-color: #eef2f7;
+      border-left: 4px solid #007bff;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 4px;
+    }
+    .instructions ol {
+      margin: 0;
+      padding-left: 20px;
+    }
+    .footer {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 12px;
+      color: #777;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Chrome to Netscape Cookie Converter</h1>
+
+    <div class="instructions">
+      <p><strong>Instructions:</strong></p>
+      <ol>
+        <li>Go to <a href="https://www.youtube.com" target="_blank">youtube.com</a>.</li>
+        <li>Press <code>F12</code>to open Developer Tools.</li>
+        <li>Click the <strong>Console</strong> tab.</li>
+        <li>Type <code>console.log(document.cookie)</code> and press <kbd>Enter</kbd>.</li>
+        <li>Copy the output and paste it below.</li>
+      </ol>
+    </div>
+
+    <div>
+      <label for="domain">Domain:</label>
+      <input type="text" id="domain" value=".youtube.com" placeholder="e.g. .example.com">
+    </div>
+
+    <div>
+      <label for="cookieString">Cookie String:</label>
+      <textarea id="cookieString" rows="4" placeholder="Paste your Chrome cookies here (semicolon-separated)"></textarea>
+    </div>
+
+    <div>
+      <button id="convert">Convert</button>
+      <button id="download" disabled>Download cookies.txt</button>
+    </div>
+
+    <div>
+      <label for="output">Netscape Format Output:</label>
+      <textarea id="output" rows="8" readonly></textarea>
+    </div>
+
+  </div>
+
+  <script>
+    const convertBtn = document.getElementById('convert');
+    const downloadBtn = document.getElementById('download');
+    const outputEl = document.getElementById('output');
+
+    convertBtn.addEventListener('click', () => {
+      const domain = document.getElementById('domain').value.trim();
+      if (!domain) {
+        alert('Please enter a domain (e.g. .example.com)');
+        return;
+      }
+      const raw = document.getElementById('cookieString').value;
+      if (!raw) {
+        alert('Please paste your cookie string.');
+        return;
+      }
+      const cookies = raw.split(';').map(c => c.trim()).filter(c => c);
+      const header = '# Netscape HTTP Cookie File\n# http://curl.haxx.se/rfc/cookie_spec.html\n\n';
+      const lines = cookies.map(c => {
+        const idx = c.indexOf('=');
+        const name = c.substring(0, idx).trim();
+        const value = c.substring(idx + 1).trim();
+        const secure = name.startsWith('__Secure-') ? 'TRUE' : 'FALSE';
+        const flag = 'TRUE';
+        const path = '/';
+        const expires = '0';
+        return [domain, flag, path, secure, expires, name, value].join('\t');
+      });
+      const result = header + lines.join('\n');
+      outputEl.value = result;
+      downloadBtn.disabled = false;
+    });
+
+    downloadBtn.addEventListener('click', () => {
+      const text = outputEl.value;
+      if (!text) return;
+      const blob = new Blob([text], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'cookies.txt';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    });
+  </script>
+</body>
+</html>
