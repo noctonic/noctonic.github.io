@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Serial Terminal</title>
+  <style>
+    :root{
+      --bg:#0b0f14;
+      --panel:#0f141b;
+      --fg:#e6edf3;
+      --muted:#94a3b8;
+      --accent:#3b82f6;
+      --border:#1f2937;
+      --ok:#22c55e;
+      --err:#ef4444;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      --radius:10px;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; background:var(--bg); color:var(--fg);
+      font:14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji","Segoe UI Emoji";
+    }
+    header{
+      position:sticky; top:0; z-index:10;
+      display:flex; align-items:center; justify-content:space-between; gap:1rem;
+      padding:14px 16px; background:linear-gradient(to bottom, rgba(15,20,27,.9), rgba(15,20,27,.6));
+      border-bottom:1px solid var(--border); backdrop-filter: blur(6px);
+    }
+    header h1{margin:0; font-size:16px; font-weight:600; color:#cbd5e1}
+    .status{
+      display:inline-flex; align-items:center; gap:.5rem; font-size:13px; color:var(--muted)
+    }
+    .dot{
+      width:10px; height:10px; border-radius:50%;
+      background:#6b7280; box-shadow:0 0 0 2px rgba(0,0,0,.25) inset;
+    }
+    .dot.ok{ background:var(--ok) }
+    .dot.bad{ background:#6b7280 }
+    .dot.err{ background:var(--err) }
+
+    .wrap{
+      max-width:1024px; margin:0 auto; padding:16px;
+      display:grid; grid-template-columns:1fr; gap:12px;
+    }
+    .panel{
+      background:var(--panel); border:1px solid var(--border); border-radius:var(--radius);
+      padding:12px;
+    }
+    fieldset{border:none; margin:0; padding:0; display:flex; flex-wrap:wrap; gap:10px; align-items:end}
+    fieldset > label{display:flex; flex-direction:column; gap:6px; font-size:12px; color:#a8b3c7}
+    input[type="number"], select, input[type="text"]{
+      appearance:none; outline:none; border:1px solid var(--border); background:#0c1117; color:var(--fg);
+      padding:8px 10px; border-radius:8px; font-size:14px; min-width:110px;
+    }
+    input[disabled], select[disabled]{opacity:.6}
+    .btn{
+      appearance:none; outline:none; border:1px solid var(--border); background:#0c1117; color:var(--fg);
+      padding:8px 12px; border-radius:8px; font-weight:600; cursor:pointer;
+    }
+    .btn.primary{ background:var(--accent); border-color:transparent; color:white }
+    .btn:disabled{ opacity:.6; cursor:not-allowed }
+    .controls{display:grid; grid-template-columns:1fr; gap:12px}
+    @media (min-width:860px){
+      .controls{ grid-template-columns: 1.2fr .8fr; }
+    }
+
+    .terminal{
+      height:min(64vh, 600px);
+      background:#0a0f15; border:1px solid var(--border); border-radius:var(--radius);
+      padding:10px 12px; overflow:auto; font-family:var(--mono); font-size:13px; line-height:1.45;
+      white-space:pre-wrap; word-wrap:break-word;
+    }
+    .terminal .sys{ color:#9aa7bd }
+    .terminal .out{ color:#89d185 }  /* local echo color */
+    .terminal .err{ color:var(--err) }
+
+    .inputbar{ display:flex; gap:10px; align-items:center; background:transparent; }
+    .grow{ flex:1 }
+    .tip{ font-size:12px; color:var(--muted); margin-top:4px }
+    .warning{ color:#f59e0b }
+    .hidden{ display:none !important }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Serial Terminal</h1>
+    <div class="status" id="status">
+      <span class="dot bad" id="statusDot" aria-hidden="true"></span>
+      <span id="statusText">Disconnected</span>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <div class="controls">
+      <div class="panel">
+        <fieldset>
+          <label>
+            Baud rate
+            <input id="baudRate" type="number" min="50" step="1" list="baudList" value="115200" />
+            <datalist id="baudList">
+              <option value="300"></option><option value="1200"></option><option value="2400"></option>
+              <option value="4800"></option><option value="9600"></option><option value="14400"></option>
+              <option value="19200"></option><option value="28800"></option><option value="38400"></option>
+              <option value="57600"></option><option value="74880"></option><option value="115200"></option>
+              <option value="230400"></option><option value="460800"></option><option value="921600"></option>
+            </datalist>
+          </label>
+          <label>
+            Data bits
+            <select id="dataBits">
+              <option value="8" selected>8</option>
+              <option value="7">7</option>
+            </select>
+          </label>
+          <label>
+            Parity
+            <select id="parity">
+              <option value="none" selected>None</option>
+              <option value="even">Even</option>
+              <option value="odd">Odd</option>
+            </select>
+          </label>
+          <label>
+            Stop bits
+            <select id="stopBits">
+              <option value="1" selected>1</option>
+              <option value="2">2</option>
+            </select>
+          </label>
+          <label>
+            Flow control
+            <select id="flowControl">
+              <option value="none" selected>None</option>
+              <option value="hardware">Hardware (RTS/CTS)</option>
+            </select>
+          </label>
+          <button id="connectBtn" class="btn primary">Connect</button>
+          <button id="disconnectBtn" class="btn" disabled>Disconnect</button>
+        </fieldset>
+        <p class="tip" id="secureTip"></p>
+      </div>
+
+      <div class="panel">
+        <fieldset>
+          <label>
+            Line ending
+            <select id="eol">
+              <option value="CRLF">CRLF (\r\n)</option>
+              <option value="LF">LF (\n)</option>
+              <option value="CR" selected>CR (\r)</option>
+              <option value="NONE">None</option>
+            </select>
+          </label>
+          <label style="flex-direction:row; gap:8px; align-items:center; margin-left:8px; margin-right:8px;">
+            <input id="autoscroll" type="checkbox" checked /> Auto‑scroll
+          </label>
+          <label style="flex-direction:row; gap:8px; align-items:center;">
+            <input id="localecho" type="checkbox" /> Local echo
+          </label>
+          <label style="flex-direction:row; gap:8px; align-items:center;">
+            <input id="ansiColors" type="checkbox" checked /> ANSI colors
+          </label>
+          <button id="clearBtn" class="btn">Clear</button>
+          <button id="saveBtn" class="btn">Save log</button>
+        </fieldset>
+      </div>
+    </div>
+
+    <div id="terminal" class="terminal" role="log" aria-live="polite"></div>
+
+    <div class="panel">
+      <div class="inputbar">
+        <input id="sendInput" class="grow" type="text" placeholder="Type here and press Enter to send…" autocomplete="off" disabled />
+        <button id="sendBtn" class="btn" disabled>Send</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    const $ = (id) => document.getElementById(id);
+
+    const ui = {
+      dot: $("statusDot"),
+      status: $("statusText"),
+      terminal: $("terminal"),
+      connectBtn: $("connectBtn"),
+      disconnectBtn: $("disconnectBtn"),
+      sendInput: $("sendInput"),
+      sendBtn: $("sendBtn"),
+      baudRate: $("baudRate"),
+      dataBits: $("dataBits"),
+      parity: $("parity"),
+      stopBits: $("stopBits"),
+      flowControl: $("flowControl"),
+      eol: $("eol"),
+      autoscroll: $("autoscroll"),
+      localecho: $("localecho"),
+      ansiColors: $("ansiColors"),
+      clearBtn: $("clearBtn"),
+      saveBtn: $("saveBtn"),
+      unsupported: $("unsupported"),
+      secureTip: $("secureTip"),
+    };
+
+    let port = null;
+    let reader = null;
+    let writer = null;
+    let readableStreamClosed = null;
+    let writableStreamClosed = null;
+    let isConnected = false;
+
+    const supportsSerial = 'serial' in navigator;
+    if (!supportsSerial) ui.unsupported.classList.remove('hidden');
+    if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+      ui.secureTip.innerHTML = 'To use Web Serial, serve this page from <b>https://</b> or <b>http://localhost</b>.';
+    }
+
+    function setStatus(text, kind='bad') {
+      ui.status.textContent = text;
+      ui.dot.classList.remove('ok','bad','err');
+      ui.dot.classList.add(kind);
+    }
+    function setConnected(connected) {
+      isConnected = connected;
+      ui.connectBtn.disabled = connected || !supportsSerial;
+      ui.disconnectBtn.disabled = !connected;
+      ui.sendInput.disabled = !connected;
+      ui.sendBtn.disabled = !connected;
+      [ui.baudRate, ui.dataBits, ui.parity, ui.stopBits, ui.flowControl].forEach(el => el.disabled = connected);
+      setStatus(connected ? 'Connected' : 'Disconnected', connected ? 'ok' : 'bad');
+    }
+
+    function eolString() {
+      switch (ui.eol.value) {
+        case 'CR': return '\r';
+        case 'LF': return '\n';
+        case 'CRLF': return '\r\n';
+        default: return '';
+      }
+    }
+
+    function writeToTerminal(text, cls) {
+      if (!text) return;
+      const span = document.createElement('span');
+      if (cls) span.className = cls;
+      span.textContent = text;
+      ui.terminal.appendChild(span);
+      if (ui.autoscroll.checked) ui.terminal.scrollTop = ui.terminal.scrollHeight;
+    }
+
+    function logSys(msg) { writeToTerminal(`[${new Date().toLocaleTimeString()}] ${msg}\n`, 'sys'); }
+    function logErr(msg) { writeToTerminal(`[Error] ${msg}\n`, 'err'); }
+
+
+    const ansi = (() => {
+      const ANSI16 = [
+        '#000000','#aa0000','#00aa00','#aa5500','#0000aa','#aa00aa','#00aaaa','#aaaaaa',
+        '#555555','#ff5555','#55ff55','#ffff55','#5555ff','#ff55ff','#55ffff','#ffffff'
+      ];
+      const LEVELS = [0,95,135,175,215,255];
+      const toHex = (n) => n.toString(16).padStart(2,'0');
+
+      function xterm256(n){
+        n = Math.max(0, Math.min(255, n|0));
+        if (n < 16) return ANSI16[n];
+        if (n >= 232) {
+          const v = 8 + (n-232)*10;
+          return `#${toHex(v)}${toHex(v)}${toHex(v)}`;
+        }
+        n -= 16;
+        const r = LEVELS[Math.floor(n/36)%6];
+        const g = LEVELS[Math.floor(n/6)%6];
+        const b = LEVELS[n%6];
+        return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+      }
+
+      const state0 = () => ({ bold:false, italic:false, underline:false, inverse:false, fg:null, bg:null });
+      let state = state0();
+      let buffer = ''; // holds partial ESC sequences across chunks
+
+      function applySGR(paramsStr){
+        // Empty param == 0 (reset)
+        const parts = paramsStr === '' ? ['0'] : paramsStr.split(';');
+        let i = 0;
+        while (i < parts.length) {
+          const raw = parts[i] === '' ? '0' : parts[i];
+          const n = parseInt(raw, 10);
+          if (Number.isNaN(n)) { i++; continue; }
+
+          if (n === 0) { state = state0(); i++; continue; }
+          if (n === 1) { state.bold = true; i++; continue; }
+          if (n === 2) { /* dim: do nothing or implement via opacity; omitted for simplicity */ i++; continue; }
+          if (n === 3) { state.italic = true; i++; continue; }
+          if (n === 4) { state.underline = true; i++; continue; }
+          if (n === 7) { state.inverse = true; i++; continue; }
+          if (n === 22){ state.bold = false; i++; continue; }
+          if (n === 23){ state.italic = false; i++; continue; }
+          if (n === 24){ state.underline = false; i++; continue; }
+          if (n === 27){ state.inverse = false; i++; continue; }
+
+          if ((n >= 30 && n <= 37) || (n >= 90 && n <= 97)) { state.fg = ANSI16[(n>=90?8:0) + (n%10)]; i++; continue; }
+          if ((n >= 40 && n <= 47) || (n >= 100 && n <= 107)) { state.bg = ANSI16[(n>=100?8:0) + (n%10)]; i++; continue; }
+          if (n === 39) { state.fg = null; i++; continue; }
+          if (n === 49) { state.bg = null; i++; continue; }
+
+          if (n === 38 || n === 48) {
+            const isFG = (n === 38);
+            const mode = parseInt(parts[i+1]||'', 10);
+            if (mode === 5 && parts[i+2] != null) {
+              const idx = parseInt(parts[i+2], 10);
+              const col = xterm256(idx);
+              if (isFG) state.fg = col; else state.bg = col;
+              i += 3; continue;
+            } else if (mode === 2 && parts[i+2]!=null && parts[i+3]!=null && parts[i+4]!=null) {
+              const r = Math.max(0, Math.min(255, parseInt(parts[i+2],10)||0));
+              const g = Math.max(0, Math.min(255, parseInt(parts[i+3],10)||0));
+              const b = Math.max(0, Math.min(255, parseInt(parts[i+4],10)||0));
+              const col = `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+              if (isFG) state.fg = col; else state.bg = col;
+              i += 5; continue;
+            } else {
+              i += 2; continue;
+            }
+          }
+
+          i++;
+        }
+      }
+
+      function flushText(frag, text){
+        if (!text) return;
+        text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        const span = document.createElement('span');
+        let fg = state.fg, bg = state.bg;
+        if (state.inverse) {
+          const swapFg = bg || 'var(--bg)';
+          const swapBg = fg || 'var(--fg)';
+          fg = swapFg; bg = swapBg;
+        }
+        if (fg) span.style.color = fg;
+        if (bg) span.style.backgroundColor = bg;
+        if (state.bold) span.style.fontWeight = '700';
+        if (state.italic) span.style.fontStyle = 'italic';
+        if (state.underline) span.style.textDecoration = 'underline';
+
+        span.textContent = text;
+        frag.appendChild(span);
+      }
+
+      function render(chunk){
+        let s = buffer + chunk;
+        buffer = '';
+        const frag = document.createDocumentFragment();
+        let i = 0, plainStart = 0;
+
+        while (i < s.length) {
+          const ch = s[i];
+          if (ch !== '\x1b') { i++; continue; }
+
+          if (i > plainStart) flushText(frag, s.slice(plainStart, i));
+
+          if (i+1 >= s.length) { buffer = s.slice(i); return frag; }
+
+          const next = s[i+1];
+          if (next === '[') {
+            let k = i + 2;
+            while (k < s.length) {
+              const cc = s.charCodeAt(k);
+              if (cc >= 0x40 && cc <= 0x7E) break;
+              k++;
+            }
+            if (k >= s.length) { buffer = s.slice(i); return frag; }
+            const params = s.slice(i+2, k);
+            const finalByte = s[k];
+
+            if (finalByte === 'm') {
+              applySGR(params);
+            } else if (finalByte === 'J') {
+              if (params === '2' || params === '3') {
+                ui.terminal.textContent = '';
+              }
+            }
+            i = k + 1;
+            plainStart = i;
+            continue;
+          } else if (next === ']') {
+            const bel = s.indexOf('\x07', i+2);
+            const st = s.indexOf('\x1b\\', i+2);
+            let end = -1;
+            if (bel !== -1) end = bel + 1;
+            if (st !== -1 && (end === -1 || st + 2 < end)) end = st + 2;
+            if (end === -1) { buffer = s.slice(i); return frag; }
+            i = end;
+            plainStart = i;
+            continue;
+          } else {
+            if (i+2 > s.length) { buffer = s.slice(i); return frag; }
+            i += 2;
+            plainStart = i;
+            continue;
+          }
+        }
+
+        if (plainStart < s.length) flushText(frag, s.slice(plainStart));
+        return frag;
+      }
+
+      function reset(){ state = state0(); buffer = ''; }
+
+      return { render, reset };
+    })();
+
+    function writeAnsi(text){
+      if (!text) return;
+      if (!ui.ansiColors.checked) { writeToTerminal(text); return; }
+      const frag = ansi.render(text);
+      ui.terminal.appendChild(frag);
+      if (ui.autoscroll.checked) ui.terminal.scrollTop = ui.terminal.scrollHeight;
+    }
+
+    async function connect() {
+      if (!supportsSerial) return;
+
+      try {
+        const baudRate = Math.max(50, parseInt(ui.baudRate.value || '115200', 10));
+        const dataBits = parseInt(ui.dataBits.value, 10);
+        const stopBits = parseInt(ui.stopBits.value, 10);
+        const parity = ui.parity.value;
+        const flowControl = ui.flowControl.value;
+
+        port = await navigator.serial.requestPort();
+        await port.open({ baudRate, dataBits, stopBits, parity, flowControl });
+
+        const decoder = new TextDecoderStream();
+        readableStreamClosed = port.readable.pipeTo(decoder.writable).catch(() => {});
+        reader = decoder.readable.getReader();
+
+        const encoder = new TextEncoderStream();
+        writableStreamClosed = encoder.readable.pipeTo(port.writable).catch(() => {});
+        writer = encoder.writable.getWriter();
+
+        ansi.reset();
+        setConnected(true);
+
+        const info = port.getInfo?.() || {};
+        logSys(`Port opened (baud ${baudRate}${flowControl==='hardware' ? ', RTS/CTS' : ''}).` + (info.usbVendorId ? ` [VID: ${toHex(info.usbVendorId)} PID: ${toHex(info.usbProductId)}]` : ''));
+
+        readLoop();
+      } catch (err) {
+        setConnected(false);
+        logErr(err.message || String(err));
+        try { await disconnect(); } catch {}
+      }
+    }
+
+    function toHex(n){ try{ return '0x' + (n>>>0).toString(16).padStart(4,'0'); } catch { return ''; } }
+
+    async function readLoop() {
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          if (value) writeAnsi(value);
+        }
+      } catch (err) {
+        if (isConnected) logErr(err.message || String(err));
+      }
+    }
+
+    async function disconnect() {
+      try { if (reader) { await reader.cancel(); await readableStreamClosed; reader.releaseLock(); } } catch {}
+      try { if (writer) { await writer.close(); await writableStreamClosed; } } catch {}
+      try { if (port) { await port.close(); } } catch {}
+      reader = writer = null;
+      readableStreamClosed = writableStreamClosed = null;
+      port = null;
+      ansi.reset();
+      setConnected(false);
+      logSys('Port closed.');
+    }
+
+    async function send() {
+      const text = ui.sendInput.value;
+      if (!text && eolString()==='') return;
+      if (!writer) { logErr('Not connected.'); return; }
+      try {
+        const out = text + eolString();
+        await writer.write(out);
+        if (ui.localecho.checked) writeToTerminal(out, 'out');
+        ui.sendInput.value = '';
+      } catch (err) {
+        logErr(err.message || String(err));
+      }
+    }
+
+    ui.connectBtn.addEventListener('click', connect);
+    ui.disconnectBtn.addEventListener('click', disconnect);
+    ui.sendBtn.addEventListener('click', send);
+    ui.sendInput.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); send(); }
+    });
+    ui.clearBtn.addEventListener('click', () => { ui.terminal.textContent = ''; ansi.reset(); });
+    ui.saveBtn.addEventListener('click', () => {
+      try {
+        const blob = new Blob([ui.terminal.innerText], { type: 'text/plain;charset=utf-8' });
+        const a = document.createElement('a');
+        const ts = new Date().toISOString().replace(/[:.]/g,'-');
+        a.href = URL.createObjectURL(blob);
+        a.download = `serial-log-${ts}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        URL.revokeObjectURL(a.href);
+        a.remove();
+      } catch (err) { logErr('Could not save: ' + (err.message||err)); }
+    });
+
+    if (supportsSerial) {
+      navigator.serial.addEventListener('disconnect', async (event) => {
+        if (port && event.port === port) {
+          writeToTerminal('\n[Device disconnected]\n', 'sys');
+          await disconnect();
+        }
+      });
+      navigator.serial.addEventListener('connect', (event) => {
+        logSys('A serial device became available.');
+      });
+    }
+
+    setConnected(false);
+    if (!supportsSerial) setStatus('Unsupported', 'err');
+  </script>
+</body>
+</html>
