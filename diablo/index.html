@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Diablo DEADitor</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <marquee class="banner" behavior="alternate" scrollamount="6">
+    Welcome to the <span class="blink">Diablo Character Editor</span>!
+  </marquee>
+
+  <header class="topbar">
+    <h1>Diablo DEADitor</h1>
+
+    <div class="toolbar">
+      <label class="file">
+        <input type="file" id="saveFile" accept=".sv,.dat,.bin,.hsv" />
+        <span>Open</span>
+      </label>
+
+      <label>
+        Type:
+        <select id="saveType">
+          <option value="diablo">Diablo</option>
+          <option value="multi">Multiplayer</option>
+          <option value="spawn">Spawn</option>
+          <option value="hellfire">Hellfire</option>
+        </select>
+      </label>
+
+      <button id="download" disabled>Save</button>
+
+    </div>
+  </header>
+
+  <div id="status" class="status" aria-live="polite">Loading…</div>
+
+  <main class="container">
+    <nav class="tabs" role="tablist" aria-label="Editor sections">
+      <button class="tab active" role="tab" aria-selected="true" aria-controls="tab-character" id="tabbtn-character">Character</button>
+      <button class="tab" role="tab" aria-selected="false" aria-controls="tab-stats" id="tabbtn-stats">Stats</button>
+      <button class="tab" role="tab" aria-selected="false" aria-controls="tab-spells" id="tabbtn-spells">Spells</button>
+      <button class="tab" role="tab" aria-selected="false" aria-controls="tab-equipment" id="tabbtn-equipment">Equipment</button>
+      <button class="tab" role="tab" aria-selected="false" aria-controls="tab-backpack" id="tabbtn-backpack">Backpack</button>
+      <button class="tab" role="tab" aria-selected="false" aria-controls="tab-advanced" id="tabbtn-advanced">Advanced</button>
+    </nav>
+
+    <section class="panel" id="tab-character" role="tabpanel" aria-labelledby="tabbtn-character">
+      <div class="grid cols-2">
+        <div class="card">
+          <h2>Identity</h2>
+          <div class="field">
+            <label for="pName">Name</label>
+            <input id="pName" type="text" data-bind="pName" maxlength="15" />
+          </div>
+          <div class="field">
+            <label for="pClass">Class</label>
+            <select id="pClass" data-bind="pClass" data-type="enum:class"></select>
+          </div>
+          <div class="row">
+            <div class="field">
+              <label>Level</label>
+              <div class="spin" data-bind="pLevel" data-min="1" data-max="50" data-step="1"></div>
+            </div>
+            <div class="field">
+              <label>Difficulty</label>
+              <select data-bind="pDifficulty" data-type="enum:difficulty"></select>
+            </div>
+          </div>
+          <div class="row">
+            <div class="field">
+              <label>Experience</label>
+              <div class="spin" data-bind="pExperience" data-min="0" data-max="2147483647" data-step="100"></div>
+            </div>
+            <div class="field">
+              <label>Gold</label>
+              <div class="spin" data-bind="pGold" data-min="0" data-max="50000" data-step="50"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Location & Flags</h2>
+          <div class="row">
+            <div class="field small">
+              <label>Pos X</label>
+              <div class="spin" data-bind="px" data-min="0" data-max="255" data-step="1"></div>
+            </div>
+            <div class="field small">
+              <label>Pos Y</label>
+              <div class="spin" data-bind="py" data-min="0" data-max="255" data-step="1"></div>
+            </div>
+          </div>
+          <div class="switch">
+            <input type="checkbox" id="pManaShield" data-bind="pManaShield" data-type="bool" />
+            <label for="pManaShield">Mana Shield Active</label>
+          </div>
+          <div class="switch">
+            <input type="checkbox" id="bIsHellfire" data-bind="bIsHellfire" data-type="bool" />
+            <label for="bIsHellfire">Hellfire Save</label>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel hidden" id="tab-stats" role="tabpanel" aria-labelledby="tabbtn-stats">
+      <div class="grid cols-3">
+        <div class="card">
+          <h2>Core</h2>
+          <div class="field"><label>Strength</label><div class="spin" data-bind="_pStrength" data-min="0" data-max="255" data-step="1"></div></div>
+          <div class="field"><label>Magic</label><div class="spin" data-bind="_pMagic" data-min="0" data-max="255" data-step="1"></div></div>
+          <div class="field"><label>Dexterity</label><div class="spin" data-bind="_pDexterity" data-min="0" data-max="255" data-step="1"></div></div>
+          <div class="field"><label>Vitality</label><div class="spin" data-bind="_pVitality" data-min="0" data-max="255" data-step="1"></div></div>
+        </div>
+
+        <div class="card">
+          <h2>Life / Mana</h2>
+          <div class="field"><label>HP</label><div class="spin" data-bind="_pHitPoints" data-min="0" data-max="32767" data-step="1"></div></div>
+          <div class="field"><label>Max HP</label><div class="spin" data-bind="_pMaxHP" data-min="1" data-max="32767" data-step="1"></div></div>
+          <div class="field"><label>Mana</label><div class="spin" data-bind="_pMana" data-min="0" data-max="32767" data-step="1"></div></div>
+          <div class="field"><label>Max Mana</label><div class="spin" data-bind="_pMaxMana" data-min="0" data-max="32767" data-step="1"></div></div>
+        </div>
+
+        <div class="card">
+          <h2>Base Pools</h2>
+          <div class="field"><label>Base HP</label><div class="spin" data-bind="pHPBase" data-min="0" data-max="32767"></div></div>
+          <div class="field"><label>Base Max HP</label><div class="spin" data-bind="pMaxHPBase" data-min="0" data-max="32767"></div></div>
+          <div class="field"><label>Base Mana</label><div class="spin" data-bind="pManaBase" data-min="0" data-max="32767"></div></div>
+          <div class="field"><label>Base Max Mana</label><div class="spin" data-bind="pMaxManaBase" data-min="0" data-max="32767"></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel hidden" id="tab-spells" role="tabpanel" aria-labelledby="tabbtn-spells">
+      <div class="card">
+        <h2>Spell Levels</h2>
+        <div id="spellsGrid" class="chip-grid"></div>
+      </div>
+    </section>
+
+    <section class="panel hidden" id="tab-equipment" role="tabpanel" aria-labelledby="tabbtn-equipment">
+      <div class="grid cols-2">
+        <div class="card">
+          <h2>Equipped</h2>
+          <div id="equippedSlots" class="equip-grid"></div>
+        </div>
+        <div class="card">
+          <h2>Speed Bar (8)</h2>
+          <div id="speedBar" class="speed-grid"></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Item Inspector</h2>
+        <div id="equipInspector" class="inspector muted">Select an item…</div>
+      </div>
+    </section>
+
+    <section class="panel hidden" id="tab-backpack" role="tabpanel" aria-labelledby="tabbtn-backpack">
+      <div class="grid cols-2">
+        <div class="card">
+          <h2>Backpack (10×4)</h2>
+          <div id="invGrid" class="inv-grid"></div>
+          <div class="muted small">
+            Click a cell to select its item. With an item selected, click a cell to place its top‑left.
+          </div>
+        </div>
+        <div class="card">
+          <h2>Backpack Items</h2>
+          <select id="bpDropdown"></select>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Item Inspector</h2>
+        <div id="bpInspector" class="inspector muted">Select an item…</div>
+      </div>
+    </section>
+
+    <section class="panel hidden" id="tab-advanced" role="tabpanel" aria-labelledby="tabbtn-advanced">
+      <div class="card">
+        <h2>JSON</h2>
+        <textarea id="json" rows="22" cols="80" placeholder="JSON will appear here…"></textarea>
+        <div class="row right">
+          <button id="applyJson">Apply JSON to UI</button>
+        </div>
+      </div>
+    </section>
+  </main>
+  <center>
+  <div class="construction">
+    <img src="HeHeartlandPines1980construct.gif" alt="Under Construction" />
+    <img src="griswold.gif" alt="Griswold the Blacksmith" />
+  </div>
+  </center>
+
+  <script>
+    window.__d1_calledRun = false;
+    window.Module = {
+      locateFile: (path) => path.endsWith('.wasm') ? 'd1_edit.wasm' : path,
+      onRuntimeInitialized() {
+        window.__d1_calledRun = true;
+        window.dispatchEvent(new Event('d1:ready'));
+      }
+    };
+  </script>
+  <script src="d1_edit.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
