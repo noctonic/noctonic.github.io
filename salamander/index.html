@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Salamander Chat</title>
+  <link rel="stylesheet" href="chat.css">
+</head>
+<body>
+  <div id="chat">
+    <div id="topicBar">
+      <span class="chan">#salamander</span>
+      <span class="sep">—</span>
+      topic: "video killed the radio star"
+    </div>
+
+    <div id="messages">
+    </div>
+
+    <div id="inputBar">
+      <input id="input" type="text" placeholder="Type message — press Enter to send" />
+      <button id="send">Send</button>
+      <button id="settingsBtn" title="Settings">⚙️</button>
+    </div>
+
+    <div id="settingsPanel" class="hidden">
+      <div><label>Call Sign: <input id="callsign" type="text" /></label></div>
+      <div><label>Carrier Frequency: <input id="carrierFrequency" type="number" value="1500" /></label></div>
+      <div><label>Noise Symbols: <input id="noiseSymbols" type="number" value="0" /></label></div>
+      <div><label><input type="checkbox" id="fancyHeader"> Fancy header</label></div>
+      <div><label>Sample Rate:
+        <select id="sampleRate">
+          <option value="8000">8000</option>
+          <option value="16000">16000</option>
+          <option value="32000">32000</option>
+          <option value="44100">44100</option>
+          <option value="48000" selected>48000</option>
+        </select>
+      </label></div>
+      <div><label>Channel:
+        <select id="channel">
+          <option value="0" selected>0 (mono)</option>
+          <option value="1">1 (left)</option>
+          <option value="2">2 (right)</option>
+          <option value="4">4 (I/Q)</option>
+        </select>
+      </label></div>
+      <div><label><input type="checkbox" id="muteDuringTx" checked> Mute during transmission</label></div>
+    </div>
+  </div>
+
+  <script type="module" src="chat.js"></script>
+  <script>
+    document.querySelectorAll('#messages .row').forEach(row => {
+      row.querySelector('.ts').textContent = row.dataset.ts;
+      row.querySelector('.nick').textContent = `<${row.dataset.nick}>`;
+    });
+  </script>
+</body>
+</html>
