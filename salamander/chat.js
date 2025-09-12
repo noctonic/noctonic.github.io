@@ -118,15 +118,11 @@ function scrollToBottom(){
   messages.scrollTop = messages.scrollHeight;
 }
 
-function highlightMentions(text, nick = ''){
-  const call = myCall.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const re = new RegExp(`\\b${call}\\b`, 'gi');
-  const highlighted = text.replace(re, m => `<span class="call">${m}</span>`);
-  if (text.startsWith('/me ')) {
-    const act = text.slice(4);
-    return `<em>* ${nick || myCall} ${linkify(act)}</em>`;
-  }
-  return linkify(highlighted);
+function highlightMentions(text, nick = '') {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
 
 function addMessage(role, nick, text){
