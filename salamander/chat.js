@@ -75,18 +75,7 @@ function fmtTime(d = new Date()){
   return `[${pad2(d.getHours())}:${pad2(d.getMinutes())}]`;
 }
 
-function linkify(text){
-  const esc = text
-    .replace(/&/g,'&amp;')
-    .replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;');
-  return esc.replace(
-    /\b(https?:\/\/[^\s<]+[^\s<\.)])/gi,
-    '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>'
-  );
-}
-
-function createRow(role, nick, htmlText, timeStr = fmtTime()){
+function createRow(role, nick, plainText, timeStr = fmtTime()){
   const row = document.createElement('div');
   row.className = `row ${role}`;
   row.dataset.ts = timeStr;
@@ -102,7 +91,7 @@ function createRow(role, nick, htmlText, timeStr = fmtTime()){
 
   const tx = document.createElement('span');
   tx.className = 'text';
-  tx.innerHTML = htmlText;
+  tx.textContent = plainText;
 
   row.appendChild(ts);
   row.appendChild(nk);
@@ -118,17 +107,9 @@ function scrollToBottom(){
   messages.scrollTop = messages.scrollHeight;
 }
 
-function highlightMentions(text, nick = '') {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-}
-
 function addMessage(role, nick, text){
   const stick = shouldStick();
-  const html = highlightMentions(text, nick);
-  const row = createRow(role, nick, html);
+  const row = createRow(role, nick, text);
   messages.appendChild(row);
   if (stick) scrollToBottom();
   if (document.hidden) {
@@ -154,6 +135,40 @@ inputEl.addEventListener('keydown', (e) => {
   }
 });
 
+async function deriveKeyFromPSK(psk) {
+  const enc = new TextEncoder();
+  const hash = await crypto.subtle.digest('SHA-256', enc.encode(psk));
+  return crypto.subtle.importKey('raw', hash, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+}
+async function aesEncryptToWireBase64(plaintextBytes, psk) {
+  const key = await deriveKeyFromPSK(psk);
+  const iv  = crypto.getRandomValues(new Uint8Array(12));
+  const ct  = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plaintextBytes));
+  const wireBytes = new Uint8Array(iv.length + ct.length);
+  wireBytes.set(iv, 0);
+  wireBytes.set(ct, iv.length);
+  let bin = '';
+  for (let i = 0; i < wireBytes.length; i++) bin += String.fromCharCode(wireBytes[i]);
+  return btoa(bin);
+}
+async function aesDecryptFromWireBase64(b64, psk) {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  if (bytes.length < 12 + 16) throw new Error('cipher too short');
+  const iv = bytes.subarray(0, 12);
+  const ct = bytes.subarray(12);
+  const key = await deriveKeyFromPSK(psk);
+  const pt  = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
+  return new Uint8Array(pt);
+}
+
+function calcOnAirBytes(plainLen, aesOn) {
+  if (!aesOn) return plainLen;
+  const raw = 12 + plainLen + 16;
+  return 4 * Math.ceil(raw / 3);
+}
+
 async function initMic() {
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
   if (micTrack) micTrack.stop();
@@ -176,8 +191,28 @@ async function initMic() {
     if (len > 0) {
       const msg = Module.UTF8ToString(outPtr);
       const call = (Module.UTF8ToString(callPtr) || '???').toUpperCase();
-      addMessage('them', call, msg);
-      syncing = false;
+
+      (async () => {
+        try {
+          const aesOnRx = !!document.getElementById('useAesGcm')?.checked;
+          let text;
+          if (aesOnRx) {
+            const psk = (document.getElementById('psk')?.value || '').trim();
+            if (!psk) throw new Error('PSK missing');
+            const ptBytes = await aesDecryptFromWireBase64(msg, psk);
+            text = new TextDecoder().decode(ptBytes);
+          } else {
+            text = msg;
+          }
+          addMessage('them', call, text);
+        } catch (e) {
+          addMessage('system', '***', `decrypt failed: ${e.message || 'unknown error'}`);
+          addMessage('them', call, '[unreadable]');
+        } finally {
+          syncing = false;
+        }
+      })();
+
     } else if (len === -2) {
       if (!syncing) addMessage('system', '***', 'signal detected');
       syncing = true;
@@ -207,13 +242,38 @@ async function initMic() {
 async function send() {
   const text = inputEl.value.trim();
   if (!text) return;
-  inputEl.value = '';
 
-  addMessage('me', myCall, text);
+  const aesOn = !!document.getElementById('useAesGcm')?.checked;
+  const psk   = (document.getElementById('psk')?.value || '').trim();
+
+  const plainLen = new TextEncoder().encode(text).length;
+  const predicted = calcOnAirBytes(plainLen, aesOn);
+  if (predicted > 170) {
+    addMessage('system','***', `message too long ${aesOn ? 'after encryption ' : ''}(${predicted} > 170). Shorten it.`);
+    return;
+  }
+
+
+  let wireStr;
+  if (aesOn) {
+    if (!psk) { addMessage('system','***','encryption enabled but PSK empty'); return; }
+    try {
+      const ptBytes = new TextEncoder().encode(text);
+      wireStr = await aesEncryptToWireBase64(ptBytes, psk);
+    } catch (e) {
+      addMessage('system','***', `encryption error: ${e.message || e}`);
+      return;
+    }
+  } else {
+    wireStr = text;
+  }
+
+  addMessage('me', myCall, aesOn ? `🔒 ${text}` : text);
+  inputEl.value = '';
+  updateByteIndicator();
 
   if (audioCtx && audioCtx.state === 'suspended') {
     try { await audioCtx.resume(); } catch {}
-
   } else if (!audioCtx) {
     await initMic();
   }
@@ -221,7 +281,7 @@ async function send() {
   const rate = audioCtx.sampleRate;
   const maxSamples = rate * 10;
   const ptr = Module._malloc(maxSamples * 2);
-  const written = encode(text, myCall, carrierFrequency, noiseSymbols, fancyHeader ? 1 : 0, rate, channel, ptr, maxSamples);
+  const written = encode(wireStr, myCall, carrierFrequency, noiseSymbols, fancyHeader ? 1 : 0, rate, channel, ptr, maxSamples);
 
   const samples = new Int16Array(Module.HEAP16.buffer, ptr, written);
   const buffer = audioCtx.createBuffer(1, written, rate);
@@ -251,8 +311,38 @@ initMic().catch(err => {
 document.querySelectorAll('#messages .row').forEach(row => {
   const ts = row.querySelector('.ts');
   const nk = row.querySelector('.nick');
-  const tx = row.querySelector('.text');
   if (ts && !ts.textContent) ts.textContent = row.dataset.ts || fmtTime();
   if (nk && !nk.textContent) nk.textContent = `<${row.dataset.nick || '???'}>`;
-  if (tx && tx.textContent) tx.innerHTML = linkify(tx.textContent);
 });
+
+const input = document.getElementById('input');
+const byteIndicator = document.getElementById('byteIndicator');
+const maxBytes = 170;
+
+const aesCheckbox = document.getElementById('useAesGcm');
+const pskInput = document.getElementById('psk');
+
+function updateByteIndicator() {
+  const plainLen = new TextEncoder().encode(input.value).length;
+  const aesOn = !!aesCheckbox?.checked;
+  const wireBytes = calcOnAirBytes(plainLen, aesOn);
+
+  byteIndicator.textContent = `${wireBytes} / ${maxBytes} bytes${aesOn ? ' (enc)' : ''}`;
+  byteIndicator.classList.toggle('over', wireBytes > maxBytes);
+}
+
+input.addEventListener('input', updateByteIndicator);
+aesCheckbox?.addEventListener('change', updateByteIndicator);
+
+updateByteIndicator();
+
+const dangerZone = document.getElementById('dangerZone');
+const dangerZoneFields = document.getElementById('dangerZoneFields');
+
+if (dangerZone && dangerZoneFields) {
+  dangerZoneFields.classList.toggle('hidden', !dangerZone.checked);
+  dangerZone.addEventListener('change', () => {
+    dangerZoneFields.classList.toggle('hidden', !dangerZone.checked);
+    updateByteIndicator();
+  });
+}
