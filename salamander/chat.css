@@ -9,7 +9,6 @@
   --green: #8bc34a;
   --blue: #67d4ff;
   --yellow: #ffc857;
-
   --nick-self: #67d4ff;
   --nick-other: #8bc34a;
   --nick-system: #9aa4b2;
@@ -52,16 +51,25 @@ body{
   padding: 6px 10px;
 }
 
+
 #messages .row{
   display: grid;
-  grid-template-columns: 55px 120px 1fr;
+  grid-template-columns: 55px 120px minmax(0, 1fr);
   column-gap: 8px;
   margin: 1px 0;
 }
 
+#messages .text{
+  color: var(--fg);
+  min-width: 0;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  white-space: normal; 
+}
+
 #messages .ts{ color: var(--ts); text-align: right; }
 #messages .nick{ white-space: nowrap; }
-#messages .text{ color: var(--fg); }
+
 
 #messages .me .nick { color: var(--nick-self); }
 #messages .them .nick { color: var(--nick-other); }
@@ -94,3 +102,12 @@ button:hover{ background:#16202a; }
   background: var(--bg);
 }
 .hidden{ display:none; }
+#byteIndicator {
+  font-size: 12px;
+  color: #888;
+  margin: 4px 8px;
+}
+#byteIndicator.over {
+  color: red;
+  font-weight: bold;
+}
