@@ -1,7 +1,8 @@
-const CACHE_NAME = 'salamander-cache-v1';
+const CACHE_NAME = 'salamander-cache-v2';
+const OFFLINE_URL = './index.html';
 const ASSETS = [
   './',
-  './index.html',
+  OFFLINE_URL,
   './chat.css',
   './chat.js',
   './decoder-worklet.js',
@@ -14,13 +15,16 @@ const ASSETS = [
 
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)).then(() => self.skipWaiting())
+    caches.open(CACHE_NAME)
+      .then(cache => cache.addAll(ASSETS))
+      .then(() => self.skipWaiting())
   );
 });
 
 self.addEventListener('activate', event => {
   event.waitUntil(
-    caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))))
+    caches.keys()
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -29,6 +33,20 @@ self.addEventListener('fetch', event => {
   const { request } = event;
   if (request.method !== 'GET') return;
 
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      caches.match(OFFLINE_URL).then(cached => {
+        if (cached) return cached;
+        return fetch(request).then(async resp => {
+          const cache = await caches.open(CACHE_NAME);
+          cache.put(OFFLINE_URL, resp.clone());
+          return resp;
+        }).catch(() => caches.match(OFFLINE_URL));
+      })
+    );
+    return;
+  }
+
   event.respondWith(
     caches.match(request).then(cached => {
       if (cached) return cached;
@@ -36,7 +54,7 @@ self.addEventListener('fetch', event => {
         const clone = response.clone();
         caches.open(CACHE_NAME).then(cache => cache.put(request, clone)).catch(() => {});
         return response;
-      }).catch(() => caches.match('./index.html'));
+      }).catch(() => caches.match(OFFLINE_URL));
     })
   );
 });

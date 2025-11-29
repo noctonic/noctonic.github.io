@@ -177,12 +177,9 @@ button:active{ background:#0d141c; }
 }
 
 @media (max-width: 720px) {
-  body {
-    padding: 6px;
-  }
-
   #chat {
-    min-height: 100vh;
+    min-height: 100dvh;
+    max-height: 100dvh;
     border-radius: 0;
     border: none;
   }
@@ -206,5 +203,17 @@ button:active{ background:#0d141c; }
 
   input, button{
     font-size: 16px;
+  }
+
+  /* Let the content flex to the dynamic viewport so the input stays visible */
+  body {
+    padding: max(6px, env(safe-area-inset-top, 6px))
+             max(6px, env(safe-area-inset-right, 6px))
+             max(6px, env(safe-area-inset-bottom, 6px))
+             max(6px, env(safe-area-inset-left, 6px));
+  }
+
+  #messages {
+    min-height: 0;
   }
 }
