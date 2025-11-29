@@ -135,6 +135,8 @@ button:active{ background:#0d141c; }
   background: var(--bg);
   display: grid;
   gap: 10px;
+  max-height: min(60vh, 520px);
+  overflow-y: auto;
 }
 .hidden{ display:none !important; }
 #byteIndicator {
