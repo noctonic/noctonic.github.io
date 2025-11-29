@@ -11,6 +11,7 @@ let micTrack;
 let sourceNode;
 let workletNode;
 let syncing = false;
+let playbackGainNode;
 
 let myCall = localStorage.getItem('callsign') || 'WEB';
 let carrierFrequency = parseInt(localStorage.getItem('carrierFrequency')) || 1500;
@@ -18,12 +19,15 @@ let noiseSymbols = parseInt(localStorage.getItem('noiseSymbols')) || 0;
 let fancyHeader = localStorage.getItem('fancyHeader') === '1';
 let sampleRate = parseInt(localStorage.getItem('sampleRate')) || 48000;
 let channel = parseInt(localStorage.getItem('channel')) || 0;
+let outputVolume = parseInt(localStorage.getItem('outputVolume')) || 100;
+let aesUnlocked = localStorage.getItem('aesUnlocked') === '1';
 
 const messages = document.getElementById('messages');
 const inputEl  = document.getElementById('input');
 document.getElementById('send').onclick = send;
 const settingsBtn = document.getElementById('settingsBtn');
 const settingsPanel = document.getElementById('settingsPanel');
+const aesWrapper = document.getElementById('aesWrapper');
 
 const callInput = document.getElementById('callsign');
 callInput.value = myCall;
@@ -68,7 +72,53 @@ channelSelect.onchange = () => {
   localStorage.setItem('channel', channel);
 };
 
-settingsBtn.onclick = () => settingsPanel.classList.toggle('hidden');
+const volumeSlider = document.getElementById('outputVolume');
+const volumeLabel = document.getElementById('outputVolumeLabel');
+volumeSlider.value = outputVolume;
+volumeLabel.textContent = `${outputVolume}%`;
+volumeSlider.oninput = () => {
+  outputVolume = parseInt(volumeSlider.value);
+  volumeLabel.textContent = `${outputVolume}%`;
+  if (playbackGainNode) playbackGainNode.gain.value = outputVolume / 100;
+  localStorage.setItem('outputVolume', outputVolume);
+};
+
+function toggleSettingsPanel(){
+  settingsPanel.classList.toggle('hidden');
+}
+settingsBtn.onclick = toggleSettingsPanel;
+
+function setAesUnlocked(unlocked){
+  aesUnlocked = unlocked;
+  localStorage.setItem('aesUnlocked', unlocked ? '1' : '0');
+  aesWrapper?.classList.toggle('hidden', !unlocked);
+  settingsBtn.classList.toggle('longPressHint', !unlocked);
+}
+
+let settingsPressTimer;
+const longPressMs = 600;
+function clearSettingsPress(){
+  if (settingsPressTimer) {
+    clearTimeout(settingsPressTimer);
+    settingsPressTimer = null;
+  }
+}
+
+['pointerdown','touchstart','mousedown'].forEach(evt => {
+  settingsBtn.addEventListener(evt, () => {
+    clearSettingsPress();
+    settingsPressTimer = setTimeout(() => {
+      setAesUnlocked(!aesUnlocked);
+      settingsPressTimer = null;
+    }, longPressMs);
+  });
+});
+
+['pointerup','touchend','mouseleave','touchcancel','mouseup','blur'].forEach(evt => {
+  settingsBtn.addEventListener(evt, clearSettingsPress);
+});
+
+setAesUnlocked(aesUnlocked);
 
 function pad2(n){ return String(n).padStart(2,'0'); }
 function fmtTime(d = new Date()){
@@ -170,7 +220,28 @@ function calcOnAirBytes(plainLen, aesOn) {
 }
 
 async function initMic() {
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  if (!isSecureContext) {
+    throw new Error('mic access requires a secure context (https or localhost)');
+  }
+
+  if (!navigator?.mediaDevices?.getUserMedia) {
+    throw new Error('browser does not support microphone access');
+  }
+
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (err) {
+    if (err?.name === 'NotAllowedError' || err?.name === 'SecurityError') {
+      throw new Error('microphone permission denied — enable it in browser or PWA settings');
+    }
+
+    if (err?.name === 'NotFoundError' || err?.name === 'OverconstrainedError') {
+      throw new Error('no microphone input available');
+    }
+
+    throw err;
+  }
   if (micTrack) micTrack.stop();
   micTrack = stream.getAudioTracks()[0];
 
@@ -180,6 +251,9 @@ async function initMic() {
 
   sourceNode = audioCtx.createMediaStreamSource(stream);
   workletNode = new AudioWorkletNode(audioCtx, 'decoder-worklet');
+  playbackGainNode = audioCtx.createGain();
+  playbackGainNode.gain.value = outputVolume / 100;
+  playbackGainNode.connect(audioCtx.destination);
   workletNode.port.onmessage = ({ data }) => {
     const samples = data;
     const ptr = Module._malloc(samples.length * 2);
@@ -292,7 +366,7 @@ async function send() {
 
   const src = audioCtx.createBufferSource();
   src.buffer = buffer;
-  src.connect(audioCtx.destination);
+  src.connect(playbackGainNode || audioCtx.destination);
 
   const mute = document.getElementById('muteDuringTx').checked;
   if (mute && micTrack) micTrack.enabled = false;
@@ -305,7 +379,8 @@ async function send() {
 
 initMic().catch(err => {
   console.error(err);
-  addMessage('system', '***', 'mic init failed — allow microphone access');
+  const detail = err?.message ? `: ${err.message}` : '';
+  addMessage('system', '***', `mic init failed${detail}`);
 });
 
 document.querySelectorAll('#messages .row').forEach(row => {
@@ -344,5 +419,13 @@ if (dangerZone && dangerZoneFields) {
   dangerZone.addEventListener('change', () => {
     dangerZoneFields.classList.toggle('hidden', !dangerZone.checked);
     updateByteIndicator();
+  });
+}
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('service-worker.js').catch(err => {
+      console.warn('service worker failed', err);
+    });
   });
 }
