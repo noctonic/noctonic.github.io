@@ -1,4 +1,4 @@
-const CACHE_NAME = 'salamander-cache-v2';
+const CACHE_NAME = 'salamander-cache-v2.1';
 const OFFLINE_URL = './index.html';
 const ASSETS = [
   './',
