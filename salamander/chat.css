@@ -39,7 +39,8 @@ body{
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  min-height: min(780px, 95vh);
+  height: min(820px, 95vh);
+  max-height: 95vh;
   box-shadow: 0 10px 26px rgba(0,0,0,0.35);
 }
 
@@ -58,15 +59,20 @@ body{
   overflow-y: auto;
   background: var(--bg);
   padding: 6px 10px;
-  min-height: 180px;
+  min-height: 0;
 }
 
 
 #messages .row{
   display: grid;
-  grid-template-columns: 55px 120px minmax(0, 1fr);
-  column-gap: 8px;
+  grid-template-columns: max-content minmax(0, 1fr);
+  grid-template-areas:
+    "ts nick"
+    "text text";
+  column-gap: 10px;
+  row-gap: 2px;
   margin: 1px 0;
+  align-items: baseline;
 }
 
 #messages .text{
@@ -77,8 +83,9 @@ body{
   white-space: normal; 
 }
 
-#messages .ts{ color: var(--ts); text-align: right; }
-#messages .nick{ white-space: nowrap; }
+#messages .ts{ color: var(--ts); text-align: right; grid-area: ts; white-space: nowrap; padding-right: 2px; }
+#messages .nick{ white-space: nowrap; grid-area: nick; padding-left: 2px; }
+#messages .text{ grid-area: text; display: block; }
 
 
 #messages .me .nick { color: var(--nick-self); }
@@ -109,6 +116,9 @@ input:focus{ border-color: #3a89ff66; outline:none; }
 button{ cursor: pointer; background:#11161c; }
 button:hover{ background:#16202a; }
 button:active{ background:#0d141c; }
+button.danger { background: #1e1418; border-color: #4a2c36; }
+button.danger:hover { background: #261820; }
+button.danger:active { background: #1a1117; }
 
 #settingsBtn {
   touch-action: manipulation;
@@ -138,6 +148,18 @@ button:active{ background:#0d141c; }
   max-height: min(60vh, 520px);
   overflow-y: auto;
 }
+.settingsActions {
+  border: 1px dashed var(--border);
+  padding: 10px;
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+.settingsActions .hint {
+  color: var(--fg-dim);
+  font-size: 12px;
+}
 .hidden{ display:none !important; }
 #byteIndicator {
   font-size: 12px;
@@ -163,7 +185,7 @@ button:active{ background:#0d141c; }
 }
 
 #outputVolume {
-  width: 100%;
+  width: 90%;
 }
 
 .dangerZone {
@@ -180,23 +202,21 @@ button:active{ background:#0d141c; }
 
 @media (max-width: 720px) {
   #chat {
-    min-height: 100dvh;
+    height: 100dvh;
     max-height: 100dvh;
     border-radius: 0;
     border: none;
   }
 
   #messages .row{
-    grid-template-columns: 52px 1fr;
+    grid-template-columns: max-content minmax(0, 1fr);
     grid-template-areas:
-      "ts ts"
-      "nick text";
-    row-gap: 2px;
+      "ts nick"
+      "text text";
+    row-gap: 4px;
   }
 
-  #messages .ts { grid-area: ts; text-align: left; }
-  #messages .nick { grid-area: nick; }
-  #messages .text { grid-area: text; }
+  #messages .ts { text-align: left; }
 
   #inputBar{
     grid-template-columns: 1fr auto auto;

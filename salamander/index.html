@@ -27,8 +27,12 @@
     <div id="settingsPanel" class="hidden">
       <div><label>Call Sign: <input id="callsign" type="text"></label></div>
       <div><label>Carrier Frequency: <input id="carrierFrequency" type="number" value="1500"></label></div>
-      <div><label>Noise Symbols: <input id="noiseSymbols" type="number" value="0"></label></div>
-      <div class="toggleRow"><label><input type="checkbox" id="fancyHeader"> Fancy header</label></div>
+      <div><label>Leading Noise: <input id="noiseSymbols" type="number" value="0"></label></div>
+      <div class="toggleRow"><label><input type="checkbox" id="fancyHeader"> Waterfall callsign</label></div>
+
+      <div class="toggleRow"><label><input type="checkbox" id="appendLocation"> Append GPS location</label></div>
+
+      <div class="toggleRow"><label><input type="checkbox" id="displayLocalTime" checked> Display local time</label></div>
 
       <div>
         <label>Sample Rate:
@@ -42,22 +46,16 @@
         </label>
       </div>
 
-      <div>
-        <label>Channel:
-          <select id="channel">
-            <option value="0" selected>0 (mono)</option>
-            <option value="1">1 (left)</option>
-            <option value="2">2 (right)</option>
-            <option value="4">4 (I/Q)</option>
-          </select>
-        </label>
-      </div>
-
       <div class="toggleRow"><label><input type="checkbox" id="muteDuringTx" checked> Mute during transmission</label></div>
       <div class="sliderRow">
         <label for="outputVolume">Output Volume</label>
         <input type="range" id="outputVolume" min="20" max="200" value="100">
         <span id="outputVolumeLabel">100%</span>
+      </div>
+
+      <div class="settingsActions">
+        <button id="clearLogBtn" class="danger">Clear log</button>
+        <div class="hint">Remove saved messages stored on this device.</div>
       </div>
 
       <div class="dangerZone hidden" id="aesWrapper">
@@ -109,8 +107,8 @@ By enabling encryption you acknowledge these terms and accept full responsibilit
     }
 
     document.querySelectorAll('#messages .row').forEach(row => {
-      row.querySelector('.ts').textContent = row.dataset.ts;
-      row.querySelector('.nick').textContent = `<${row.dataset.nick}>`;
+      const nick = row.querySelector('.nick');
+      if (nick && row.dataset.nick) nick.textContent = `<${row.dataset.nick}>`;
     });
   </script>
 </body>
