@@ -105,10 +105,24 @@
       <span id="scaleValue">4×</span>
     </div>
 
+  <div>
+    <label>Edges:</label>
+    <label>
+      <input type="radio" name="edgeMode" value="dead" />
+      dead
+    </label>
+    <label>
+      <input type="radio" name="edgeMode" value="live" />
+      live
+    </label>
+    <label>
+      <input type="radio" name="edgeMode" value="copy" checked />
+      copy
+    </label>
+  </div>
     <div>
       <button id="runBtn">Run</button>
     </div>
-
   </div>
 </div>
 
@@ -174,7 +188,7 @@
   }
 
 
-  function computeCA(rule, seedBits, rounds) {
+  function computeCA(rule, seedBits, rounds, edgeMode = "dead") {
     rule = Math.max(0, Math.min(255, rule | 0));
     rounds = Math.max(1, rounds | 0);
 
@@ -186,6 +200,25 @@
     for (let x = 0; x < WIDTH; x++) {
       grid[0][x] = seedBits[x];
       ruleIdxGrid[0][x] = -1;
+    }
+
+    // helper for boundary behavior
+    function getCell(prev, idx, prevLen) {
+      if (idx >= 0 && idx < prevLen) {
+        return prev[idx];
+      }
+
+      if (edgeMode === "dead") {
+        return 0;
+      } else if (edgeMode === "live") {
+        return 1;
+      } else if (edgeMode === "copy") {
+        // copy closest neighbor from inside the array
+        return idx < 0 ? prev[0] : prev[prevLen - 1];
+      }
+
+      // fallback
+      return 0;
     }
 
     for (let row = 1; row < rounds; row++) {
@@ -200,12 +233,9 @@
         const leftIdxPrev   = centerIdxPrev - 1;
         const rightIdxPrev  = centerIdxPrev + 1;
 
-        const left =
-          leftIdxPrev >= 0 && leftIdxPrev < prevLen ? prev[leftIdxPrev] : 0;
-        const center =
-          centerIdxPrev >= 0 && centerIdxPrev < prevLen ? prev[centerIdxPrev] : 0;
-        const right =
-          rightIdxPrev >= 0 && rightIdxPrev < prevLen ? prev[rightIdxPrev] : 0;
+        const left   = getCell(prev, leftIdxPrev,   prevLen);
+        const center = getCell(prev, centerIdxPrev, prevLen);
+        const right  = getCell(prev, rightIdxPrev,  prevLen);
 
         const idx = (left << 2) | (center << 1) | right; // 0–7
         const bit = (rule >> idx) & 1;
@@ -268,6 +298,7 @@
     let rounds = parseInt(roundsInput.value, 10);
     let scale  = parseInt(scaleInput.value, 10);
     const seedStr = seedInput.value;
+    const edgeMode = document.querySelector('input[name="edgeMode"]:checked').value;
 
     if (Number.isNaN(rule))   rule = 0;
     if (Number.isNaN(rounds)) rounds = 1;
@@ -284,7 +315,7 @@
 
     try {
       const seedBits = parseSeedBits256(seedStr);
-      const gridObj = computeCA(rule, seedBits, rounds);
+      const gridObj = computeCA(rule, seedBits, rounds, edgeMode);
       drawGrid(gridObj, scale);
 
       let hexDisplay;
@@ -321,6 +352,11 @@
   ["rule", "rounds", "seed"].forEach(id => {
     document.getElementById(id).addEventListener("change", run);
   });
+
+  document.querySelectorAll('input[name="edgeMode"]').forEach(el => {
+    el.addEventListener("change", run);
+  });
+
 
   run();
 </script>
