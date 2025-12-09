@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Wolfram Cellular Automaton</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      background: #111;
+      color: #eee;
+      padding: 1.5rem;
+    }
+    h1 { margin-top: 0; }
+    label { font-size: 0.85rem; }
+    input[type="number"], input[type="range"], input[type="text"] { margin: 0.2rem 0; }
+
+    #seed {
+    width: 300px;
+    font-family: monospace;
+    }
+
+    #controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+    #controls > div { min-width: 200px; }
+
+    button {
+      padding: 0.4rem 0.9rem;
+      font-size: 0.9rem;
+      cursor: pointer;
+      border-radius: 4px;
+      border: 1px solid #444;
+      background: #222;
+      color: #eee;
+    }
+
+    #info {
+      font-size: 0.8rem;
+      color: #bbb;
+      margin-bottom: 1rem;
+      white-space: pre-wrap;
+    }
+
+    #canvasWrapper {
+      border: 1px solid #444;
+      background: #000;
+      display: inline-block;
+      max-height: 80vh;
+      overflow: auto;
+    }
+    canvas {
+      display: block;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      background: #000;
+    }
+
+    small {
+      color: #aaa;
+      display: block;
+      margin-top: 0.5rem;
+    }
+    .error {
+      color: #ff6b6b;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Wolfram Cellular Automaton</h1>
+
+<div id="controls">
+  <div>
+    <label for="rule">Rule (0–255):</label><br />
+    <input type="number" id="rule" min="0" max="255" value="30" />
+  </div>
+
+  <div>
+    <label for="seed">Initial 256-bit number:</label><br />
+    <input type="text" id="seed" value="0x80000000000000000000000000000000" />
+  </div>
+
+  <div>
+    <label for="rounds">Rounds (rows):</label><br />
+    <input type="number" id="rounds" min="1" max="2048" value="128" />
+  </div>
+
+  <div>
+    <label for="scale">Pixel scale:</label><br />
+    <input type="range" id="scale" min="1" max="8" value="4" />
+    <span id="scaleValue">4×</span>
+  </div>
+
+  <div>
+    <button id="runBtn">Run</button>
+  </div>
+</div>
+
+<div id="info"></div>
+
+<div id="canvasWrapper">
+  <canvas id="caCanvas"></canvas>
+</div>
+
+<script>
+  const WIDTH = 256;
+
+  function parseSeedBits256(seedStr) {
+    const bits = new Uint8Array(256);
+    seedStr = seedStr.trim();
+    if (seedStr === "") {
+      return bits;
+    }
+
+    let n;
+    try {
+      if (seedStr.startsWith("0x") || seedStr.startsWith("0X")) {
+        n = BigInt(seedStr);
+      } else {
+        n = BigInt(seedStr);
+      }
+    } catch (e) {
+      throw new Error("Invalid seed number (use decimal or 0x-hex).");
+    }
+
+    for (let i = 0; i < 256; i++) {
+      const bitIndex = 255 - i;
+      const bit = (n >> BigInt(bitIndex)) & 1n;
+      bits[i] = bit === 1n ? 1 : 0;
+    }
+
+    return bits;
+  }
+
+  function computeCA(rule, seedBits, rounds) {
+    rule = Math.max(0, Math.min(255, rule | 0));
+    rounds = Math.max(1, rounds | 0);
+
+    const grid = new Array(rounds);
+    for (let r = 0; r < rounds; r++) {
+      grid[r] = new Uint8Array(WIDTH);
+    }
+
+    for (let x = 0; x < WIDTH; x++) {
+      grid[0][x] = seedBits[x];
+    }
+
+    for (let row = 1; row < rounds; row++) {
+      const prev = grid[row - 1];
+      const curr = grid[row];
+      for (let x = 0; x < WIDTH; x++) {
+        const left   = x > 0 ? prev[x - 1] : 0;
+        const center = prev[x];
+        const right  = x < WIDTH - 1 ? prev[x + 1] : 0;
+
+        const idx = (left << 2) | (center << 1) | right;
+        const bit = (rule >> idx) & 1;
+        curr[x] = bit;
+      }
+    }
+
+    return grid;
+  }
+
+  function drawGrid(grid, scale) {
+    const canvas = document.getElementById("caCanvas");
+    const ctx = canvas.getContext("2d");
+    const rounds = grid.length;
+
+    canvas.width = WIDTH * scale;
+    canvas.height = rounds * scale;
+    ctx.imageSmoothingEnabled = false;
+
+    for (let y = 0; y < rounds; y++) {
+      const row = grid[y];
+      for (let x = 0; x < WIDTH; x++) {
+        ctx.fillStyle = row[x] ? "#ffffff" : "#000000";
+        ctx.fillRect(x * scale, y * scale, scale, scale);
+      }
+    }
+  }
+
+  function run() {
+    const ruleInput   = document.getElementById("rule");
+    const seedInput   = document.getElementById("seed");
+    const roundsInput = document.getElementById("rounds");
+    const scaleInput  = document.getElementById("scale");
+    const infoEl      = document.getElementById("info");
+
+    let rule   = parseInt(ruleInput.value, 10);
+    let rounds = parseInt(roundsInput.value, 10);
+    let scale  = parseInt(scaleInput.value, 10);
+    const seedStr = seedInput.value;
+
+    if (Number.isNaN(rule))   rule = 0;
+    if (Number.isNaN(rounds)) rounds = 1;
+    if (Number.isNaN(scale))  scale = 1;
+
+    rule   = Math.max(0, Math.min(255, rule));
+    rounds = Math.max(1, Math.min(2048, rounds));
+    scale  = Math.max(1, Math.min(8, scale));
+
+    ruleInput.value   = rule;
+    roundsInput.value = rounds;
+    scaleInput.value  = scale;
+    document.getElementById("scaleValue").textContent = scale + "×";
+
+    try {
+      const seedBits = parseSeedBits256(seedStr);
+      const grid = computeCA(rule, seedBits, rounds);
+      drawGrid(grid, scale);
+
+      let hexDisplay;
+      try {
+        let n = seedStr.trim() === "" ? 0n :
+                (seedStr.trim().startsWith("0x") || seedStr.trim().startsWith("0X")
+                  ? BigInt(seedStr.trim())
+                  : BigInt(seedStr.trim()));
+        const mask256 = (1n << 256n) - 1n;
+        n = n & mask256;
+        hexDisplay = "0x" + n.toString(16).padStart(64, "0");
+      } catch {
+        hexDisplay = "(invalid seed)";
+      }
+
+      infoEl.classList.remove("error");
+      infoEl.textContent =
+        `Rule: ${rule}\n` +
+        `Seed (input): ${seedStr || "(empty => 0)"}\n` +
+        `Seed (low 256 bits, hex): ${hexDisplay}\n` +
+        `Width: ${WIDTH} cells | Rounds: ${rounds} | Scale: ${scale}×\n` +
+        `Boundary: fixed zeros (no wrap-around)\n`
+    } catch (err) {
+      infoEl.classList.add("error");
+      infoEl.textContent = "Error: " + (err.message || err);
+      const canvas = document.getElementById("caCanvas");
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+  }
+
+  document.getElementById("runBtn").addEventListener("click", run);
+  document.getElementById("scale").addEventListener("input", () => {
+    document.getElementById("scaleValue").textContent =
+      document.getElementById("scale").value + "×";
+  });
+
+  ["rule", "rounds", "seed"].forEach(id => {
+    document.getElementById(id).addEventListener("change", run);
+  });
+
+  run();
+</script>
+
+</body>
+</html>
