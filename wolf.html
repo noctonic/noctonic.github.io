@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Wolfram Cellular Automaton</title>
+  <title>Cellular Automaton</title>
   <style>
     body {
       font-family: system-ui, sans-serif;
@@ -15,7 +15,7 @@
     input[type="number"], input[type="range"], input[type="text"] { margin: 0.2rem 0; }
 
     #seed {
-    width: 300px;
+    width: 550px;
     font-family: monospace;
     }
 
@@ -26,7 +26,14 @@
       align-items: center;
       margin-bottom: 1rem;
     }
-    #controls > div { min-width: 200px; }
+    #controls > div { min-width: 100px; }
+
+    .full-row {
+      flex-basis: 100%;
+      display: flex;
+      gap: 1.5rem;
+      align-items: center;
+    }
 
     button {
       padding: 0.4rem 0.9rem;
@@ -71,32 +78,37 @@
 </head>
 <body>
 
-<h1>Wolfram Cellular Automaton</h1>
+<h1>Cellular Automaton</h1>
 
 <div id="controls">
   <div>
-    <label for="rule">Rule (0–255):</label><br />
+    <label for="rule">Rule:</label><br />
     <input type="number" id="rule" min="0" max="255" value="30" />
   </div>
-
   <div>
-    <label for="seed">Initial 256-bit number:</label><br />
-    <input type="text" id="seed" value="0x80000000000000000000000000000000" />
-  </div>
-
-  <div>
-    <label for="rounds">Rounds (rows):</label><br />
+    <label for="rounds">Rounds:</label><br />
     <input type="number" id="rounds" min="1" max="2048" value="128" />
   </div>
 
   <div>
-    <label for="scale">Pixel scale:</label><br />
-    <input type="range" id="scale" min="1" max="8" value="4" />
-    <span id="scaleValue">4×</span>
+    <label for="seed">256-bit Seed:</label><br />
+    <input type="text" id="seed" value="0x0000000000000000000000000000000080000000000000000000000000000000" />
   </div>
-
   <div>
-    <button id="runBtn">Run</button>
+    <button id="rdBtn">Random</button>
+  </div>
+  <div class="full-row">
+    
+    <div>
+      <label for="scale">Image Scale:</label><br />
+      <input type="range" id="scale" min="1" max="8" value="4" />
+      <span id="scaleValue">4×</span>
+    </div>
+
+    <div>
+      <button id="runBtn">Run</button>
+    </div>
+
   </div>
 </div>
 
@@ -107,7 +119,32 @@
 </div>
 
 <script>
+  document.getElementById("rdBtn").addEventListener("click", () => {
+    const bytes = new Uint8Array(32);
+    crypto.getRandomValues(bytes);
+
+    let hex = "";
+    for (const b of bytes) {
+      hex += b.toString(16).padStart(2, "0");
+    }
+
+    const seedHex = "0x" + hex;
+    document.getElementById("seed").value = seedHex;
+    run();
+  });
+
   const WIDTH = 256;
+
+  const RULE_COLORS = [
+    "#444444", // 000
+    "#1f77b4", // 001
+    "#ff7f0e", // 010
+    "#2ca02c", // 011
+    "#d62728", // 100
+    "#9467bd", // 101
+    "#8c564b", // 110
+    "#e377c2"  // 111
+  ];
 
   function parseSeedBits256(seedStr) {
     const bits = new Uint8Array(256);
@@ -136,37 +173,55 @@
     return bits;
   }
 
+
   function computeCA(rule, seedBits, rounds) {
     rule = Math.max(0, Math.min(255, rule | 0));
     rounds = Math.max(1, rounds | 0);
 
     const grid = new Array(rounds);
-    for (let r = 0; r < rounds; r++) {
-      grid[r] = new Uint8Array(WIDTH);
-    }
+    const ruleIdxGrid = new Array(rounds);
 
+    grid[0] = new Uint8Array(WIDTH);
+    ruleIdxGrid[0] = new Int8Array(WIDTH);
     for (let x = 0; x < WIDTH; x++) {
       grid[0][x] = seedBits[x];
+      ruleIdxGrid[0][x] = -1;
     }
 
     for (let row = 1; row < rounds; row++) {
       const prev = grid[row - 1];
-      const curr = grid[row];
-      for (let x = 0; x < WIDTH; x++) {
-        const left   = x > 0 ? prev[x - 1] : 0;
-        const center = prev[x];
-        const right  = x < WIDTH - 1 ? prev[x + 1] : 0;
+      const prevLen = prev.length;
+      const newLen = prevLen + 2;
+      const curr = new Uint8Array(newLen);
+      const idxRow = new Int8Array(newLen);
 
-        const idx = (left << 2) | (center << 1) | right;
+      for (let x = 0; x < newLen; x++) {
+        const centerIdxPrev = x - 1;
+        const leftIdxPrev   = centerIdxPrev - 1;
+        const rightIdxPrev  = centerIdxPrev + 1;
+
+        const left =
+          leftIdxPrev >= 0 && leftIdxPrev < prevLen ? prev[leftIdxPrev] : 0;
+        const center =
+          centerIdxPrev >= 0 && centerIdxPrev < prevLen ? prev[centerIdxPrev] : 0;
+        const right =
+          rightIdxPrev >= 0 && rightIdxPrev < prevLen ? prev[rightIdxPrev] : 0;
+
+        const idx = (left << 2) | (center << 1) | right; // 0–7
         const bit = (rule >> idx) & 1;
         curr[x] = bit;
+        idxRow[x] = idx;
       }
+
+      grid[row] = curr;
+      ruleIdxGrid[row] = idxRow;
     }
 
-    return grid;
+    return { grid, ruleIdxGrid };
   }
 
-  function drawGrid(grid, scale) {
+  function drawGrid(gridObj, scale) {
+    const { grid, ruleIdxGrid } = gridObj;
     const canvas = document.getElementById("caCanvas");
     const ctx = canvas.getContext("2d");
     const rounds = grid.length;
@@ -177,8 +232,26 @@
 
     for (let y = 0; y < rounds; y++) {
       const row = grid[y];
+      const idxRow = ruleIdxGrid[y];
+      const rowLen = row.length;
+
+      const start = Math.max(0, Math.floor((rowLen - WIDTH) / 2));
+
       for (let x = 0; x < WIDTH; x++) {
-        ctx.fillStyle = row[x] ? "#ffffff" : "#000000";
+        const idx = start + x;
+        const alive = row[idx];
+
+        if (alive) {
+          const ruleIdx = idxRow[idx];
+          const color =
+            ruleIdx >= 0 && ruleIdx < RULE_COLORS.length
+              ? RULE_COLORS[ruleIdx]
+              : "#ffffff";
+          ctx.fillStyle = color;
+        } else {
+          ctx.fillStyle = "#000000";
+        }
+
         ctx.fillRect(x * scale, y * scale, scale, scale);
       }
     }
@@ -211,8 +284,8 @@
 
     try {
       const seedBits = parseSeedBits256(seedStr);
-      const grid = computeCA(rule, seedBits, rounds);
-      drawGrid(grid, scale);
+      const gridObj = computeCA(rule, seedBits, rounds);
+      drawGrid(gridObj, scale);
 
       let hexDisplay;
       try {
@@ -227,13 +300,9 @@
         hexDisplay = "(invalid seed)";
       }
 
+      const finalRowLen = gridObj.grid[gridObj.grid.length - 1].length;
+
       infoEl.classList.remove("error");
-      infoEl.textContent =
-        `Rule: ${rule}\n` +
-        `Seed (input): ${seedStr || "(empty => 0)"}\n` +
-        `Seed (low 256 bits, hex): ${hexDisplay}\n` +
-        `Width: ${WIDTH} cells | Rounds: ${rounds} | Scale: ${scale}×\n` +
-        `Boundary: fixed zeros (no wrap-around)\n`
     } catch (err) {
       infoEl.classList.add("error");
       infoEl.textContent = "Error: " + (err.message || err);
