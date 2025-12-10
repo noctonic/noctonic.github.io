@@ -279,13 +279,13 @@
   </div>
 
   <div id="seqColorPanel" class="panel">
-    <div class="panel-title">Unique Color</div>
+    <div class="panel-title">Color Patterns</div>
     <div id="seqSummary" class="seq-summary"></div>
     <div id="seqList" class="seq-list"></div>
   </div>
 
   <div id="seqBWPanel" class="panel">
-    <div class="panel-title">Unique Black &amp; White</div>
+    <div class="panel-title">Binary</div>
     <div id="seqBWSummary" class="seq-summary"></div>
     <div id="seqBWList" class="seq-list"></div>
   </div>
@@ -627,11 +627,6 @@
     const uniqueColorOutputs = Array.from(uniqueColorMap.values());
     const uniqueBWOutputs    = Array.from(uniqueBWMap.values());
 
-    seqSummaryEl.textContent =
-      `valid index sequences: ${totalSeqs}  |  unique color patterns: ${uniqueColorOutputs.length}`;
-
-    seqBWSummaryEl.textContent =
-      `unique black & white patterns: ${uniqueBWOutputs.length}`;
 
     let htmlColorLeft = '';
     let htmlColorRight = '';
