@@ -5,7 +5,7 @@
   <title>Cellular Automaton</title>
   <style>
     body {
-      font-family: system-ui, sans-serif;
+      font-family: monospace;
       background: #111;
       color: #eee;
       padding: 1.5rem;
@@ -15,8 +15,8 @@
     input[type="number"], input[type="range"], input[type="text"] { margin: 0.2rem 0; }
 
     #seed {
-    width: 550px;
-    font-family: monospace;
+      width: 550px;
+      font-family: monospace;
     }
 
     #controls {
@@ -58,6 +58,7 @@
       display: inline-block;
       max-height: 80vh;
       overflow: auto;
+      margin-bottom: 1rem;
     }
     canvas {
       display: block;
@@ -74,8 +75,136 @@
     .error {
       color: #ff6b6b;
     }
+
+    #layout {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      align-items: flex-start;
+      margin-top: 1rem;
+    }
+
+    .panel {
+      background: #181818;
+      border: 1px solid #333;
+      border-radius: 6px;
+      padding: 0.8rem 1rem;
+      flex: 1 1 0;
+      min-width: 350px;
+      max-width: 350px;
+      box-sizing: border-box;
+    }
+
+    .panel-title {
+      font-size: 0.95rem;
+      margin-bottom: 0.4rem;
+      font-weight: 600;
+    }
+
+    #ruleVizTable {
+      border-collapse: collapse;
+      font-size: 0.8rem;
+      margin-top: 0.2rem;
+    }
+    #ruleVizTable th,
+    #ruleVizTable td {
+      border: 1px solid #444;
+      padding: 0.16rem 0.3rem;
+      text-align: center;
+    }
+    #ruleVizTable th {
+      background: #222;
+      font-weight: 600;
+    }
+    .pattern-cells {
+      display: inline-flex;
+      gap: 2px;
+    }
+    .bit-cell {
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      background: #000;
+    }
+    .bit-cell.one {
+      background: #eee;
+    }
+    .out-cell {
+      width: 14px;
+      height: 14px;
+      border-radius: 2px;
+      border: 1px solid #444;
+      display: inline-block;
+    }
+
+    .seq-summary {
+      font-size: 0.8rem;
+      color: #ccc;
+      margin-bottom: 0.4rem;
+    }
+    .seq-list {
+      font-size: 0.75rem;
+    }
+
+    #seqList {
+      display: flex;
+      gap: 0.75rem;
+    }
+    .color-column {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      flex: 1 1 0;
+    }
+    .color-pattern {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+      white-space: nowrap;
+    }
+    .color-pattern .seq-colors {
+      display: flex;
+      flex: 0 0 auto;
+    }
+    .seq-index-small {
+      color: #888;
+      font-size: 0.7rem;
+      width: 1.8rem;
+      text-align: right;
+      flex: 0 0 auto;
+    }
+
+    .seq-row {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      margin-bottom: 2px;
+      white-space: nowrap;
+    }
+    .seq-index {
+      width: 2.8rem;
+      color: #888;
+      flex: 0 0 auto;
+    }
+    .seq-colors {
+      flex: 0 0 auto;
+    }
+    .seq-box {
+      width: 12px;
+      height: 12px;
+      border-radius: 2px;
+      border: 1px solid #333;
+      display: inline-block;
+      margin-right: 2px;
+    }
+    .seq-text {
+      flex: 1 1 auto;
+      color: #ccc;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
   </style>
-<script src="../color_utils/colorConversion.js"></script>
+  <script src="../color_utils/colorConversion.js"></script>
 </head>
 <body>
 
@@ -99,38 +228,37 @@
     <button id="rdBtn">Random Seed</button>
   </div>
   <div class="full-row">
-    
     <div>
       <label for="scale">Image Scale:</label><br />
       <input type="range" id="scale" min="1" max="8" value="4" />
       <span id="scaleValue">4×</span>
     </div>
 
-  <div>
-    <label>Edges:</label>
-    <label>
-      <input type="radio" name="edgeMode" value="dead" />
-      dead
-    </label>
-    <label>
-      <input type="radio" name="edgeMode" value="live" />
-      live
-    </label>
-    <label>
-      <input type="radio" name="edgeMode" value="copy" checked />
-      copy
-    </label>
-  </div>
-  <div>
-    <label>
-      <input type="checkbox" id="deadColors" />
-      Dead colors
-    </label>
-  </div>
+    <div>
+      <label>Edges:</label>
+      <label>
+        <input type="radio" name="edgeMode" value="dead" />
+        dead
+      </label>
+      <label>
+        <input type="radio" name="edgeMode" value="live" />
+        live
+      </label>
+      <label>
+        <input type="radio" name="edgeMode" value="copy" checked />
+        copy
+      </label>
+    </div>
+    <div>
+      <label>
+        <input type="checkbox" id="deadColors" />
+        Dead colors
+      </label>
+    </div>
 
-  <div>
-    <button id="rdColorsBtn">Random colors</button>
-  </div>
+    <div>
+      <button id="rdColorsBtn">Random colors</button>
+    </div>
 
     <div>
       <button id="runBtn">Run</button>
@@ -144,6 +272,24 @@
   <canvas id="caCanvas"></canvas>
 </div>
 
+<div id="layout">
+  <div id="rulePanel" class="panel">
+    <div class="panel-title">Rule visualization</div>
+    <table id="ruleVizTable"></table>
+  </div>
+
+  <div id="seqColorPanel" class="panel">
+    <div class="panel-title">Unique Color</div>
+    <div id="seqSummary" class="seq-summary"></div>
+    <div id="seqList" class="seq-list"></div>
+  </div>
+
+  <div id="seqBWPanel" class="panel">
+    <div class="panel-title">Unique Black &amp; White</div>
+    <div id="seqBWSummary" class="seq-summary"></div>
+    <div id="seqBWList" class="seq-list"></div>
+  </div>
+</div>
 
 <script>
   document.getElementById("rdBtn").addEventListener("click", () => {
@@ -163,26 +309,26 @@
   const WIDTH = 256;
 
   let RULE_COLORS = [
-    "#003C00","#00619B","#006CFF","#E000FF","#FF004C","#EE6F00","#00CC00","#00EDFF"
+    "#003C00","#00619B","#006CFF","#E000FF",
+    "#FF004C","#EE6F00","#00CC00","#00EDFF"
   ];
 
-function darkenHexPerceptual(hex, factor = 0.4) {
-  const rgb = hex2rgb(hex);
-  let [L, C, H] = rgb2lch(rgb);
+  function darkenHexPerceptual(hex, factor = 0.15) {
+    const rgb = hex2rgb(hex);
+    let [L, C, H] = rgb2lch(rgb);
 
-  L = L * factor;
-  if (L < 0) L = 0;
+    L = L * factor;
+    if (L < 0) L = 0;
 
-  const darkerRgb = lch2rgb([L, C, H]);
-  return rgb2hex(darkerRgb);
-}
+    const darkerRgb = lch2rgb([L, C, H]);
+    return rgb2hex(darkerRgb);
+  }
 
-
-  let DEAD_RULE_COLORS = RULE_COLORS.map(c => darkenHexPerceptual(c, 0.35));
+  let DEAD_RULE_COLORS = RULE_COLORS.map(c => darkenHexPerceptual(c));
 
   function randomHelixParams() {
     return {
-      startZ: -Math.random(),
+      startZ: -0.25,
       endZ:   Math.random(),
       turns:  (Math.random() * 4) - 2,
       amplitude: 0.5 + Math.random() * 1.5,
@@ -202,7 +348,7 @@ function darkenHexPerceptual(hex, factor = 0.4) {
     if (!palette || palette.length < 8) return;
 
     RULE_COLORS = palette.slice(1, 9);
-    let DEAD_RULE_COLORS = RULE_COLORS.map(c => darkenHexPerceptual(c, 0.35));
+    DEAD_RULE_COLORS = RULE_COLORS.map(c => darkenHexPerceptual(c));
 
     run();
   }
@@ -233,7 +379,6 @@ function darkenHexPerceptual(hex, factor = 0.4) {
 
     return bits;
   }
-
 
   function computeCA(rule, seedBits, rounds, edgeMode = "dead") {
     rule = Math.max(0, Math.min(255, rule | 0));
@@ -339,66 +484,268 @@ function darkenHexPerceptual(hex, factor = 0.4) {
     }
   }
 
-function run() {
-  const ruleInput   = document.getElementById("rule");
-  const seedInput   = document.getElementById("seed");
-  const roundsInput = document.getElementById("rounds");
-  const scaleInput  = document.getElementById("scale");
-  const infoEl      = document.getElementById("info");
-  const deadColorsCheckbox = document.getElementById("deadColors");
+  const SEQ_N = 3;
+  const size = 8;
 
-  let rule   = parseInt(ruleInput.value, 10);
-  let rounds = parseInt(roundsInput.value, 10);
-  let scale  = parseInt(scaleInput.value, 10);
-  const seedStr = seedInput.value;
+  function indexToBits(i) {
+    return ((i & 4) ? '1' : '0') +
+           ((i & 2) ? '1' : '0') +
+           ((i & 1) ? '1' : '0');
+  }
 
-  const edgeMode = document.querySelector('input[name="edgeMode"]:checked').value;
+  const POSSIBLE_ADJ = (() => {
+    const m = Array.from({ length: size }, () => Array(size).fill(false));
+    for (let p = 0; p < size; p++) {
+      for (let q = 0; q < size; q++) {
+        const pLow  = p & 0b11;
+        const qHigh = q >> 1;
+        if (pLow === qHigh) {
+          m[p][q] = true;
+        }
+      }
+    }
+    return m;
+  })();
 
-  const useDeadColors = deadColorsCheckbox.checked;
+  const ADJ = (() => {
+    const adj = Array.from({ length: size }, () => []);
+    for (let p = 0; p < size; p++) {
+      for (let q = 0; q < size; q++) {
+        if (POSSIBLE_ADJ[p][q]) {
+          adj[p].push(q);
+        }
+      }
+    }
+    return adj;
+  })();
 
-  if (Number.isNaN(rule))   rule = 0;
-  if (Number.isNaN(rounds)) rounds = 1;
-  if (Number.isNaN(scale))  scale = 1;
+  const ruleVizTableEl = document.getElementById('ruleVizTable');
+  const seqSummaryEl   = document.getElementById('seqSummary');
+  const seqListEl      = document.getElementById('seqList');
+  const seqBWSummaryEl = document.getElementById('seqBWSummary');
+  const seqBWListEl    = document.getElementById('seqBWList');
 
-  rule   = Math.max(0, Math.min(255, rule));
-  rounds = Math.max(1, Math.min(2048, rounds));
-  scale  = Math.max(1, Math.min(8, scale));
+  let currentRule = 30;
 
-  ruleInput.value   = rule;
-  roundsInput.value = rounds;
-  scaleInput.value  = scale;
-  document.getElementById("scaleValue").textContent = scale + "×";
+  function buildRuleVizTable() {
+    let html = '<thead><tr>' +
+      '<th>Idx</th><th>Pattern</th><th>Bits</th><th>Outcome</th>' +
+      '</tr></thead><tbody>';
 
-  try {
-    const seedBits = parseSeedBits256(seedStr);
-    const gridObj = computeCA(rule, seedBits, rounds, edgeMode);
+    for (let i = 7; i >= 0; i--) {
+      const bits = indexToBits(i);
+      const alive = ((currentRule >> i) & 1) === 1;
 
-    drawGrid(gridObj, scale, useDeadColors);
+      const colorAlive = (i >= 0 && i < RULE_COLORS.length)
+        ? RULE_COLORS[i]
+        : "#ffffff";
+      const colorDead = (i >= 0 && i < DEAD_RULE_COLORS.length)
+        ? DEAD_RULE_COLORS[i]
+        : "#000000";
 
-    let hexDisplay;
-    try {
-      let n = seedStr.trim() === "" ? 0n :
-              (seedStr.trim().startsWith("0x") || seedStr.trim().startsWith("0X")
-                ? BigInt(seedStr.trim())
-                : BigInt(seedStr.trim()));
-      const mask256 = (1n << 256n) - 1n;
-      n = n & mask256;
-      hexDisplay = "0x" + n.toString(16).padStart(64, "0");
-    } catch {
-      hexDisplay = "(invalid seed)";
+      const outColor = alive ? colorAlive : colorDead;
+
+      html += `<tr>`;
+      html += `<th>${i}</th>`;
+      html += '<td><div class="pattern-cells">';
+      for (let k = 0; k < 3; k++) {
+        const bit = bits[k] === '1';
+        html += `<div class="bit-cell ${bit ? 'one' : ''}"></div>`;
+      }
+      html += '</div></td>';
+      html += `<td><code>${bits}</code></td>`;
+      html += `<td><span class="out-cell" style="background:${outColor};"></span></td>`;
+      html += '</tr>';
     }
 
-    const finalRowLen = gridObj.grid[gridObj.grid.length - 1].length;
-
-    infoEl.classList.remove("error");
-  } catch (err) {
-    infoEl.classList.add("error");
-    infoEl.textContent = "Error: " + (err.message || err);
-    const canvas = document.getElementById("caCanvas");
-    const ctx = canvas.getContext("2d");
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    html += '</tbody>';
+    ruleVizTableEl.innerHTML = html;
   }
-}
+
+  function allValidSequences(N) {
+    const sequences = [];
+
+    function dfs(seq) {
+      if (seq.length === N) {
+        sequences.push(seq.slice());
+        return;
+      }
+      const last = seq[seq.length - 1];
+      const neighbors = ADJ[last];
+      for (const next of neighbors) {
+        seq.push(next);
+        dfs(seq);
+        seq.pop();
+      }
+    }
+
+    for (let start = 0; start < size; start++) {
+      dfs([start]);
+    }
+
+    return sequences;
+  }
+
+  function recomputeSequences() {
+    const N = SEQ_N;
+    const seqs = allValidSequences(N);
+    const totalSeqs = seqs.length;
+
+    const uniqueColorMap = new Map();
+    const uniqueBWMap    = new Map();
+
+    for (const seq of seqs) {
+      const colors = [];
+      const bwBits = [];
+
+      for (const idx of seq) {
+        const alive = ((currentRule >> idx) & 1) === 1;
+
+        const colorAlive = (idx >= 0 && idx < RULE_COLORS.length)
+          ? RULE_COLORS[idx]
+          : "#ffffff";
+        const colorDead = (idx >= 0 && idx < DEAD_RULE_COLORS.length)
+          ? DEAD_RULE_COLORS[idx]
+          : "#000000";
+
+        const colorOut = alive ? colorAlive : colorDead;
+        colors.push(colorOut);
+        bwBits.push(alive ? 1 : 0);
+      }
+
+      const colorKey = colors.join('|');
+      if (!uniqueColorMap.has(colorKey)) {
+        uniqueColorMap.set(colorKey, { colors, exampleSeq: seq.slice() });
+      }
+
+      const bwKey = bwBits.join('');
+      if (!uniqueBWMap.has(bwKey)) {
+        uniqueBWMap.set(bwKey, { bits: bwBits, exampleSeq: seq.slice() });
+      }
+    }
+
+    const uniqueColorOutputs = Array.from(uniqueColorMap.values());
+    const uniqueBWOutputs    = Array.from(uniqueBWMap.values());
+
+    seqSummaryEl.textContent =
+      `valid index sequences: ${totalSeqs}  |  unique color patterns: ${uniqueColorOutputs.length}`;
+
+    seqBWSummaryEl.textContent =
+      `unique black & white patterns: ${uniqueBWOutputs.length}`;
+
+    let htmlColorLeft = '';
+    let htmlColorRight = '';
+
+    uniqueColorOutputs.forEach((entry, idx) => {
+      const { colors } = entry;
+      let row = `<div class="color-pattern">`;
+      row += `<div class="seq-index-small">${idx}</div>`;
+      row += `<div class="seq-colors">`;
+      for (const c of colors) {
+        row += `<span class="seq-box" style="background:${c};"></span>`;
+      }
+      row += `</div>`;
+      row += `</div>`;
+
+      if (idx < 16) {
+        htmlColorLeft += row;
+      } else {
+        htmlColorRight += row;
+      }
+    });
+
+    seqListEl.innerHTML =
+      `<div class="color-column">${htmlColorLeft}</div>` +
+      `<div class="color-column">${htmlColorRight}</div>`;
+
+    let htmlBW = '';
+    uniqueBWOutputs.forEach((entry, idx) => {
+      const { bits, exampleSeq } = entry;
+      const idxLabel = idx.toString().padStart(3, ' ');
+      const seqStr  = exampleSeq.join(',');
+
+      let row = `<div class="seq-row">`;
+      row += `<div class="seq-index">#${idxLabel}</div>`;
+      row += `<div class="seq-colors">`;
+      for (const bit of bits) {
+        const col = bit ? '#ffffff' : '#000000';
+        row += `<span class="seq-box" style="background:${col};"></span>`;
+      }
+      row += `</div>`;
+      row += `<div class="seq-text">indices: ${seqStr}  |  bits: ${bits.join('')}</div>`;
+      row += `</div>`;
+
+      htmlBW += row;
+    });
+    seqBWListEl.innerHTML = htmlBW;
+  }
+
+  function setRule(ruleValue) {
+    currentRule = Math.max(0, Math.min(255, ruleValue | 0));
+    buildRuleVizTable();
+    recomputeSequences();
+  }
+
+  function run() {
+    const ruleInput   = document.getElementById("rule");
+    const seedInput   = document.getElementById("seed");
+    const roundsInput = document.getElementById("rounds");
+    const scaleInput  = document.getElementById("scale");
+    const infoEl      = document.getElementById("info");
+    const deadColorsCheckbox = document.getElementById("deadColors");
+
+    let rule   = parseInt(ruleInput.value, 10);
+    let rounds = parseInt(roundsInput.value, 10);
+    let scale  = parseInt(scaleInput.value, 10);
+    const seedStr = seedInput.value;
+
+    const edgeMode = document.querySelector('input[name="edgeMode"]:checked').value;
+    const useDeadColors = deadColorsCheckbox.checked;
+
+    if (Number.isNaN(rule))   rule = 0;
+    if (Number.isNaN(rounds)) rounds = 1;
+    if (Number.isNaN(scale))  scale = 1;
+
+    rule   = Math.max(0, Math.min(255, rule));
+    rounds = Math.max(1, Math.min(2048, rounds));
+    scale  = Math.max(1, Math.min(8, scale));
+
+    ruleInput.value   = rule;
+    roundsInput.value = rounds;
+    scaleInput.value  = scale;
+    document.getElementById("scaleValue").textContent = scale + "×";
+
+    try {
+      const seedBits = parseSeedBits256(seedStr);
+      const gridObj = computeCA(rule, seedBits, rounds, edgeMode);
+
+      drawGrid(gridObj, scale, useDeadColors);
+
+      let hexDisplay;
+      try {
+        let n = seedStr.trim() === "" ? 0n :
+                (seedStr.trim().startsWith("0x") || seedStr.trim().startsWith("0X")
+                  ? BigInt(seedStr.trim())
+                  : BigInt(seedStr.trim()));
+        const mask256 = (1n << 256n) - 1n;
+        n = n & mask256;
+        hexDisplay = "0x" + n.toString(16).padStart(64, "0");
+      } catch {
+        hexDisplay = "(invalid seed)";
+      }
+
+      const finalRowLen = gridObj.grid[gridObj.grid.length - 1].length;
+
+      infoEl.classList.remove("error");
+      setRule(rule);
+    } catch (err) {
+      infoEl.classList.add("error");
+      infoEl.textContent = "Error: " + (err.message || err);
+      const canvas = document.getElementById("caCanvas");
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+  }
 
   document.getElementById("runBtn").addEventListener("click", run);
 
