@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Automaton Graph</title>
+  <style>
+    body{
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+      background:#0f0f12;
+      color:#e8e8ea;
+      padding:1.25rem;
+      line-height:1.35;
+    }
+    h1{margin:0 0 .75rem 0;font-size:1.1rem}
+
+    .bar{
+      display:flex; gap:1rem; flex-wrap:wrap; align-items:end;
+      padding:.9rem 1rem; margin-bottom:1rem;
+      background:#17171c; border:1px solid #2a2a33; border-radius:10px;
+      max-width: 1500px;
+    }
+    label{display:block;font-size:.85rem;color:#c9c9d1;margin-bottom:.25rem}
+    input[type="number"], input[type="text"], select{
+      padding:.4rem .5rem;
+      border-radius:8px;
+      border:1px solid #343443;
+      background:#111117;
+      color:#e8e8ea;
+      outline:none;
+    }
+    input[type="number"]{width:140px}
+    input[type="text"]{width:160px}
+    select{min-width:210px}
+    button{
+      padding:.45rem .8rem;border-radius:8px;border:1px solid #343443;
+      background:#1c1c25;color:#e8e8ea;cursor:pointer;
+    }
+    button:hover{background:#232332}
+    .muted{color:#a8a8b3;font-size:.85rem; max-width:1500px}
+    code{color:#e8e8ea}
+
+    .card{
+      max-width:1500px;
+      padding:.8rem 1rem;
+      background:#17171c;
+      border:1px solid #2a2a33;
+      border-radius:10px;
+      margin-bottom:1rem;
+    }
+
+    .kpiGrid{
+      display:grid;
+      grid-template-columns: repeat(4, minmax(240px, 1fr));
+      gap:.75rem;
+      margin-top:.75rem;
+      margin-bottom:.75rem;
+    }
+    .kpi{
+      background:#131318;border:1px solid #2a2a33;border-radius:10px;
+      padding:.65rem .75rem;
+    }
+    .kpi .k{color:#bdbdc8;font-size:.8rem}
+    .kpi .v{font-size:1.05rem;margin-top:.15rem}
+    .ok{color:#7CFF7C}
+    .warn{color:#ffb86b}
+
+    pre{
+      margin:0;
+      background:#0f0f12;
+      border:1px solid #2a2a33;
+      border-radius:10px;
+      padding:.75rem .85rem;
+      overflow:auto;
+      max-height:26vh;
+      white-space:pre-wrap;
+      word-break:break-word;
+    }
+
+    .legend{
+      display:flex;
+      flex-wrap:wrap;
+      gap:.55rem 1rem;
+      align-items:center;
+      margin-top:.5rem;
+    }
+    .legItem{display:flex; align-items:center; gap:.35rem; color:#c9c9d1; font-size:.85rem;}
+    .swatch{width:14px; height:14px; border-radius:3px; border:1px solid #333; display:inline-block;}
+
+    .pathBar{
+      display:flex;
+      gap:1rem;
+      flex-wrap:wrap;
+      align-items:center;
+      margin:.4rem 0 .6rem 0;
+    }
+    input[type="range"]{ width:420px; }
+    .pill{
+      display:inline-block;
+      padding:.12rem .45rem;
+      border:1px solid #343443;
+      border-radius:999px;
+      background:#111117;
+      color:#cfcfd6;
+      font-size:.8rem;
+    }
+
+    #graphWrap{
+      border:1px solid #2a2a33;
+      border-radius:10px;
+      background:#0f0f12;
+      overflow:hidden;
+      height:70vh;
+      min-height:420px;
+      max-height:900px;
+      padding:.5rem;
+      box-sizing:border-box;
+    }
+    svg{ display:block; width:100%; height:100%; }
+
+    .layerLabel{ fill:#bdbdc8; font-size:12px; }
+    .layerLine{ stroke:#2a2a33; stroke-width:1; }
+
+    .edge{
+      fill:none;
+      stroke:#5a5a66;
+      stroke-width:1.25;
+      opacity:0.35;
+    }
+    .edge.forward{
+      stroke:#7cffc4;
+      opacity:0.55;
+      stroke-width:1.6;
+    }
+    .edge.revisit{
+      stroke:#ffb86b;
+      opacity:0.50;
+      stroke-dasharray:4 4;
+      stroke-width:1.4;
+    }
+
+    .edge.path{
+      stroke:#ffd54a;
+      opacity:0.95;
+      stroke-width:3.0;
+    }
+    .edge.revisit.path{
+      stroke-dasharray:4 4;
+    }
+    .edge.active{
+      stroke:#ffffff;
+      opacity:1;
+      stroke-width:3.8;
+    }
+
+    .nodeCircle{
+      fill:#14141b;
+      stroke:#343443;
+      stroke-width:1.4;
+    }
+    .nodeCircle.reachable{ fill:#16161f; }
+    .nodeCircle.unreachable{ fill:#14141b; opacity:0.6; }
+    .nodeCircle.cycle{ stroke:#2a6a2a; }
+    .nodeCircle.start{ stroke:#e8e8ea; stroke-width:2.4; }
+
+    .nodeGroup.path .nodeCircle{
+      stroke:#ffd54a;
+      stroke-width:2.8;
+    }
+    .nodeGroup.active .nodeCircle{
+      stroke:#ffffff;
+      stroke-width:3.4;
+    }
+
+    .nodeLabel{
+      fill:#cfcfd6;
+      font-size:11px;
+      text-anchor:middle;
+      dominant-baseline:hanging;
+    }
+
+    .nodeGroup.highlight .nodeCircle{
+      stroke:#ffffff;
+      stroke-width:2.8;
+    }
+
+    .miniCell{
+      stroke:rgba(0,0,0,0.55);
+      stroke-width:1;
+      rx:2; ry:2;
+    }
+  </style>
+</head>
+<body>
+  <h1>Automaton Graph</h1>
+
+  <div class="bar">
+    <div>
+      <label for="rule">Rule (0–255)</label>
+      <input id="rule" type="number" min="0" max="255" value="30" />
+    </div>
+
+    <div>
+      <label for="start">Start center 5-bit window</label>
+      <input id="start" type="text" value="00100" />
+    </div>
+
+    <div>
+      <label for="steps">Sim steps</label>
+      <input id="steps" type="number" min="0" max="4096" value="80" />
+    </div>
+
+    <div>
+      <label for="edgeMode">Edges shown</label>
+      <select id="edgeMode">
+        <option value="forward" selected>Forward only (depth → depth+1)</option>
+        <option value="reachable">All edges among reachable nodes</option>
+        <option value="all">All edges (including unreachable column)</option>
+      </select>
+    </div>
+
+    <div style="display:flex; gap:.8rem; align-items:center;">
+      <label style="margin:0;">
+        <input id="showUnreach" type="checkbox" checked />
+        <span class="muted">show unreachable column</span>
+      </label>
+    </div>
+
+    <div>
+      <button id="runBtn">Compute</button>
+    </div>
+
+    <div class="muted" style="flex:1 1 720px;">
+      
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="muted">Case legend (bright = state 1, dark = state 0)</div>
+    <div id="legend" class="legend"></div>
+  </div>
+
+  <div class="card">
+    <div class="muted">Core stats</div>
+    <div id="kpis" class="kpiGrid"></div>
+    <pre id="summary">(compute)</pre>
+  </div>
+
+  <div class="card">
+    <div class="muted">Simulation Controls</div>
+    <div class="pathBar">
+      <div class="muted">t</div>
+      <input id="tSlider" type="range" min="0" max="0" value="0" />
+      <span id="tLabel" class="pill">t=0</span>
+      <button id="playBtn">Play</button>
+      <span id="pathStats" class="muted"></span>
+    </div>
+    <pre id="pathText">(compute)</pre>
+  </div>
+
+  <div class="card">
+    <div class="muted"></div>
+    <div id="graphWrap">
+      <svg id="graphSvg"></svg>
+    </div>
+    <div class="muted" style="margin-top:.5rem;">
+    </div>
+  </div>
+
+<script>
+
+  const CASE_COLORS = [
+    "#CFCFD6", // 0
+    "#00619B", // 1
+    "#006CFF", // 2
+    "#E000FF", // 3
+    "#FF004C", // 4
+    "#EE6F00", // 5
+    "#00CC00", // 6
+    "#00EDFF"  // 7
+  ];
+  function hexToRgb(hex) {
+    hex = hex.replace("#","").trim();
+    if (hex.length === 3) hex = hex.split("").map(c => c + c).join("");
+    const n = parseInt(hex, 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  function rgbToHex(r,g,b) {
+    const to2 = (x) => x.toString(16).padStart(2,"0");
+    return "#" + to2(r) + to2(g) + to2(b);
+  }
+  function darkenHex(hex, factor) {
+    const [r,g,b] = hexToRgb(hex);
+    return rgbToHex(
+      Math.round(Math.max(0, Math.min(255, r * factor))),
+      Math.round(Math.max(0, Math.min(255, g * factor))),
+      Math.round(Math.max(0, Math.min(255, b * factor)))
+    );
+  }
+  const DEAD_CASE_COLORS = CASE_COLORS.map(c => darkenHex(c, 0.22));
+
+  function caseBits(i){
+    return ((i&4)?"1":"0")+((i&2)?"1":"0")+((i&1)?"1":"0");
+  }
+  function renderLegend(){
+    const el = document.getElementById("legend");
+    el.innerHTML = CASE_COLORS.map((col, i) => `
+      <div class="legItem">
+        <span class="swatch" style="background:${col};"></span>
+        <span class="swatch" style="background:${DEAD_CASE_COLORS[i]};"></span>
+        <code>${i}</code> <span class="muted">(${caseBits(i)})</span>
+      </div>
+    `).join("");
+  }
+
+  function clampInt(x, lo, hi){ x = x|0; if (x<lo) return lo; if (x>hi) return hi; return x; }
+  function parseBits(str, n){
+    str = (str || "").trim().replace(/[_\s]/g, "");
+    if (str.length !== n) throw new Error(`Expected ${n} bits.`);
+    const bits = new Array(n);
+    for (let i=0;i<n;i++){
+      const ch = str[i];
+      if (ch !== "0" && ch !== "1") throw new Error("Bits must be only 0/1.");
+      bits[i] = ch === "1" ? 1 : 0;
+    }
+    return bits;
+  }
+  function bitsToInt(bits){ let n=0; for (const b of bits) n=(n<<1)|b; return n; }
+  function intToBits(n, len){ const bits = new Array(len); for (let i=0;i<len;i++) bits[i]=(n>>(len-1-i))&1; return bits; }
+  function toBin(n, len){ return n.toString(2).padStart(len,"0"); }
+  function ruleOut(rule, idx){ return (rule >> idx) & 1; }
+
+  function nibbleBin(n){ return n.toString(2).padStart(4,"0"); }
+  function nodeBinStr(nibs){ return "[" + nibs.map(nibbleBin).join(",") + "]"; }
+
+  function casesFromRow5(b){
+    return [
+      (b[0]<<2)|(b[1]<<1)|b[2],
+      (b[1]<<2)|(b[2]<<1)|b[3],
+      (b[2]<<2)|(b[3]<<1)|b[4]
+    ];
+  }
+
+  function nodeFromRow5(b){
+    const c = casesFromRow5(b);
+    return [
+      ((b[1]&1)<<3) | c[0],
+      ((b[2]&1)<<3) | c[1],
+      ((b[3]&1)<<3) | c[2],
+    ];
+  }
+
+  function childRowIds(rule, id5){
+    const b = intToBits(id5, 5);
+    const c = casesFromRow5(b);
+
+    const next1 = ruleOut(rule, c[0]);
+    const next2 = ruleOut(rule, c[1]);
+    const next3 = ruleOut(rule, c[2]);
+
+    const idxL0 = (0<<2)|(b[0]<<1)|b[1];
+    const idxL1 = (1<<2)|(b[0]<<1)|b[1];
+    const L0 = ruleOut(rule, idxL0);
+    const L1 = ruleOut(rule, idxL1);
+    const leftChoices = (L0 === L1) ? [L0] : [L0, L1];
+
+    const idxR0 = (b[3]<<2)|(b[4]<<1)|0;
+    const idxR1 = (b[3]<<2)|(b[4]<<1)|1;
+    const R0 = ruleOut(rule, idxR0);
+    const R1 = ruleOut(rule, idxR1);
+    const rightChoices = (R0 === R1) ? [R0] : [R0, R1];
+
+    const out = new Set();
+    for (const L of leftChoices){
+      for (const R of rightChoices){
+        const childBits = [L, next1, next2, next3, R];
+        out.add(bitsToInt(childBits));
+      }
+    }
+    return Array.from(out).sort((a,b)=>a-b);
+  }
+
+  function buildGraph(rule){
+    const nodes = new Array(32);
+    const outEdges = new Array(32);
+    const indeg = new Array(32).fill(0);
+
+    for (let id=0; id<32; id++){
+      nodes[id] = nodeFromRow5(intToBits(id, 5));
+    }
+    for (let id=0; id<32; id++){
+      outEdges[id] = childRowIds(rule, id);
+    }
+    for (let u=0; u<32; u++){
+      for (const v of outEdges[u]) indeg[v]++;
+    }
+    return { nodes, outEdges, indeg };
+  }
+
+  function bfs(outEdges, startId){
+    const dist = new Array(32).fill(-1);
+    dist[startId] = 0;
+    const q = [startId];
+    for (let qi=0; qi<q.length; qi++){
+      const u = q[qi];
+      for (const v of outEdges[u]){
+        if (dist[v] === -1){
+          dist[v] = dist[u] + 1;
+          q.push(v);
+        }
+      }
+    }
+    let maxD = 0;
+    for (const d of dist) if (d > maxD) maxD = d;
+
+    const reachable = dist.map(d => d !== -1);
+    const R = reachable.filter(Boolean).length;
+
+    let firstRevisitDepth = null;
+    for (let d=0; d<=maxD; d++){
+      let any = false;
+      for (let u=0; u<32; u++){
+        if (dist[u] !== d) continue;
+        for (const v of outEdges[u]){
+          if (dist[v] !== -1 && dist[v] <= d) { any = true; break; }
+        }
+        if (any) break;
+      }
+      if (any){ firstRevisitDepth = d; break; }
+    }
+
+    return { dist, reachable, R, maxD, firstRevisitDepth };
+  }
+
+  function sccKosaraju(outEdges, reachable){
+    const n = outEdges.length;
+    const rev = Array.from({length:n}, () => []);
+    for (let u=0; u<n; u++){
+      if (!reachable[u]) continue;
+      for (const v of outEdges[u]){
+        if (!reachable[v]) continue;
+        rev[v].push(u);
+      }
+    }
+
+    const vis = new Array(n).fill(false);
+    const order = [];
+    function dfs1(u){
+      vis[u] = true;
+      for (const v of outEdges[u]){
+        if (!reachable[v]) continue;
+        if (!vis[v]) dfs1(v);
+      }
+      order.push(u);
+    }
+    for (let i=0; i<n; i++){
+      if (!reachable[i]) continue;
+      if (!vis[i]) dfs1(i);
+    }
+
+    vis.fill(false);
+    const comps = [];
+    const compOf = new Array(n).fill(-1);
+    function dfs2(u, idx){
+      vis[u] = true;
+      compOf[u] = idx;
+      comps[idx].push(u);
+      for (const v of rev[u]){
+        if (!vis[v]) dfs2(v, idx);
+      }
+    }
+    for (let k=order.length-1; k>=0; k--){
+      const u = order[k];
+      if (!reachable[u]) continue;
+      if (!vis[u]){
+        const idx = comps.length;
+        comps.push([]);
+        dfs2(u, idx);
+      }
+    }
+
+    const isSink = new Array(comps.length).fill(true);
+    for (let u=0; u<n; u++){
+      if (!reachable[u]) continue;
+      const cu = compOf[u];
+      for (const v of outEdges[u]){
+        if (!reachable[v]) continue;
+        const cv = compOf[v];
+        if (cu !== cv) isSink[cu] = false;
+      }
+    }
+
+    const inCycle = new Array(n).fill(false);
+    for (let ci=0; ci<comps.length; ci++){
+      const comp = comps[ci];
+      if (comp.length > 1){
+        for (const u of comp) inCycle[u] = true;
+      } else if (comp.length === 1){
+        const u = comp[0];
+        if (outEdges[u].includes(u)) inCycle[u] = true;
+      }
+    }
+
+    return { comps, compOf, isSink, inCycle };
+  }
+
+  function simulateCenterWindowPath(rule, startBits5, steps){
+    steps = clampInt(steps, 0, 4096);
+
+    const width = 2*steps + 15;
+    const center = Math.floor(width/2);
+
+    let row = new Array(width).fill(0);
+    for (let i=0;i<5;i++) row[center - 2 + i] = startBits5[i];
+
+    const ids = [];
+    for (let t=0; t<=steps; t++){
+      const win = [
+        row[center-2], row[center-1], row[center], row[center+1], row[center+2]
+      ];
+      ids.push(bitsToInt(win));
+
+      if (t === steps) break;
+
+      const next = new Array(width).fill(0);
+      for (let i=0;i<width;i++){
+        const l = (i>0) ? row[i-1] : 0;
+        const c = row[i];
+        const r = (i<width-1) ? row[i+1] : 0;
+        const idx = (l<<2)|(c<<1)|r;
+        next[i] = (rule >> idx) & 1;
+      }
+      row = next;
+    }
+    return ids;
+  }
+
+  function buildPathSets(ids){
+    const nodeSet = new Set(ids);
+    const edgeSet = new Set();
+    const edgeCounts = new Map();
+    for (let t=0; t<ids.length-1; t++){
+      const u = ids[t], v = ids[t+1];
+      const key = `${u}->${v}`;
+      edgeSet.add(key);
+      edgeCounts.set(key, (edgeCounts.get(key)||0) + 1);
+    }
+    return { nodeSet, edgeSet, edgeCounts };
+  }
+
+  function renderKPIsAndSummary(graph, bfsRes, sccRes, rule, startId, pathInfo){
+    const { outEdges, nodes } = graph;
+    const { R, maxD, firstRevisitDepth } = bfsRes;
+    const { comps, isSink, inCycle } = sccRes;
+
+    const sccSizes = comps.map(c => c.length).sort((a,b)=>b-a);
+    const sinkCount = isSink.filter(Boolean).length;
+    let sinkMax = 0;
+    for (let i=0; i<comps.length; i++){
+      if (isSink[i]) sinkMax = Math.max(sinkMax, comps[i].length);
+    }
+    const cycleNodeCount = bfsRes.reachable.map((r,i)=>r && inCycle[i]).filter(Boolean).length;
+
+    let edgesTotal = 0;
+    for (let u=0; u<32; u++){
+      if (!bfsRes.reachable[u]) continue;
+      edgesTotal += outEdges[u].length;
+    }
+    const avgOut = edgesTotal / Math.max(1, R);
+    const cycleGuarantee = R;
+
+    const pathSteps = (pathInfo?.ids?.length || 1) - 1;
+    const pathDistinctNodes = pathInfo?.nodeSet?.size ?? 0;
+    const pathDistinctEdges = pathInfo?.edgeSet?.size ?? 0;
+
+    const kpis = document.getElementById("kpis");
+    const kpi = (k, v, cls="") => `
+      <div class="kpi">
+        <div class="k">${k}</div>
+        <div class="v ${cls}">${v}</div>
+      </div>
+    `;
+    kpis.innerHTML = [
+      kpi("Rule", String(rule)),
+      kpi("Reachable nodes (R)", `${R} / 32`, (R===32) ? "ok" : "warn"),
+      kpi("Saturation depth (D)", String(maxD)),
+      kpi("Cycle-guarantee depth (≤R)", String(cycleGuarantee)),
+      kpi("First revisit-edge depth", firstRevisitDepth===null ? "(none)" : String(firstRevisitDepth)),
+      kpi("SCC count (reachable)", String(comps.length), (comps.length===1 && R>0) ? "ok" : "warn"),
+      kpi("Largest SCC", String(sccSizes[0] || 0)),
+      kpi("Sink SCCs", `${sinkCount} (max size ${sinkMax})`),
+      kpi("Nodes in directed cycles", `${cycleNodeCount} / ${R}`, (cycleNodeCount===R && R>0) ? "ok" : "warn"),
+      kpi("Reachable edges total", String(edgesTotal)),
+      kpi("Avg out-degree (reachable)", avgOut.toFixed(6)),
+      kpi("Path steps (real CA)", String(pathSteps)),
+      kpi("Path distinct nodes", String(pathDistinctNodes)),
+      kpi("Path distinct edges", String(pathDistinctEdges)),
+    ].join("");
+
+    const startNode = nodes[startId];
+    const lines = [];
+    lines.push(`Rule: ${rule}`);
+    lines.push(`Start center window row5: ${toBin(startId,5)} (id=${startId})`);
+    lines.push(`Start node nibbles: ${nodeBinStr(startNode)}  (dec [${startNode.join(",")}])`);
+    lines.push("");
+    lines.push(`Graph saturation D = ${maxD}. Reachable nodes R = ${R}.`);
+    lines.push(`Real CA path: ${pathSteps} steps, visits ${pathDistinctNodes} distinct nodes, uses ${pathDistinctEdges} distinct directed edges.`);
+    document.getElementById("summary").textContent = lines.join("\n");
+  }
+
+  function drawMiniPatternInsideCircle(svgNS, group, cx, cy, nibs, radius){
+    const pad = Math.max(2, radius * 0.22);
+    let gap = Math.max(1, Math.min(3, radius * 0.18));
+
+    const available = Math.max(2, (2*radius - 2*pad));
+    let miniSize = Math.min(10, radius * 0.85);
+    miniSize = Math.min(miniSize, (available - 2*gap) / 3);
+    miniSize = Math.floor(miniSize);
+    if (miniSize < 2) miniSize = 2;
+
+    const maxGap = Math.max(1, Math.floor((available - 3*miniSize)/2));
+    gap = Math.min(gap, maxGap);
+
+    const patW = 3*miniSize + 2*gap;
+    const x0 = cx - patW/2;
+    const y0 = cy - miniSize/2;
+
+    for (let i=0; i<3; i++){
+      const n = nibs[i];
+      const alive = (n >> 3) & 1;
+      const cs = n & 7;
+      const fill = alive ? CASE_COLORS[cs] : DEAD_CASE_COLORS[cs];
+
+      const r = document.createElementNS(svgNS, "rect");
+      r.setAttribute("x", x0 + i*(miniSize+gap));
+      r.setAttribute("y", y0);
+      r.setAttribute("width", miniSize);
+      r.setAttribute("height", miniSize);
+      r.setAttribute("class", "miniCell");
+      r.setAttribute("fill", fill);
+      group.appendChild(r);
+    }
+  }
+
+  function renderGraphSVG(graph, bfsRes, sccRes, opts){
+    const { nodes, outEdges } = graph;
+    const { dist } = bfsRes;
+    const { inCycle } = sccRes;
+
+    const wrap = document.getElementById("graphWrap");
+    const svg = document.getElementById("graphSvg");
+    const svgNS = "http://www.w3.org/2000/svg";
+
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+    const W = Math.max(300, wrap.clientWidth - 1);
+    const H = Math.max(240, wrap.clientHeight - 1);
+
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+
+    const reachableIds = [];
+    const unreachableIds = [];
+    for (let i=0; i<32; i++){
+      if (dist[i] >= 0) reachableIds.push(i);
+      else unreachableIds.push(i);
+    }
+
+    const D = bfsRes.maxD;
+    const showUnreach = opts.showUnreach && unreachableIds.length > 0;
+
+    const layers = [];
+    for (let d=0; d<=D; d++) layers.push([]);
+    for (const id of reachableIds) layers[dist[id]].push(id);
+    for (const layer of layers) layer.sort((a,b)=>a-b);
+
+    if (showUnreach){
+      unreachableIds.sort((a,b)=>a-b);
+      layers.push(unreachableIds);
+    }
+
+    const numCols = layers.length;
+    const maxLayerSize = layers.reduce((m,arr)=>Math.max(m,arr.length), 1);
+
+    const marginX = Math.max(40, Math.min(70, W * 0.06));
+    const marginY = Math.max(35, Math.min(60, H * 0.08));
+
+    const colGap = (numCols > 1) ? (W - 2*marginX) / (numCols - 1) : 0;
+    const rowGap = (maxLayerSize > 1) ? (H - 2*marginY) / (maxLayerSize - 1) : 0;
+
+    const radius = Math.max(7, Math.min(18, rowGap * 0.30, colGap * 0.22));
+    const labelSize = Math.max(9, Math.min(12, radius * 0.65));
+
+    const pos = new Array(32).fill(null);
+    for (let col=0; col<layers.length; col++){
+      const layer = layers[col];
+      const k = layer.length;
+      const span = (k<=1) ? 0 : (k-1)*rowGap;
+      const y0 = (H - span) / 2;
+      const x = marginX + col*colGap;
+      for (let i=0; i<k; i++){
+        const id = layer[i];
+        pos[id] = { x, y: y0 + i*rowGap, col };
+      }
+    }
+
+    function mk(name, attrs){
+      const el = document.createElementNS(svgNS, name);
+      for (const [k,v] of Object.entries(attrs||{})) el.setAttribute(k, String(v));
+      return el;
+    }
+
+    for (let col=0; col<layers.length; col++){
+      const x = marginX + col*colGap;
+      svg.appendChild(mk("line", { x1:x, y1:20, x2:x, y2:H-20, class:"layerLine" }));
+
+      const label = (showUnreach && col === layers.length-1) ? "unreachable" : `depth ${col}`;
+      const t = mk("text", { x:x, y:14, class:"layerLabel", "text-anchor":"middle" });
+      t.appendChild(document.createTextNode(label));
+      svg.appendChild(t);
+    }
+
+    const gEdges = mk("g", { id:"edges" });
+    const gNodes = mk("g", { id:"nodes" });
+    svg.appendChild(gEdges);
+    svg.appendChild(gNodes);
+
+    const edgeMap = new Map();
+    const nodeGroupMap = new Map();
+    const edgeElems = [];
+
+    for (let u=0; u<32; u++){
+      const pu = pos[u];
+      if (!pu) continue;
+
+      for (const v of outEdges[u]){
+        const pv = pos[v];
+        if (!pv) continue;
+
+        const key = `${u}->${v}`;
+        const isPathEdge = opts.pathEdgeSet && opts.pathEdgeSet.has(key);
+
+        const du = dist[u], dv = dist[v];
+        const uReach = du >= 0, vReach = dv >= 0;
+
+        if (!isPathEdge){
+          if (opts.edgeMode === "forward"){
+            if (!(uReach && vReach && dv === du + 1)) continue;
+          } else if (opts.edgeMode === "reachable"){
+            if (!(uReach && vReach)) continue;
+          }
+        }
+
+        const x1 = pu.x, y1 = pu.y;
+        const x2 = pv.x, y2 = pv.y;
+
+        const dx = (x2 - x1) * 0.55;
+        const dPath = `M ${x1} ${y1} C ${x1+dx} ${y1}, ${x2-dx} ${y2}, ${x2} ${y2}`;
+
+        let cls = "edge";
+        if (uReach && vReach && dv === du + 1) cls += " forward";
+        else if (uReach && vReach && dv <= du) cls += " revisit";
+        if (isPathEdge) cls += " path";
+
+        const path = mk("path", { d: dPath, class: cls, "data-from":u, "data-to":v });
+        gEdges.appendChild(path);
+
+        edgeMap.set(key, path);
+        edgeElems.push(path);
+      }
+    }
+
+    for (let id=0; id<32; id++){
+      const p = pos[id];
+      if (!p) continue;
+
+      const d = dist[id];
+      const reachable = d >= 0;
+
+      const g = mk("g", { class:"nodeGroup", "data-id":id });
+      nodeGroupMap.set(id, g);
+
+      const circleClass = [
+        "nodeCircle",
+        reachable ? "reachable" : "unreachable",
+        inCycle[id] ? "cycle" : "",
+        (id === opts.startId) ? "start" : ""
+      ].filter(Boolean).join(" ");
+
+      g.appendChild(mk("circle", { cx:p.x, cy:p.y, r:radius, class: circleClass }));
+
+      if (opts.pathNodeSet && opts.pathNodeSet.has(id)) {
+        g.classList.add("path");
+      }
+
+      drawMiniPatternInsideCircle(svgNS, g, p.x, p.y, nodes[id], radius);
+
+      const lbl = mk("text", {
+        x:p.x,
+        y:(p.y + radius + 4),
+        class:"nodeLabel",
+        style:`font-size:${labelSize}px`
+      });
+      lbl.appendChild(document.createTextNode(toBin(id,5)));
+      g.appendChild(lbl);
+
+      const tip = [
+        `row5: ${toBin(id,5)} (id=${id})`,
+        `depth: ${reachable ? d : "unreachable"}`,
+        `nibbles: ${nodeBinStr(nodes[id])} (dec [${nodes[id].join(",")}])`,
+        `children: ${outEdges[id].length} -> ${outEdges[id].map(v=>toBin(v,5)).join(" ")}`
+      ].join("\n");
+      const title = mk("title", {});
+      title.appendChild(document.createTextNode(tip));
+      g.appendChild(title);
+
+      gNodes.appendChild(g);
+    }
+
+    function clearHighlight(){
+      svg.querySelectorAll(".highlight").forEach(el => el.classList.remove("highlight"));
+    }
+    function highlight(id){
+      clearHighlight();
+      const g = nodeGroupMap.get(id);
+      if (g) g.classList.add("highlight");
+
+      for (const e of edgeElems){
+        const from = parseInt(e.getAttribute("data-from"), 10);
+        const to = parseInt(e.getAttribute("data-to"), 10);
+        if (from === id || to === id){
+          e.classList.add("highlight");
+        }
+        if (from === id){
+          const cg = nodeGroupMap.get(to);
+          if (cg) cg.classList.add("highlight");
+        }
+      }
+    }
+    for (const [id, g] of nodeGroupMap.entries()){
+      g.addEventListener("mouseenter", () => highlight(id));
+      g.addEventListener("mouseleave", () => clearHighlight());
+    }
+
+    return { nodeGroupMap, edgeMap };
+  }
+
+  function renderPathPanel(ids, graph){
+    const slider = document.getElementById("tSlider");
+    const tLabel = document.getElementById("tLabel");
+    const pathText = document.getElementById("pathText");
+    const pathStats = document.getElementById("pathStats");
+
+    slider.min = 0;
+    slider.max = Math.max(0, ids.length - 1);
+    slider.value = 0;
+    tLabel.textContent = `t=0`;
+
+    const { nodeSet, edgeSet } = buildPathSets(ids);
+
+    pathStats.textContent = `steps=${ids.length-1} · distinct nodes=${nodeSet.size} · distinct edges=${edgeSet.size}`;
+
+    const maxLines = 220;
+    const lines = [];
+    for (let t=0; t<ids.length; t++){
+      const id = ids[t];
+      const row = toBin(id,5);
+      const nibs = graph.nodes[id];
+      lines.push(`${String(t).padStart(4," ")}  row5=${row}   nibbles=${nodeBinStr(nibs)}`);
+      if (lines.length >= maxLines){
+        if (t < ids.length-1) lines.push(`... (truncated; total steps=${ids.length-1})`);
+        break;
+      }
+    }
+    pathText.textContent = lines.join("\n");
+  }
+
+  let LAST_RENDER = null;
+  let LAST_PATH = null;
+  let LAST_ACTIVE = { nodeId: null, edgeKey: null };
+
+  function setActiveStep(t){
+    if (!LAST_RENDER || !LAST_PATH) return;
+
+    const ids = LAST_PATH.ids;
+    t = clampInt(t, 0, ids.length - 1);
+
+    const slider = document.getElementById("tSlider");
+    slider.value = t;
+
+    document.getElementById("tLabel").textContent = `t=${t}`;
+
+    if (LAST_ACTIVE.nodeId !== null){
+      const gPrev = LAST_RENDER.nodeGroupMap.get(LAST_ACTIVE.nodeId);
+      if (gPrev) gPrev.classList.remove("active");
+    }
+    if (LAST_ACTIVE.edgeKey !== null){
+      const ePrev = LAST_RENDER.edgeMap.get(LAST_ACTIVE.edgeKey);
+      if (ePrev) ePrev.classList.remove("active");
+    }
+
+    const nodeId = ids[t];
+    const g = LAST_RENDER.nodeGroupMap.get(nodeId);
+    if (g) g.classList.add("active");
+
+    let edgeKey = null;
+    if (t < ids.length - 1){
+      edgeKey = `${ids[t]}->${ids[t+1]}`;
+      const e = LAST_RENDER.edgeMap.get(edgeKey);
+      if (e) e.classList.add("active");
+    }
+
+    LAST_ACTIVE = { nodeId, edgeKey };
+  }
+
+  let PLAY_TIMER = null;
+  function togglePlay(){
+    const btn = document.getElementById("playBtn");
+    if (!LAST_PATH) return;
+
+    if (PLAY_TIMER){
+      clearInterval(PLAY_TIMER);
+      PLAY_TIMER = null;
+      btn.textContent = "Play";
+      return;
+    }
+
+    btn.textContent = "Pause";
+    PLAY_TIMER = setInterval(() => {
+      const slider = document.getElementById("tSlider");
+      let t = parseInt(slider.value, 10);
+      if (Number.isNaN(t)) t = 0;
+      const maxT = parseInt(slider.max, 10);
+
+      if (t >= maxT){
+        clearInterval(PLAY_TIMER);
+        PLAY_TIMER = null;
+        btn.textContent = "Play";
+        return;
+      }
+      setActiveStep(t + 1);
+    }, 120);
+  }
+
+  function run(){
+    const ruleEl = document.getElementById("rule");
+    const startEl = document.getElementById("start");
+    const stepsEl = document.getElementById("steps");
+    const edgeModeEl = document.getElementById("edgeMode");
+    const showUnreachEl = document.getElementById("showUnreach");
+
+    let rule = parseInt(ruleEl.value, 10);
+    if (Number.isNaN(rule)) rule = 0;
+    rule = clampInt(rule, 0, 255);
+    ruleEl.value = rule;
+
+    let steps = parseInt(stepsEl.value, 10);
+    if (Number.isNaN(steps)) steps = 0;
+    steps = clampInt(steps, 0, 4096);
+    stepsEl.value = steps;
+
+    let startBits;
+    try{
+      startBits = parseBits(startEl.value, 5);
+    }catch(e){
+      document.getElementById("kpis").innerHTML = "";
+      document.getElementById("summary").textContent = "Error: " + (e.message || e);
+      const svg = document.getElementById("graphSvg");
+      while (svg.firstChild) svg.removeChild(svg.firstChild);
+      document.getElementById("pathText").textContent = "(invalid start bits)";
+      return;
+    }
+    const startId = bitsToInt(startBits);
+
+    const graph = buildGraph(rule);
+    const bfsRes = bfs(graph.outEdges, startId);
+    const sccRes = sccKosaraju(graph.outEdges, bfsRes.reachable);
+
+    const ids = simulateCenterWindowPath(rule, startBits, steps);
+    const pathSets = buildPathSets(ids);
+
+    renderKPIsAndSummary(graph, bfsRes, sccRes, rule, startId, { ids, ...pathSets });
+
+    renderPathPanel(ids, graph);
+
+    LAST_RENDER = renderGraphSVG(
+      graph, bfsRes, sccRes,
+      {
+        edgeMode: edgeModeEl.value,
+        showUnreach: showUnreachEl.checked,
+        startId,
+        pathEdgeSet: pathSets.edgeSet,
+        pathNodeSet: pathSets.nodeSet
+      }
+    );
+
+    LAST_PATH = { ids };
+    LAST_ACTIVE = { nodeId: null, edgeKey: null };
+    setActiveStep(0);
+  }
+
+  document.getElementById("runBtn").addEventListener("click", run);
+  document.getElementById("rule").addEventListener("input", run);
+  document.getElementById("start").addEventListener("change", run);
+  document.getElementById("steps").addEventListener("change", run);
+  document.getElementById("edgeMode").addEventListener("change", run);
+  document.getElementById("showUnreach").addEventListener("change", run);
+  document.getElementById("tSlider").addEventListener("input", (e) => {
+    const t = parseInt(e.target.value, 10);
+    if (!Number.isNaN(t)) setActiveStep(t);
+  });
+  document.getElementById("playBtn").addEventListener("click", togglePlay);
+
+  let _resizeTimer = null;
+  window.addEventListener("resize", () => {
+    clearTimeout(_resizeTimer);
+    _resizeTimer = setTimeout(run, 80);
+  });
+
+  renderLegend();
+  run();
+</script>
+</body>
+</html>
