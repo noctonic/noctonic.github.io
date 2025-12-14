@@ -684,18 +684,10 @@ button.g3Cell:focus-visible{
   height:18px;
 }
 
-.bgWrap{
-  display:flex;
-  flex-direction:column;
-  gap:.65rem;
-}
 
-.bgBar{
-  display:flex;
-  gap:.9rem;
-  flex-wrap:wrap;
-  align-items:end;
-}
+.bgWrap{ display:flex; flex-direction:column; gap:.65rem; }
+
+.bgBar{ display:flex; gap:.9rem; flex-wrap:wrap; align-items:end; }
 
 .bgBar label{
   display:block;
@@ -714,11 +706,7 @@ button.g3Cell:focus-visible{
   font-family:inherit;
   outline:none;
 }
-
-.bgNum:focus-visible{
-  outline:2px solid var(--text);
-  outline-offset:2px;
-}
+.bgNum:focus-visible{ outline:2px solid var(--text); outline-offset:2px; }
 
 .bgCode{
   font-variant-numeric: tabular-nums;
@@ -735,11 +723,7 @@ button.g3Cell:focus-visible{
   overflow:hidden;
 }
 
-.bgSvg{
-  display:block;
-  width:100%;
-  height:100%;
-}
+.bgSvg{ display:block; width:100%; height:100%; }
 
 .bgEdge{
   fill:none;
@@ -748,19 +732,12 @@ button.g3Cell:focus-visible{
   opacity:0.35;
   pointer-events:stroke;
 }
-
-.bgEdge.multi{
-  stroke-width:2.0;
-  opacity:0.45;
-}
-
+.bgEdge.multi{ stroke-width:2.0; opacity:0.45; }
 .bgEdge.dim{ opacity:0.06; }
 
-.bgEdge.hl{
-  stroke:#ffffff;
-  opacity:0.95;
-  stroke-width:3.2;
-}
+.bgEdge.parent{ stroke:#ffb86b; opacity:0.95; }
+.bgEdge.child { stroke:#7cffc4; opacity:0.95; }
+.bgEdge.both  { stroke:#ffd54a; opacity:0.98; }
 
 .bgNode{ cursor:default; }
 .bgNode.dim{ opacity:0.18; }
@@ -771,20 +748,9 @@ button.g3Cell:focus-visible{
   stroke-width:1.3;
 }
 
-.bgNode.orphan .bgCircle{
-  stroke:#ffb86b;
-  stroke-width:2.2;
-}
-
-.bgNode.nei .bgCircle{
-  stroke:#cfcfd6;
-  stroke-width:2.0;
-}
-
-.bgNode.hl .bgCircle{
-  stroke:#ffffff;
-  stroke-width:2.8;
-}
+.bgNode.orphan .bgCircle{ stroke:#ffb86b; stroke-width:2.2; }
+.bgNode.nei .bgCircle{ stroke:#cfcfd6; stroke-width:2.0; }
+.bgNode.hl  .bgCircle{ stroke:#ffffff; stroke-width:2.8; }
 
 .bgMini{
   stroke:rgba(0,0,0,0.55);
@@ -800,43 +766,26 @@ button.g3Cell:focus-visible{
   opacity:0.9;
 }
 
-
-.bgInfo{
-  color:var(--muted);
-  font-size:.85rem;
+.bgInfo{ color:var(--muted); font-size:.85rem; }
+.rwWrap .bgEdge{
+  opacity:0.06;
 }
 
-.bgEdge.cw{ stroke:#7cffc4; }
-.bgEdge.ccw{ stroke:#ffb86b; }
-.bgEdge.loop{ stroke:#ffd54a; }
+.rwWrap .bgEdge.rwHot1{ opacity:0.30; }
+.rwWrap .bgEdge.rwHot2{ opacity:0.55; }
+.rwWrap .bgEdge.rwHot3{ opacity:0.85; }
 
-.bgEdge.dim{ opacity:0.06; }
-.bgEdge.hl{
-  stroke:#ffffff;
-  opacity:0.95;
-  stroke-width:3.2;
-}
-
-
-.rwWrap .bgNode{ cursor:pointer; }
-
-.bgNode.cur .bgCircle{
-  stroke:#ffffff;
-  stroke-width:3.0;
-}
-
-.bgEdge.rwHot1{ opacity:0.55; }
-.bgEdge.rwHot2{ opacity:0.80; }
-.bgEdge.rwHot3{ opacity:1.00; }
-
-.bgEdge.rwNow{
+.rwWrap .bgEdge.rwNow{
   opacity:1.00;
   stroke:#ffffff;
 }
 
-.bgNode.rwHot1{ opacity:0.70; }
-.bgNode.rwHot2{ opacity:0.88; }
-.bgNode.rwHot3{ opacity:1.00; }
+.rwWrap .bgEdge.cw,
+.rwWrap .bgEdge.ccw,
+.rwWrap .bgEdge.loop{
+  stroke:#5a5a66 !important;
+}
+
 
 .rwHistory{
   display:flex;

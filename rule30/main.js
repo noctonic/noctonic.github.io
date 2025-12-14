@@ -1071,6 +1071,7 @@
 
     sync();
     });
+
     registerDemo("adjacency3cellmatrix", (mount, opts) => {
 
     const CASE_COLORS = [
@@ -1198,17 +1199,17 @@
 
     sync();
     });
-    registerDemo("basicgraph", (mount, opts) => {
 
+    registerDemo("basicgraph", (mount, opts) => {
     const CASE_COLORS = [
-        "#60a5fa", 
-        "#34d399", 
-        "#fbbf24", 
-        "#fb7185", 
-        "#a78bfa", 
-        "#f97316", 
-        "#22c55e", 
-        "#38bdf8", 
+        "#60a5fa",
+        "#34d399",
+        "#fbbf24",
+        "#fb7185",
+        "#a78bfa",
+        "#f97316",
+        "#22c55e",
+        "#38bdf8",
     ];
 
     function hexToRgb(hex){
@@ -1270,12 +1271,12 @@
     let rule = clamp255((opts && Number.isFinite(opts.rule)) ? Math.floor(opts.rule) : 30);
 
     const root = el("div", "bgWrap");
-
     const bar = el("div", "bgBar");
 
     const ruleBox = el("div");
     const ruleLab = document.createElement("label");
     ruleLab.textContent = "rule";
+
     const ruleInput = document.createElement("input");
     ruleInput.className = "bgNum";
     ruleInput.type = "number";
@@ -1290,7 +1291,7 @@
     ruleBin.className = "bgCode";
 
     const hint = el("div", "bgInfo");
-    hint.textContent = "hover a node. orphans are outlined (none in rule 30)";
+    hint.textContent = "hover to see parent/child relationships. Orphans are highlighted orange (none in rule 30)";
 
     bar.appendChild(ruleBox);
     bar.appendChild(ruleBin);
@@ -1310,9 +1311,19 @@
     mount.appendChild(root);
 
     let nodeG = new Array(32).fill(null);
-    let edgeP = []; 
+
+    let edgeP = [];
+
     let outAdj = Array.from({length:32}, () => []);
     let inAdj  = Array.from({length:32}, () => []);
+
+   
+    const MARK = {
+        neutral: "bgArrowNeutral",
+        parent:  "bgArrowParent",
+        child:   "bgArrowChild",
+        both:    "bgArrowBoth",
+    };
 
     function buildGraph(){
         const edgeCount = new Map();
@@ -1356,14 +1367,28 @@
         return n;
     }
 
+    function addMarker(defs, id, fill){
+        const m = mk("marker", {
+        id,
+        viewBox: "0 0 10 10",
+        refX: "9",
+        refY: "5",
+        markerWidth: "6",
+        markerHeight: "6",
+        orient: "auto"
+        });
+        m.appendChild(mk("path", { d: "M 0 0 L 10 5 L 0 10 z", fill }));
+        defs.appendChild(m);
+    }
+
     function render(){
         rule = clamp255(rule);
         ruleInput.value = String(rule);
         ruleBin.textContent = toBin(rule, 8);
 
         const edgeCount = buildGraph();
+        const edgeKeys = new Set(edgeCount.keys());
 
-        
         const W = Math.max(320, viz.clientWidth | 0);
         const H = Math.max(260, viz.clientHeight | 0);
         svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
@@ -1371,40 +1396,20 @@
 
         clearSvg();
 
+       
         const defs = mk("defs");
-
-        function addMarker(id, fill){
-        const m = mk("marker", {
-            id,
-            viewBox: "0 0 10 10",
-            refX: "9",
-            refY: "5",
-            markerWidth: "6",
-            markerHeight: "6",
-            orient: "auto"
-        });
-        m.appendChild(mk("path", { d: "M 0 0 L 10 5 L 0 10 z", fill }));
-        defs.appendChild(m);
-        }
-
-        addMarker("bgArrowCW",  "#7cffc4");
-        addMarker("bgArrowCCW", "#ffb86b");
-        addMarker("bgArrowLoop","#ffd54a");
-
+        addMarker(defs, MARK.neutral, "#5a5a66");
+        addMarker(defs, MARK.parent,  "#ffb86b");
+        addMarker(defs, MARK.child,   "#7cffc4");
+        addMarker(defs, MARK.both,    "#ffd54a");
         svg.appendChild(defs);
-
 
         const gEdges = mk("g");
         const gNodes = mk("g");
         svg.appendChild(gEdges);
         svg.appendChild(gNodes);
-        function circularDir(u, v){
-        if (u === v) return "loop";
-        const d = (v - u + 32) % 32; 
-        return (d <= 16) ? "cw" : "ccw";
-        }
 
-        
+       
         const cx = W/2, cy = H/2;
         const nodeR = Math.max(10, Math.min(18, Math.min(W,H) * 0.04));
         const ringR = Math.max(10, Math.min(W,H) * 0.46 - nodeR - 10);
@@ -1419,6 +1424,7 @@
         };
         }
 
+       
         const orphan = new Array(32).fill(false);
         let orphanCount = 0;
         for (let i=0;i<32;i++){
@@ -1428,13 +1434,14 @@
         }
         }
 
+       
         edgeP = [];
+
         for (const [key, count] of edgeCount.entries()){
         const [a,b] = key.split("->");
         const u = Number(a), v = Number(b);
 
         const p1 = pos[u], p2 = pos[v];
-
         let d = "";
 
         if (u === v){
@@ -1443,9 +1450,7 @@
             const ox = p1.x + rx * (nodeR + 10);
             const oy = p1.y + ry * (nodeR + 10);
 
-            
             const px = -ry, py = rx;
-
             const xA = ox + px * loopR;
             const yA = oy + py * loopR;
             const xB = ox - px * loopR;
@@ -1455,53 +1460,51 @@
                 C ${xA + rx*loopR} ${yA + ry*loopR},
                 ${xB + rx*loopR} ${yB + ry*loopR},
                 ${xB} ${yB}`;
-
         } else {
-            
             const dx = p2.x - p1.x, dy = p2.y - p1.y;
             const len = Math.hypot(dx,dy) || 1;
             const ux = dx/len, uy = dy/len;
 
-            const x1 = p1.x + ux * nodeR;
-            const y1 = p1.y + uy * nodeR;
-            const x2 = p2.x - ux * nodeR;
-            const y2 = p2.y - uy * nodeR;
+            const startPad = nodeR + 2;
+            const endPad   = nodeR + 4;
 
-            
-            const c1x = x1*0.70 + cx*0.30;
-            const c1y = y1*0.70 + cy*0.30;
-            const c2x = x2*0.70 + cx*0.30;
-            const c2y = y2*0.70 + cy*0.30;
+            const x1 = p1.x + ux * startPad;
+            const y1 = p1.y + uy * startPad;
+            const x2 = p2.x - ux * endPad;
+            const y2 = p2.y - uy * endPad;
+
+            const c1x = x1*0.65 + cx*0.35;
+            const c1y = y1*0.65 + cy*0.35;
+            const c2x = x2*0.85 + cx*0.15;
+            const c2y = y2*0.85 + cy*0.15;
 
             d = `M ${x1} ${y1} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${x2} ${y2}`;
         }
 
-        const dir = circularDir(u, v);
-        const markerId = (dir === "cw") ? "bgArrowCW" : (dir === "ccw") ? "bgArrowCCW" : "bgArrowLoop";
+       
+       
+       
+        const revKey = `${v}->${u}`;
+        const defaultKind = (edgeKeys.has(revKey) ? "both" : "child");
+        const defaultMarker = MARK[defaultKind];
 
         const path = mk("path", {
-        d,
-        class: `bgEdge ${dir}` + (count > 1 ? " multi" : ""),
-        "marker-end": `url(#${markerId})`
+            d,
+            class: `bgEdge ${defaultKind}` + (count > 1 ? " multi" : ""),
+            "marker-end": `url(#${defaultMarker})`
         });
 
-
-        
         path.style.strokeWidth = String(1.2 + (count - 1) * 0.7);
 
-        path.dataset.from = String(u);
-        path.dataset.to = String(v);
-
-        
         const t = mk("title");
-        t.textContent = `${toBin(u,5)} → ${toBin(v,5)}  (multiplicity=${count})`;
+        t.textContent = `${toBin(u,5)} → ${toBin(v,5)} (x${count})`;
         path.appendChild(t);
 
         gEdges.appendChild(path);
-        edgeP.push({ from:u, to:v, el:path });
+        edgeP.push({ from:u, to:v, el:path, defaultClass: defaultKind, defaultMarker });
         }
 
-        
+       
         nodeG = new Array(32).fill(null);
 
         for (let id=0; id<32; id++){
@@ -1510,10 +1513,9 @@
         const g = mk("g", { class: "bgNode" + (orphan[id] ? " orphan" : "") });
         g.dataset.id = String(id);
 
-        
         g.appendChild(mk("circle", { cx:p.x, cy:p.y, r:nodeR, class:"bgCircle" }));
 
-        
+       
         const cases = casesFromId5(id);
 
         const pad = Math.max(2, nodeR * 0.22);
@@ -1530,35 +1532,27 @@
             const on = ruleOut(rule, c) === 1;
             const fill = on ? CASE_COLORS[c] : DEAD_CASE_COLORS[c];
 
-            const r = mk("rect", {
+            g.appendChild(mk("rect", {
             x: x0 + i*(mini+gap),
             y: y0,
             width: mini,
             height: mini,
             class: "bgMini",
             fill
-            });
-            g.appendChild(r);
+            }));
         }
 
-        
-        const lbl = mk("text", {
-            x: p.x,
-            y: p.y + nodeR + 4,
-            class: "bgLabel"
-        });
+        const lbl = mk("text", { x:p.x, y:p.y + nodeR + 4, class:"bgLabel" });
         lbl.appendChild(document.createTextNode(toBin(id,5)));
         g.appendChild(lbl);
 
-        
         const tt = mk("title");
         tt.textContent =
-            `node abcde=${toBin(id,5)}\n` +
+            `abcde=${toBin(id,5)}\n` +
             `cases: ${cases.map(c => toBin(c,3)).join(" ")}` +
-            (orphan[id] ? "\n(orphan: no parents)" : "");
+            (orphan[id] ? "\n(orphan)" : "");
         g.appendChild(tt);
 
-        
         g.addEventListener("mouseenter", () => highlightNode(id));
         g.addEventListener("mouseleave", clearHighlight);
 
@@ -1566,68 +1560,73 @@
         nodeG[id] = g;
         }
 
-        
-        for (const e of edgeP){
-        e.el.addEventListener("mouseenter", () => highlightEdge(e.from, e.to));
-        e.el.addEventListener("mouseleave", clearHighlight);
-        }
-
-        
         info.textContent = `nodes=32 · edges=${edgeP.length} · orphans=${orphanCount}`;
+        clearHighlight();
     }
 
+   
     function clearHighlight(){
         for (const g of nodeG){
         if (!g) continue;
         g.classList.remove("hl","nei","dim");
         }
         for (const e of edgeP){
-        e.el.classList.remove("hl","dim");
+        e.el.classList.remove("parent","child","both","dim");
+        e.el.classList.add(e.defaultClass);
+        e.el.setAttribute("marker-end", `url(#${e.defaultMarker})`);
         }
     }
 
     function highlightNode(id){
-        const parents = inAdj[id].map(x => x.from);
-        const kids    = outAdj[id].map(x => x.to);
+        const parents = new Set(inAdj[id].map(x => x.from));
+        const kids    = new Set(outAdj[id].map(x => x.to));
 
-        const parentSet = new Set(parents);
-        const kidSet = new Set(kids);
-
+       
         for (let i=0;i<32;i++){
         const g = nodeG[i];
         if (!g) continue;
 
         if (i === id) g.classList.add("hl");
-        else if (parentSet.has(i) || kidSet.has(i)) g.classList.add("nei");
+        else if (parents.has(i) || kids.has(i)) g.classList.add("nei");
         else g.classList.add("dim");
         }
 
+       
         for (const e of edgeP){
-        if (e.from === id || e.to === id){
-            e.el.classList.add("hl");
-        } else {
+        const u = e.from, v = e.to;
+
+        const incident = (u === id || v === id);
+
+        if (!incident){
+           
             e.el.classList.add("dim");
+            e.el.classList.remove("parent","child","both");
+            e.el.setAttribute("marker-end", `url(#${MARK.neutral})`);
+            continue;
+        }
+
+       
+       
+        const isOut = (u === id);
+        const other = isOut ? v : u;
+        const mutual = parents.has(other) && kids.has(other);
+
+        e.el.classList.remove("dim","parent","child","both");
+
+        if (mutual){
+            e.el.classList.add("both");
+            e.el.setAttribute("marker-end", `url(#${MARK.both})`);
+        } else if (isOut){
+            e.el.classList.add("child");
+            e.el.setAttribute("marker-end", `url(#${MARK.child})`);
+        } else {
+            e.el.classList.add("parent");
+            e.el.setAttribute("marker-end", `url(#${MARK.parent})`);
         }
         }
 
         info.textContent =
-        `hover ${toBin(id,5)} · out=${outAdj[id].length} · in=${inAdj[id].length}`;
-    }
-
-    function highlightEdge(u, v){
-        for (let i=0;i<32;i++){
-        const g = nodeG[i];
-        if (!g) continue;
-        if (i === u || i === v) g.classList.add("hl");
-        else g.classList.add("dim");
-        }
-
-        for (const e of edgeP){
-        if (e.from === u && e.to === v) e.el.classList.add("hl");
-        else e.el.classList.add("dim");
-        }
-
-        info.textContent = `hover edge ${toBin(u,5)} → ${toBin(v,5)}`;
+        `hover ${toBin(id,5)} · children=${outAdj[id].length} · parents=${inAdj[id].length}`;
     }
 
     ruleInput.addEventListener("input", () => {
@@ -1639,7 +1638,6 @@
         render();
     });
 
-    
     let resizeTimer = null;
     window.addEventListener("resize", () => {
         clearTimeout(resizeTimer);
@@ -1648,371 +1646,194 @@
 
     render();
     });
-registerDemo("walkgraph", (mount, opts) => {
-  
-  const CASE_COLORS = [
-    "#60a5fa", 
-    "#34d399", 
-    "#fbbf24", 
-    "#fb7185", 
-    "#a78bfa", 
-    "#f97316", 
-    "#22c55e", 
-    "#38bdf8", 
-  ];
 
-  
-  function hexToRgb(hex){
-    hex = hex.replace("#","").trim();
-    if (hex.length === 3) hex = hex.split("").map(c => c+c).join("");
-    const n = parseInt(hex, 16);
-    return [(n>>16)&255, (n>>8)&255, n&255];
-  }
-  function rgbToHex(r,g,b){
-    const to2 = (x) => x.toString(16).padStart(2,"0");
-    return "#" + to2(r) + to2(g) + to2(b);
-  }
-  function darkenHex(hex, factor){
-    const [r,g,b] = hexToRgb(hex);
-    return rgbToHex(
-      Math.round(Math.max(0, Math.min(255, r*factor))),
-      Math.round(Math.max(0, Math.min(255, g*factor))),
-      Math.round(Math.max(0, Math.min(255, b*factor)))
-    );
-  }
-  const DEAD_CASE_COLORS = CASE_COLORS.map(c => darkenHex(c, 0.22));
-
-  const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n|0));
-  const clamp255 = (n) => clamp(n, 0, 255);
-
-  const toBin = (n, len) => (n >>> 0).toString(2).padStart(len, "0");
-  const ruleOut = (rule, idx) => (rule >> idx) & 1;
-
-  function bits5(id){
-    return [
-      (id >> 4) & 1,
-      (id >> 3) & 1,
-      (id >> 2) & 1,
-      (id >> 1) & 1,
-      (id >> 0) & 1,
+    registerDemo("walkgraph", (mount, opts) => {
+   
+    const CASE_COLORS = [
+        "#60a5fa",
+        "#34d399",
+        "#fbbf24",
+        "#fb7185",
+        "#a78bfa",
+        "#f97316",
+        "#22c55e",
+        "#38bdf8",
     ];
-  }
 
-  
-  function casesFromId5(id){
-    const [a,b,c,d,e] = bits5(id);
-    const x = (a<<2) | (b<<1) | c;
-    const y = (b<<2) | (c<<1) | d;
-    const z = (c<<2) | (d<<1) | e;
-    return [x,y,z];
-  }
+    function hexToRgb(hex){
+        hex = hex.replace("#","").trim();
+        if (hex.length === 3) hex = hex.split("").map(c => c+c).join("");
+        const n = parseInt(hex, 16);
+        return [(n>>16)&255, (n>>8)&255, n&255];
+    }
+    function rgbToHex(r,g,b){
+        const to2 = (x) => x.toString(16).padStart(2,"0");
+        return "#" + to2(r) + to2(g) + to2(b);
+    }
+    function darkenHex(hex, factor){
+        const [r,g,b] = hexToRgb(hex);
+        return rgbToHex(
+        Math.round(Math.max(0, Math.min(255, r*factor))),
+        Math.round(Math.max(0, Math.min(255, g*factor))),
+        Math.round(Math.max(0, Math.min(255, b*factor)))
+        );
+    }
+    const DEAD_CASE_COLORS = CASE_COLORS.map(c => darkenHex(c, 0.22));
 
-  
-  function childFromParent(rule, parentId, L, R){
-    const [a,b,c,d,e] = bits5(parentId);
+   
+    const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n|0));
+    const clamp255 = (n) => clamp(n, 0, 255);
+    const toBin = (n, len) => (n >>> 0).toString(2).padStart(len, "0");
+    const ruleOut = (rule, idx) => (rule >> idx) & 1;
 
-    const o0 = ruleOut(rule, (L<<2) | (a<<1) | b);
-    const o1 = ruleOut(rule, (a<<2) | (b<<1) | c);
-    const o2 = ruleOut(rule, (b<<2) | (c<<1) | d);
-    const o3 = ruleOut(rule, (c<<2) | (d<<1) | e);
-    const o4 = ruleOut(rule, (d<<2) | (e<<1) | R);
-
-    return (o0<<4) | (o1<<3) | (o2<<2) | (o3<<1) | o4;
-  }
-
-  
-  function circularDir(u, v){
-    if (u === v) return "loop";
-    const d = (v - u + 32) % 32; 
-    return (d <= 16) ? "cw" : "ccw";
-  }
-
-  
-  let rule = clamp255((opts && Number.isFinite(opts.rule)) ? Math.floor(opts.rule) : 30);
-
-  
-  let cur = clamp((opts && Number.isFinite(opts.start)) ? Math.floor(opts.start) : 4, 0, 31);
-
-  let running = false;
-  let stepCount = 0;
-
-  let speedMs = clamp((opts && Number.isFinite(opts.speedMs)) ? Math.floor(opts.speedMs) : 140, 30, 2000);
-  let timer = null;
-
-  
-  let lastL = 0, lastR = 0;
-
-  
-  let history = [cur];
-
-  
-  let nodeHeat = new Float32Array(32);
-  let edgeHeat = new Float32Array(0);
-  let lastEdgeIdx = -1;
-
-  
-  let outAdj = Array.from({length:32}, () => []);
-  let inAdj  = Array.from({length:32}, () => []);
-
-  
-  const root = el("div", "bgWrap");
-  root.classList.add("rwWrap");
-
-  const bar = el("div", "bgBar");
-
-  const ruleBox = el("div");
-  const ruleLab = document.createElement("label");
-  ruleLab.textContent = "rule";
-  const ruleInput = document.createElement("input");
-  ruleInput.className = "rwNum";
-  ruleInput.type = "number";
-  ruleInput.min = "0";
-  ruleInput.max = "255";
-  ruleInput.step = "1";
-  ruleBox.appendChild(ruleLab);
-  ruleBox.appendChild(ruleInput);
-
-  const ruleBin = document.createElement("code");
-  ruleBin.className = "bgCode";
-
-  const playBtn = document.createElement("button");
-  playBtn.type = "button";
-  playBtn.className = "rwBtn";
-  playBtn.textContent = "Play";
-
-  const stepBtn = document.createElement("button");
-  stepBtn.type = "button";
-  stepBtn.className = "rwBtn";
-  stepBtn.textContent = "Step";
-
-  const speedBox = el("div");
-  const speedLab = document.createElement("label");
-  speedLab.textContent = "ms/step";
-  const speedInput = document.createElement("input");
-  speedInput.className = "rwNum";
-  speedInput.type = "number";
-  speedInput.min = "30";
-  speedInput.max = "2000";
-  speedInput.step = "10";
-  speedBox.appendChild(speedLab);
-  speedBox.appendChild(speedInput);
-
-  const curCode = document.createElement("code");
-  curCode.className = "bgCode";
-
-  bar.appendChild(ruleBox);
-  bar.appendChild(ruleBin);
-  bar.appendChild(playBtn);
-  bar.appendChild(stepBtn);
-  bar.appendChild(speedBox);
-  bar.appendChild(curCode);
-
-  const histWrap = el("div", "rwHistory");
-  const histSlots = []; 
-
-  for (let i=0;i<10;i++){
-    const item = el("div", "rwItem");
-    const bitsRow = el("div", "rwBits");
-    const sqs = [];
-
-    for (let k=0;k<5;k++){
-      const s = el("div", "sq");
-      sqs.push(s);
-      bitsRow.appendChild(s);
+    function bits5(id){
+        return [
+        (id >> 4) & 1,
+        (id >> 3) & 1,
+        (id >> 2) & 1,
+        (id >> 1) & 1,
+        (id >> 0) & 1,
+        ];
     }
 
-    const txt = el("div", "rwTxt");
-    item.appendChild(bitsRow);
-    item.appendChild(txt);
+   
+    function casesFromId5(id){
+        const [a,b,c,d,e] = bits5(id);
+        const x = (a<<2) | (b<<1) | c;
+        const y = (b<<2) | (c<<1) | d;
+        const z = (c<<2) | (d<<1) | e;
+        return [x,y,z];
+    }
 
-    histWrap.appendChild(item);
-    histSlots.push({ wrap:item, sqs, label:txt });
-  }
+   
+    function childFromParent(rule, parentId, L, R){
+        const [a,b,c,d,e] = bits5(parentId);
 
-  const hint = el("div", "bgInfo");
-  hint.textContent = "click a node to choose the current 5-bit state · Play starts a random walk (random L/R each step)";
+        const o0 = ruleOut(rule, (L<<2) | (a<<1) | b);
+        const o1 = ruleOut(rule, (a<<2) | (b<<1) | c);
+        const o2 = ruleOut(rule, (b<<2) | (c<<1) | d);
+        const o3 = ruleOut(rule, (c<<2) | (d<<1) | e);
+        const o4 = ruleOut(rule, (d<<2) | (e<<1) | R);
 
-  const viz = el("div", "bgViz");
-  const svgNS = "http://www.w3.org/2000/svg";
-  const svg = document.createElementNS(svgNS, "svg");
-  svg.setAttribute("class", "bgSvg");
-  viz.appendChild(svg);
+        return (o0<<4) | (o1<<3) | (o2<<2) | (o3<<1) | o4;
+    }
 
-  const info = el("div", "bgInfo");
+   
+    let rule = clamp255((opts && Number.isFinite(opts.rule)) ? Math.floor(opts.rule) : 30);
+    let cur  = clamp((opts && Number.isFinite(opts.start)) ? Math.floor(opts.start) : 4, 0, 31);
+    let running = false;
+    let stepCount = 0;
+
+    let speedMs = clamp((opts && Number.isFinite(opts.speedMs)) ? Math.floor(opts.speedMs) : 100, 30, 2000);
+    let timer = null;
+
+    let lastL = 0, lastR = 0;
+
+   
+    let nodeHeat = new Float32Array(32);
+    let edgeHeat = new Float32Array(0);
+    let lastEdgeIdx = -1;
+
+   
+    let outAdj = Array.from({length:32}, () => []);
+    let inAdj  = Array.from({length:32}, () => []);
+
+   
+    const root = el("div", "bgWrap");
+    root.classList.add("rwWrap");
+
+    const bar = el("div", "bgBar");
+
+    const ruleBox = el("div");
+    const ruleLab = document.createElement("label");
+    ruleLab.textContent = "rule";
+    const ruleInput = document.createElement("input");
+    ruleInput.className = "rwNum";
+    ruleInput.type = "number";
+    ruleInput.min = "0";
+    ruleInput.max = "255";
+    ruleInput.step = "1";
+    ruleBox.appendChild(ruleLab);
+    ruleBox.appendChild(ruleInput);
+
+    const ruleBin = document.createElement("code");
+    ruleBin.className = "bgCode";
+
+    const playBtn = document.createElement("button");
+    playBtn.type = "button";
+    playBtn.className = "rwBtn";
+    playBtn.textContent = "Play";
+
+    const stepBtn = document.createElement("button");
+    stepBtn.type = "button";
+    stepBtn.className = "rwBtn";
+    stepBtn.textContent = "Step";
+
+    const speedBox = el("div");
+    const speedLab = document.createElement("label");
+    speedLab.textContent = "ms/step";
+    const speedInput = document.createElement("input");
+    speedInput.className = "rwNum";
+    speedInput.type = "number";
+    speedInput.min = "30";
+    speedInput.max = "2000";
+    speedInput.step = "10";
+    speedBox.appendChild(speedLab);
+    speedBox.appendChild(speedInput);
+
+    const curCode = document.createElement("code");
+    curCode.className = "bgCode";
+
+    bar.appendChild(ruleBox);
+    bar.appendChild(ruleBin);
+    bar.appendChild(playBtn);
+    bar.appendChild(stepBtn);
+    bar.appendChild(speedBox);
+    bar.appendChild(curCode);
+
+    const hint = el("div", "bgInfo");
+    hint.textContent = "click a node to set the initial state. Play runs a random walk";
+
+    const viz = el("div", "bgViz");
+    const svgNS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(svgNS, "svg");
+    svg.setAttribute("class", "bgSvg");
+    viz.appendChild(svg);
 
     const main = el("div", "rwMain");
     const log = el("div", "rwLog");
-
     main.appendChild(viz);
     main.appendChild(log);
+
+    const info = el("div", "bgInfo");
 
     root.appendChild(bar);
     root.appendChild(main);
     root.appendChild(hint);
     root.appendChild(info);
+    mount.appendChild(root);
 
-  mount.appendChild(root);
+   
+    let nodeG = new Array(32).fill(null);
+    let edgeP = [];         
+    let edgeIdx = new Map();
 
-  
-  let nodeG = new Array(32).fill(null);
-  let edgeP = [];                
-  let edgeIdx = new Map();       
+   
+    const uid = "wg_" + Math.random().toString(36).slice(2, 9);
+    const mkId = (s) => `${uid}_${s}`;
 
-  
-  const uid = "wg_" + Math.random().toString(36).slice(2, 9);
-  const mkId = (s) => `${uid}_${s}`;
-
-  function mk(name, attrs){
-    const n = document.createElementNS(svgNS, name);
-    for (const [k,v] of Object.entries(attrs || {})) n.setAttribute(k, String(v));
-    return n;
-  }
-
-  function clearSvg(){
-    while (svg.firstChild) svg.removeChild(svg.firstChild);
-  }
-function appendLogEntry(id){
-  const item = el("div", "rwLogItem");
-  const trip = el("div", "rwLogTrip");
-
-  const cases = casesFromId5(id); 
-
-  for (let i=0;i<3;i++){
-    const c = cases[i] & 7;
-    const on = ruleOut(rule, c) === 1;
-
-    const sq = el("div", "rwLogSq" + (on ? " on" : ""));
-    sq.style.setProperty("--c", CASE_COLORS[c]);
-    sq.style.setProperty("--cd", DEAD_CASE_COLORS[c]);
-
-    sq.title = `case ${toBin(c,3)} → ${on ? 1 : 0}`;
-    trip.appendChild(sq);
-  }
-
-  item.appendChild(trip);
-  log.appendChild(item);
-
-  
-  while (log.children.length > 38){
-    log.removeChild(log.firstChild);
-  }
-}
-
-  function buildGraph(){
-    
-    const edgeCount = new Map();
-
-    outAdj = Array.from({length:32}, () => []);
-    inAdj  = Array.from({length:32}, () => []);
-
-    for (let u=0; u<32; u++){
-      for (let L=0; L<=1; L++){
-        for (let R=0; R<=1; R++){
-          const v = childFromParent(rule, u, L, R);
-          const key = `${u}->${v}`;
-          edgeCount.set(key, (edgeCount.get(key) || 0) + 1);
-        }
-      }
+    function mk(name, attrs){
+        const n = document.createElementNS(svgNS, name);
+        for (const [k,v] of Object.entries(attrs || {})) n.setAttribute(k, String(v));
+        return n;
     }
 
-    for (const [key, count] of edgeCount.entries()){
-      const [a,b] = key.split("->");
-      const u = Number(a);
-      const v = Number(b);
-      outAdj[u].push({ to:v, count });
-      inAdj[v].push({ from:u, count });
+    function clearSvg(){
+        while (svg.firstChild) svg.removeChild(svg.firstChild);
     }
 
-    for (let i=0;i<32;i++){
-      outAdj[i].sort((p,q)=>p.to-q.to);
-      inAdj[i].sort((p,q)=>p.from-q.from);
-    }
-
-    return edgeCount;
-  }
-
-  function renderHistory(){
-    const view = history.slice(-10);              
-    const pad = 10 - view.length;
-
-    for (let i=0;i<10;i++){
-      const slot = histSlots[i];
-      slot.wrap.classList.remove("cur");
-
-      const id = (i < pad) ? null : view[i - pad];
-
-      if (id === null){
-        slot.label.textContent = "";
-        for (const s of slot.sqs) s.classList.remove("on");
-        continue;
-      }
-
-      const b = bits5(id);
-      for (let k=0;k<5;k++){
-        slot.sqs[k].classList.toggle("on", b[k] === 1);
-      }
-      slot.label.textContent = toBin(id,5);
-
-      if (i === 9) slot.wrap.classList.add("cur"); 
-    }
-  }
-
-  function heatClass(h){
-    if (h > 0.66) return "rwHot3";
-    if (h > 0.33) return "rwHot2";
-    if (h > 0.10) return "rwHot1";
-    return "";
-  }
-
-  function applyWalkStyles(){
-    
-    for (let i=0;i<32;i++){
-      const g = nodeG[i];
-      if (!g) continue;
-
-      g.classList.toggle("cur", i === cur);
-
-      g.classList.remove("rwHot1","rwHot2","rwHot3");
-      const hc = heatClass(nodeHeat[i]);
-      if (hc) g.classList.add(hc);
-    }
-
-    
-    for (let i=0;i<edgeP.length;i++){
-      const e = edgeP[i].el;
-
-      e.classList.remove("rwHot1","rwHot2","rwHot3","rwNow");
-
-      const hc = heatClass(edgeHeat[i]);
-      if (hc) e.classList.add(hc);
-
-      if (i === lastEdgeIdx) e.classList.add("rwNow");
-    }
-  }
-
-  function render(){
-    rule = clamp255(rule);
-    ruleInput.value = String(rule);
-    ruleBin.textContent = toBin(rule, 8);
-
-    speedMs = clamp(speedMs, 30, 2000);
-    speedInput.value = String(speedMs);
-
-    const edgeCount = buildGraph();
-
-    
-    const W = Math.max(320, viz.clientWidth | 0);
-    const H = Math.max(260, viz.clientHeight | 0);
-    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-    svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
-
-    clearSvg();
-
-    
-    const defs = mk("defs");
-
-    function addMarker(id, fill){
-      const m = mk("marker", {
+    function addMarker(defs, id, fill){
+        const m = mk("marker", {
         id,
         viewBox: "0 0 10 10",
         refX: "9",
@@ -2020,334 +1841,399 @@ function appendLogEntry(id){
         markerWidth: "6",
         markerHeight: "6",
         orient: "auto"
-      });
-      m.appendChild(mk("path", { d: "M 0 0 L 10 5 L 0 10 z", fill }));
-      defs.appendChild(m);
+        });
+        m.appendChild(mk("path", { d: "M 0 0 L 10 5 L 0 10 z", fill }));
+        defs.appendChild(m);
     }
 
-    addMarker(mkId("arrowCW"),  "#7cffc4");
-    addMarker(mkId("arrowCCW"), "#ffb86b");
-    addMarker(mkId("arrowLoop"),"#ffd54a");
+   
+    function appendLogEntry(id){
+        const item = el("div", "rwLogItem");
+        const trip = el("div", "rwLogTrip");
 
-    svg.appendChild(defs);
-
-    const gEdges = mk("g");
-    const gNodes = mk("g");
-    svg.appendChild(gEdges);
-    svg.appendChild(gNodes);
-
-    
-    const cx = W/2, cy = H/2;
-    const nodeR = Math.max(10, Math.min(18, Math.min(W,H) * 0.04));
-    const ringR = Math.max(10, Math.min(W,H) * 0.46 - nodeR - 10);
-
-    const pos = new Array(32);
-    for (let id=0; id<32; id++){
-      const ang = -Math.PI/2 + (2*Math.PI*id/32);
-      pos[id] = {
-        x: cx + ringR * Math.cos(ang),
-        y: cy + ringR * Math.sin(ang),
-        ang
-      };
-    }
-
-    
-    const orphan = new Array(32).fill(false);
-    let orphanCount = 0;
-    for (let i=0;i<32;i++){
-      if (inAdj[i].length === 0){
-        orphan[i] = true;
-        orphanCount++;
-      }
-    }
-
-    
-    edgeP = [];
-    edgeIdx = new Map();
-
-    for (const [key, count] of edgeCount.entries()){
-      const [a,b] = key.split("->");
-      const u = Number(a), v = Number(b);
-
-      const p1 = pos[u], p2 = pos[v];
-      let d = "";
-
-      if (u === v){
-        
-        const loopR = nodeR * 1.6;
-        const rx = Math.cos(p1.ang), ry = Math.sin(p1.ang);
-        const ox = p1.x + rx * (nodeR + 10);
-        const oy = p1.y + ry * (nodeR + 10);
-
-        const px = -ry, py = rx;
-        const xA = ox + px * loopR;
-        const yA = oy + py * loopR;
-        const xB = ox - px * loopR;
-        const yB = oy - py * loopR;
-
-        d = `M ${xA} ${yA}
-             C ${xA + rx*loopR} ${yA + ry*loopR},
-               ${xB + rx*loopR} ${yB + ry*loopR},
-               ${xB} ${yB}`;
-      } else {
-        
-        const dx = p2.x - p1.x, dy = p2.y - p1.y;
-        const len = Math.hypot(dx,dy) || 1;
-        const ux = dx/len, uy = dy/len;
-
-        const startPad = nodeR + 2;
-        const endPad   = nodeR + 4;
-
-        const x1 = p1.x + ux * startPad;
-        const y1 = p1.y + uy * startPad;
-        const x2 = p2.x - ux * endPad;
-        const y2 = p2.y - uy * endPad;
-
-        
-        const c1x = x1*0.65 + cx*0.35;
-        const c1y = y1*0.65 + cy*0.35;
-        const c2x = x2*0.85 + cx*0.15;
-        const c2y = y2*0.85 + cy*0.15;
-
-        d = `M ${x1} ${y1} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${x2} ${y2}`;
-      }
-
-      const dir = circularDir(u, v);
-      const markerId =
-        (dir === "cw")  ? mkId("arrowCW") :
-        (dir === "ccw") ? mkId("arrowCCW") :
-                          mkId("arrowLoop");
-
-      const path = mk("path", {
-        d,
-        class: `bgEdge ${dir}` + (count > 1 ? " multi" : ""),
-        "marker-end": `url(#${markerId})`
-      });
-
-      
-      path.style.strokeWidth = String(1.2 + (count - 1) * 0.7);
-
-      const t = mk("title");
-      t.textContent = `${toBin(u,5)} → ${toBin(v,5)} (x${count})`;
-      path.appendChild(t);
-
-      gEdges.appendChild(path);
-
-      const idx = edgeP.length;
-      edgeP.push({ from:u, to:v, el:path });
-      edgeIdx.set(key, idx);
-    }
-
-    
-    edgeHeat = new Float32Array(edgeP.length);
-    nodeHeat = new Float32Array(32);
-    lastEdgeIdx = -1;
-
-    
-    nodeG = new Array(32).fill(null);
-
-    for (let id=0; id<32; id++){
-      const p = pos[id];
-
-      const g = mk("g", { class: "bgNode" + (orphan[id] ? " orphan" : "") });
-      g.dataset.id = String(id);
-
-      g.appendChild(mk("circle", { cx:p.x, cy:p.y, r:nodeR, class:"bgCircle" }));
-
-      
-      const cases = casesFromId5(id);
-
-      const pad = Math.max(2, nodeR * 0.22);
-      const gap = Math.max(1, nodeR * 0.16);
-      let mini = Math.floor((2*nodeR - 2*pad - 2*gap) / 3);
-      mini = Math.max(3, Math.min(mini, Math.floor(nodeR * 0.85)));
-
-      const totalW = 3*mini + 2*gap;
-      const x0 = p.x - totalW/2;
-      const y0 = p.y - mini/2;
-
-      for (let i=0;i<3;i++){
+        const cases = casesFromId5(id);
+        for (let i=0;i<3;i++){
         const c = cases[i] & 7;
         const on = ruleOut(rule, c) === 1;
-        const fill = on ? CASE_COLORS[c] : DEAD_CASE_COLORS[c];
 
-        const r = mk("rect", {
-          x: x0 + i*(mini+gap),
-          y: y0,
-          width: mini,
-          height: mini,
-          class: "bgMini",
-          fill
+        const sq = el("div", "rwLogSq" + (on ? " on" : ""));
+        sq.style.setProperty("--c", CASE_COLORS[c]);
+        sq.style.setProperty("--cd", DEAD_CASE_COLORS[c]);
+        sq.title = `case ${toBin(c,3)} → ${on ? 1 : 0}`;
+        trip.appendChild(sq);
+        }
+
+        item.appendChild(trip);
+        log.appendChild(item);
+
+        while (log.children.length > 38){
+        log.removeChild(log.firstChild);
+        }
+    }
+
+    function buildGraph(){
+        const edgeCount = new Map();
+
+        outAdj = Array.from({length:32}, () => []);
+        inAdj  = Array.from({length:32}, () => []);
+
+        for (let u=0; u<32; u++){
+        for (let L=0; L<=1; L++){
+            for (let R=0; R<=1; R++){
+            const v = childFromParent(rule, u, L, R);
+            const key = `${u}->${v}`;
+            edgeCount.set(key, (edgeCount.get(key) || 0) + 1);
+            }
+        }
+        }
+
+        for (const [key, count] of edgeCount.entries()){
+        const [a,b] = key.split("->");
+        const u = Number(a);
+        const v = Number(b);
+        outAdj[u].push({ to:v, count });
+        inAdj[v].push({ from:u, count });
+        }
+
+        for (let i=0;i<32;i++){
+        outAdj[i].sort((p,q)=>p.to-q.to);
+        inAdj[i].sort((p,q)=>p.from-q.from);
+        }
+
+        return edgeCount;
+    }
+
+    function heatClass(h){
+        if (h > 0.66) return "rwHot3";
+        if (h > 0.33) return "rwHot2";
+        if (h > 0.10) return "rwHot1";
+        return "";
+    }
+
+    function applyWalkStyles(){
+        for (let i=0;i<32;i++){
+        const g = nodeG[i];
+        if (!g) continue;
+
+        g.classList.toggle("cur", i === cur);
+
+        g.classList.remove("rwHot1","rwHot2","rwHot3");
+        const hc = heatClass(nodeHeat[i]);
+        if (hc) g.classList.add(hc);
+        }
+
+        for (let i=0;i<edgeP.length;i++){
+        const e = edgeP[i].el;
+
+        e.classList.remove("rwHot1","rwHot2","rwHot3","rwNow");
+        const hc = heatClass(edgeHeat[i]);
+        if (hc) e.classList.add(hc);
+
+        if (i === lastEdgeIdx) e.classList.add("rwNow");
+        }
+    }
+
+    function syncCurCode(){
+        curCode.textContent = `current=${toBin(cur,5)}`;
+    }
+
+    function setCurrent(id){
+        cur = clamp(id, 0, 31);
+        stepCount = 0;
+
+        for (let i=0;i<nodeHeat.length;i++) nodeHeat[i] = 0;
+        for (let i=0;i<edgeHeat.length;i++) edgeHeat[i] = 0;
+        lastEdgeIdx = -1;
+
+        clear(log);
+        appendLogEntry(cur);
+
+        applyWalkStyles();
+        syncCurCode();
+        info.textContent = `t=${stepCount} · current=${toBin(cur,5)}`;
+    }
+
+    function oneStep(){
+        const decay = 0.90;
+        for (let i=0;i<nodeHeat.length;i++) nodeHeat[i] *= decay;
+        for (let i=0;i<edgeHeat.length;i++) edgeHeat[i] *= decay;
+
+        lastL = (Math.random() < 0.5) ? 0 : 1;
+        lastR = (Math.random() < 0.5) ? 0 : 1;
+
+        const next = childFromParent(rule, cur, lastL, lastR);
+
+        const key = `${cur}->${next}`;
+        const idx = edgeIdx.get(key);
+        lastEdgeIdx = (typeof idx === "number") ? idx : -1;
+
+        nodeHeat[cur] = 1;
+        nodeHeat[next] = 1;
+        if (lastEdgeIdx >= 0) edgeHeat[lastEdgeIdx] = 1;
+
+        cur = next;
+        stepCount++;
+
+        appendLogEntry(cur);
+        applyWalkStyles();
+        syncCurCode();
+
+        info.textContent = `t=${stepCount} · current=${toBin(cur,5)} · LR=${lastL}${lastR}`;
+    }
+
+    function start(){
+        if (timer) return;
+        running = true;
+        playBtn.textContent = "Pause";
+        timer = setInterval(oneStep, speedMs);
+    }
+
+    function stop(){
+        running = false;
+        playBtn.textContent = "Play";
+        if (timer){
+        clearInterval(timer);
+        timer = null;
+        }
+    }
+
+    function restartTimerIfRunning(){
+        if (!running) return;
+        stop();
+        start();
+    }
+
+    function render(){
+        rule = clamp255(rule);
+        ruleInput.value = String(rule);
+        ruleBin.textContent = toBin(rule, 8);
+
+        speedMs = clamp(speedMs, 30, 2000);
+        speedInput.value = String(speedMs);
+
+        const edgeCount = buildGraph();
+
+        const W = Math.max(320, viz.clientWidth | 0);
+        const H = Math.max(260, viz.clientHeight | 0);
+        svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+        svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+
+        clearSvg();
+
+        const defs = mk("defs");
+        addMarker(defs, mkId("arrowNeutral"), "#5a5a66");
+        svg.appendChild(defs);
+
+        const gEdges = mk("g");
+        const gNodes = mk("g");
+        svg.appendChild(gEdges);
+        svg.appendChild(gNodes);
+
+        const cx = W/2, cy = H/2;
+        const nodeR = Math.max(10, Math.min(18, Math.min(W,H) * 0.04));
+        const ringR = Math.max(10, Math.min(W,H) * 0.46 - nodeR - 10);
+
+        const pos = new Array(32);
+        for (let id=0; id<32; id++){
+        const ang = -Math.PI/2 + (2*Math.PI*id/32);
+        pos[id] = {
+            x: cx + ringR * Math.cos(ang),
+            y: cy + ringR * Math.sin(ang),
+            ang
+        };
+        }
+
+        let orphanCount = 0;
+        for (let i=0;i<32;i++){
+        if (inAdj[i].length === 0) orphanCount++;
+        }
+
+        edgeP = [];
+        edgeIdx = new Map();
+
+        for (const [key, count] of edgeCount.entries()){
+        const [a,b] = key.split("->");
+        const u = Number(a), v = Number(b);
+
+        const p1 = pos[u], p2 = pos[v];
+        let d = "";
+
+        if (u === v){
+            const loopR = nodeR * 1.6;
+            const rx = Math.cos(p1.ang), ry = Math.sin(p1.ang);
+            const ox = p1.x + rx * (nodeR + 10);
+            const oy = p1.y + ry * (nodeR + 10);
+
+            const px = -ry, py = rx;
+            const xA = ox + px * loopR;
+            const yA = oy + py * loopR;
+            const xB = ox - px * loopR;
+            const yB = oy - py * loopR;
+
+            d = `M ${xA} ${yA}
+                C ${xA + rx*loopR} ${yA + ry*loopR},
+                ${xB + rx*loopR} ${yB + ry*loopR},
+                ${xB} ${yB}`;
+        } else {
+            const dx = p2.x - p1.x, dy = p2.y - p1.y;
+            const len = Math.hypot(dx,dy) || 1;
+            const ux = dx/len, uy = dy/len;
+
+            const startPad = nodeR + 2;
+            const endPad   = nodeR + 4;
+
+            const x1 = p1.x + ux * startPad;
+            const y1 = p1.y + uy * startPad;
+            const x2 = p2.x - ux * endPad;
+            const y2 = p2.y - uy * endPad;
+
+            const c1x = x1*0.65 + cx*0.35;
+            const c1y = y1*0.65 + cy*0.35;
+            const c2x = x2*0.85 + cx*0.15;
+            const c2y = y2*0.85 + cy*0.15;
+
+            d = `M ${x1} ${y1} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${x2} ${y2}`;
+        }
+
+        const path = mk("path", {
+            d,
+            class: `bgEdge` + (count > 1 ? " multi" : ""),
+            "marker-end": `url(#${mkId("arrowNeutral")})`
         });
-        g.appendChild(r);
-      }
 
-      const lbl = mk("text", {
-        x: p.x,
-        y: p.y + nodeR + 4,
-        class: "bgLabel"
-      });
-      lbl.appendChild(document.createTextNode(toBin(id,5)));
-      g.appendChild(lbl);
+        path.style.strokeWidth = String(1.2 + (count - 1) * 0.7);
 
-      const tt = mk("title");
-      tt.textContent =
-        `abcde=${toBin(id,5)}\n` +
-        `cases=${cases.map(c => toBin(c,3)).join(" ")}\n` +
-        (orphan[id] ? "orphan" : "");
-      g.appendChild(tt);
+        const t = mk("title");
+        t.textContent = `${toBin(u,5)} → ${toBin(v,5)} (x${count})`;
+        path.appendChild(t);
 
-      
-      g.addEventListener("click", (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        setCurrent(id);
-      });
+        gEdges.appendChild(path);
 
-      gNodes.appendChild(g);
-      nodeG[id] = g;
+        const idx = edgeP.length;
+        edgeP.push({ from:u, to:v, el:path });
+        edgeIdx.set(`${u}->${v}`, idx);
+        }
+
+        edgeHeat = new Float32Array(edgeP.length);
+        nodeHeat = new Float32Array(32);
+        lastEdgeIdx = -1;
+
+        nodeG = new Array(32).fill(null);
+
+        for (let id=0; id<32; id++){
+        const p = pos[id];
+
+        const isOrphan = (inAdj[id].length === 0);
+        const g = mk("g", { class: "bgNode" + (isOrphan ? " orphan" : "") });
+        g.dataset.id = String(id);
+
+        g.appendChild(mk("circle", { cx:p.x, cy:p.y, r:nodeR, class:"bgCircle" }));
+
+        const cases = casesFromId5(id);
+
+        const pad = Math.max(2, nodeR * 0.22);
+        const gap = Math.max(1, nodeR * 0.16);
+        let mini = Math.floor((2*nodeR - 2*pad - 2*gap) / 3);
+        mini = Math.max(3, Math.min(mini, Math.floor(nodeR * 0.85)));
+
+        const totalW = 3*mini + 2*gap;
+        const x0 = p.x - totalW/2;
+        const y0 = p.y - mini/2;
+
+        for (let i=0;i<3;i++){
+            const c = cases[i] & 7;
+            const on = ruleOut(rule, c) === 1;
+            const fill = on ? CASE_COLORS[c] : DEAD_CASE_COLORS[c];
+
+            g.appendChild(mk("rect", {
+            x: x0 + i*(mini+gap),
+            y: y0,
+            width: mini,
+            height: mini,
+            class: "bgMini",
+            fill
+            }));
+        }
+
+        const lbl = mk("text", { x:p.x, y:p.y + nodeR + 4, class:"bgLabel" });
+        lbl.appendChild(document.createTextNode(toBin(id,5)));
+        g.appendChild(lbl);
+
+        const tt = mk("title");
+        tt.textContent =
+            `abcde=${toBin(id,5)}\n` +
+            `cases=${cases.map(c => toBin(c,3)).join(" ")}\n` +
+            (isOrphan ? "orphan" : "");
+        g.appendChild(tt);
+
+        g.addEventListener("click", (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            setCurrent(id);
+        });
+
+        gNodes.appendChild(g);
+        nodeG[id] = g;
+        }
+
+        info.textContent = `nodes=32 · edges=${edgeP.length} · orphans=${orphanCount}`;
+
+        clear(log);
+        appendLogEntry(cur);
+        applyWalkStyles();
+        syncCurCode();
     }
 
-    
-    info.textContent = `nodes=32 · edges=${edgeP.length} · orphans=${orphanCount}`;
+    playBtn.addEventListener("click", () => {
+        if (running) stop();
+        else start();
+    });
 
-    
-    renderHistory();
-    applyWalkStyles();
-    syncCurCode();
-  }
+    stepBtn.addEventListener("click", () => {
+        oneStep();
+    });
 
-  function syncCurCode(){
-    curCode.textContent = `current=${toBin(cur,5)}`;
-  }
+    ruleInput.addEventListener("input", () => {
+        const raw = ruleInput.value.trim();
+        if (raw === "") return;
+        const n = Number(raw);
+        if (!Number.isFinite(n)) return;
 
-  function setCurrent(id){
-    cur = clamp(id, 0, 31);
-    stepCount = 0;
-    history = [cur];
+        rule = clamp255(Math.floor(n));
 
-    
-    for (let i=0;i<nodeHeat.length;i++) nodeHeat[i] = 0;
-    for (let i=0;i<edgeHeat.length;i++) edgeHeat[i] = 0;
-    lastEdgeIdx = -1;
-    clear(log);
-    appendLogEntry(cur);
+        const wasRunning = running;
+        if (wasRunning) stop();
+        render();
+        if (wasRunning) start();
+    });
 
-    renderHistory();
-    applyWalkStyles();
-    syncCurCode();
+    speedInput.addEventListener("input", () => {
+        const raw = speedInput.value.trim();
+        if (raw === "") return;
+        const n = Number(raw);
+        if (!Number.isFinite(n)) return;
 
-    info.textContent = `t=${stepCount} · current=${toBin(cur,5)}`;
-  }
+        speedMs = clamp(Math.floor(n), 30, 2000);
+        speedInput.value = String(speedMs);
+        restartTimerIfRunning();
+    });
 
-  function oneStep(){
-    
-    const decay = 0.90;
-    for (let i=0;i<nodeHeat.length;i++) nodeHeat[i] *= decay;
-    for (let i=0;i<edgeHeat.length;i++) edgeHeat[i] *= decay;
+    let resizeTimer = null;
+    window.addEventListener("resize", () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+        const wasRunning = running;
+        if (wasRunning) stop();
+        render();
+        if (wasRunning) start();
+        }, 80);
+    });
 
-    
-    lastL = (Math.random() < 0.5) ? 0 : 1;
-    lastR = (Math.random() < 0.5) ? 0 : 1;
-
-    const next = childFromParent(rule, cur, lastL, lastR);
-
-    const key = `${cur}->${next}`;
-    const idx = edgeIdx.get(key);
-    lastEdgeIdx = (typeof idx === "number") ? idx : -1;
-
-    
-    nodeHeat[cur] = 1;
-    nodeHeat[next] = 1;
-    if (lastEdgeIdx >= 0) edgeHeat[lastEdgeIdx] = 1;
-
-    
-    cur = next;
-    stepCount++;
-
-    appendLogEntry(cur);
-    applyWalkStyles();
-    syncCurCode();
-
-
-    info.textContent = `t=${stepCount} · current=${toBin(cur,5)} · LR=${lastL}${lastR}`;
-  }
-
-  function start(){
-    if (timer) return;
-    running = true;
-    playBtn.textContent = "Pause";
-    timer = setInterval(oneStep, speedMs);
-  }
-
-  function stop(){
-    running = false;
-    playBtn.textContent = "Play";
-    if (timer){
-      clearInterval(timer);
-      timer = null;
-    }
-  }
-
-  function restartTimerIfRunning(){
-    if (!running) return;
-    stop();
-    start();
-  }
-
-  
-  playBtn.addEventListener("click", () => {
-    if (running) stop();
-    else start();
-  });
-
-  stepBtn.addEventListener("click", () => {
-    
-    oneStep();
-  });
-
-  ruleInput.addEventListener("input", () => {
-    const raw = ruleInput.value.trim();
-    if (raw === "") return;
-    const n = Number(raw);
-    if (!Number.isFinite(n)) return;
-
-    
-    rule = clamp255(Math.floor(n));
-
-    const wasRunning = running;
-    if (wasRunning) stop();
+   
     render();
-    if (wasRunning) start();
-  });
+    setCurrent(cur);
+    });
 
-  speedInput.addEventListener("input", () => {
-    const raw = speedInput.value.trim();
-    if (raw === "") return;
-    const n = Number(raw);
-    if (!Number.isFinite(n)) return;
-
-    speedMs = clamp(Math.floor(n), 30, 2000);
-    speedInput.value = String(speedMs);
-    restartTimerIfRunning();
-  });
-
-  
-  let resizeTimer = null;
-  window.addEventListener("resize", () => {
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => {
-      const wasRunning = running;
-      if (wasRunning) stop();
-      render();
-      if (wasRunning) start();
-    }, 80);
-  });
-
-  
-  render();
-  setCurrent(cur); 
-});
 
 
 

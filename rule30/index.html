@@ -20,8 +20,7 @@
             their state based on the current state of their "neighborhood". For this CA we only consider 
             the current state of the cell and the state of the cells on it's immediate left and right. 
             We will label the cells (p,q,r) where q is the cell in question. 
-            The next state of the cell is determined by a rule. 
-            The rules We have 3 cells. 
+            The next state of the cell is determined by a rule. <br>
             Each cell may be either "alive" or "dead". Here is a table showing every possibility: 
         </p>
 
@@ -35,22 +34,22 @@
         <div class="demoMount" data-demo="caseTable"></div>
         <p>
             That's convenient!
-            This means that we can store these 8 situations as numbers 0-8 and the binary will actually encode 
+            This means that we can store these 8 situations as numbers 0-7 and the binary will actually encode 
             the states of the cell, or we can read the cells, interpret it as binary, and easily look up the 
-            "case" to find out what we are supposed to do. So what are supposed to do?
+            "case" to find out what we are supposed to do. So what are we supposed to do?
         </p>
         <h3>The Rules</h3><div class="muted">8 cases to rule them all</div>
         <p>
             We have an infinite array of cells and we need to evaluate them all simoultaneously in sets of 3.
             We know that there are only 8 unique situations, but we do not yet know what to do in each situation.
-            We need rules for each situation that tell us if the cell in question (q) will be alive or dead.
+            We need rules for each situation that tell us if the cell in question (q) will become alive or dead.
             Lets lay out the 8 situtations and determine our rules. Click the cells to change the rule:
         </p>
         <div class="demoMount" data-demo="ruleGen"></div>
         <p>
-            Conveniently, we can again use binary to store our set of cases and outcomes. 
+            Conveniently, we can again use binary to store our set of "cases" and outcomes. 
             Each case results in a cell being alive or dead. We can think about it as true/false, on/off, but 
-            using 1/0 give us a way store the whole story as a number between 0 and 255.
+            using 1/0 gives us a way store the whole story as a number between 0 and 255.
         </p>
         <p>
             <a href="https://rule30prize.org/" target="_blank">Rule 30</a> is one of the 256 rules. 
@@ -59,11 +58,11 @@
         <h3>To Infinity</h3><div class="muted">...and beyond!</div>
         <p>
         We have a rule and we are looking for a board to play on. The CA is supposed to be an "infinite" array and that is going to be a problem.
-        Lets start small and work our way up to infinity. What is the minimum input we need to play the game?
-        </p>
+        Lets start small and work our way up to infinity. </p><br>What is the minimum input we need to play the game?<br>
+
         <p>
         Our rule must consider the current state of the cell in question (q), the cell on it's left(p), and the cell on its right (r).
-        The minimum number of cells we need to start with is 3. Instead of replacing a cell with the result, lets place it below so we can see cause and effect.
+        So the minimum number of cells we need to start with is 3. Instead of replacing a cell with the result, lets place it below so we can see cause and effect.
         </p>
         (You can change the rule and initial state)
         <div class="demoMount" data-demo="3cellgame"></div>
@@ -72,8 +71,8 @@
         Also you may notice that the initial state determines which case of our rule is used. Changing the rule does not change the case, it only determines the output.
         </p>
         <p>
-        It would be more fun if output at least 3 cells, that way we could generate another generation from our output, but we have a problem.
-        Every step in time is going to require the evaluation of 2 more cells, one on each end.
+        It would be more fun if we output at least 3 cells, that way we could generate another generation from our output, but we have a problem.
+        Every step in time is going to require the evaluation of 2 more cells, one on each end. 3->5->7->9
         </p>
         <p>
         What is outside of the initial state?
@@ -91,49 +90,94 @@
         It seems as though, if we want to know what a given cell's state is after some number (N) steps, we must compute all prior steps.
         If we tried to look at a window that is smaller than the full output we can't assume that the cells outsire our window are dead.
         They might be living or dead and the only way to know for sure would be to run the whole simulation. 
-        The only thing we know for sure is that those cells are either alive or dead. At each step there are 4 options.
+        The only thing we know for sure is that those cells are either alive or dead. At each step there are possible paths.
         </p>
-        Lets look at a 5 cell slice of rule 30 and compare it to the output if wee assume that the unknown cells are always dead or always alive, or randomly chosen.
+        Lets look at a 5 cell slice of rule 30 and compare it to the output if we assume that the unknown cells are always dead or always alive, or randomly chosen.
         <div class="demoMount" data-demo="rule30slice5steps10"></div>
         <p>
-        OK, that's thats not going to work. We don't have enough information. Is there any other information we can use? 
-        At the moment all we know is that a cell is either on or off. Lets see if we can store some more information, like which case decided it's fate.
+        OK, that's thats not going to work. We don't have enough information. As we move forward in time our simulation drifts further away from the truth. 
+        Is there any other information we can use? <br>
+        At the moment all we know is that a cell is either on or off. If we want more information we will have to compute it. 
+        If we keep computing more info the rows will get keep getting wider, maybe we can find an alternative way of displaying it.
         </p>
+        <h3>Over the Rainbow</h3><div class="muted">...or how i learned to stop worrying and love irreducible complexity</div>
         <p> 
-        We can store this information using 4 bits, lets store the case in the lower three bits and the state in the forth bit. 
+        Lets store the case in the lower three bits and the state in the forth bit. 
         This will also give us an opportunity to make better looking diagrams. We can choose 8 colors, one for each case, and then modify the brightness to signify if a cell is "on" or "off" like an LED.
         </p>
         Lets see how this looks:
         <div class="demoMount" data-demo="basiccawithcolors"></div>
         <p>
-        That's pretty.<br>
+        That's pretty.<br><br>
         We can now see some pattern emerging that give us a little more information about what is happening. 
         Previously we only had 2 kind of cells but now we have more.
         <br>How many do we have?<br>
+
+        <h3>Impassible Combinations</h3><div class="muted">...nothing is impossible.</div>
+
         We know that we have 8 colors x 2 states, so 16 possible cells. 
         The color of a cell is determined by the case (the state of 3 cells above it). 
         The state is determined by the current rule. Each rule states that a specific color is either on or off.
-        We can't have both so we actually have half of 16. You can see that by looking at the color legend above.
+        We can't have both so we actually have half of 16 (thats 8). You can see that by looking at the color legend above.<br>
         <br>Can all colors be neighbors?<br>
         The answer to this question is the same no matter which rule you are using. 
         If we take the lower 2 bit of each case, we can check if they are the same as the higher 2 bits of each case.
         </p>
         <div class="demoMount" data-demo="adjacency2cellmatrix"></div>
         <p> 
-        The means that there are 16 different combination of 2 cell. What about 3 cells? 
+        This means that there are 16 different combination of 2 cell. What about 3 cells? 
         <br>
         We could make a giant table of all (512) possible combinations, or we can use the following formula
         <pre>((x & 3) === (y >> 1)) && ((y & 3) === (z >> 1))</pre> to determine that only 32 of them are possible.
         Each cell has two neighbors, so in this situation the middle cell must match 2 bits of the cell on the left and 2 bits of the cell on the right.
         <div class="demoMount" data-demo="adjacency3cellmatrix"></div>
         <p>
+        A side note here, looking at valid states, as we increased the window we saw 8,16,32... it looks like a pattern. 
+        <table class="caseTable">
+        <thead>
+            <tr>
+            <th>Number of cells</th>
+            <th>Possible configurations</th>
+            <th>Count</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+            <td>1 cell</td>
+            <td><code>0</code>, <code>1</code></td>
+            <td><code>2</code></td>
+            </tr>
+            <tr>
+            <td>2 cells</td>
+            <td><code>00</code>, <code>01</code>, <code>10</code>, <code>11</code></td>
+            <td><code>4</code></td>
+            </tr>
+            <tr>
+            <td>3 cells</td>
+            <td><code>000...111</code></td>
+            <td><code>8</code></td>
+            </tr>
+            <tr>
+            <td>4 cells</td>
+            <td><code>0000...1111</code></td>
+            <td><code>16</code></td>
+            </tr>
+            <tr>
+            <td>k cells</td>
+            <td><code>2<sup>k</sup></code> possible bit strings</td>
+            <td><code>2<sup>k</sup></code></td>
+            </tr>
+        </tbody>
+        </table>
+        <p>So what are we doing here? Adding color to 3 cells is really just the same as evaluating 5 bits right?</p>
+        <h3>Connect the dots</h3><div class="muted">...---...</div>
         Having a full set of 3 cell neighborhoods is a cool place to be because we need 3 cells to spawn a cell in the next generation.
-        It would nice to see what relation these sets have to each other. In order to do that we will need to add some cells to the outside of each set.
+        It would nice to see what relation these sets have to each other. In order to do that we will need to add some cells to the outside of each set...again. <br><br>
         Any 5 cell row will produce one of the other three cell rows. 
         For each of our 3 cell sets, which other sets can they spawn and which ones can spawn them?
         Gathering this info will lets a build a directed graph. Thankfully we already have the data we need saved in our colors. 
-        The colors are essentially a record of the previous generations. So all we have to do is shave off the outter bits and to see who the parents could be.
-        This will also identify nodes that are orphans, meaning that they cannot naturally spawn from this rule 
+        The colors are essentially a record of the previous generation. All we have to do is shave off the outter bits and to see who the parents could be.
+        This will also identify nodes that are orphans, meaning that they cannot naturally spawn from this rule, but you COULD start from there initially.
         
         </p>
         <div class="demoMount" data-demo="basicgraph"></div>
@@ -143,19 +187,13 @@
 
         <div class="demoMount" data-demo="walkgraph"></div>
         <p>OK thats all for now. I don't think we covered any new ground about rule 30. It certainly seems random unlike some of the other rules. 
-            It should be clear, if you played with the demos, that most of the other rules are less connected, and they have orphan nodes.
+            It should be clear, if you played with the demos, that most of the other rules are less connected, and they have orphan nodes. 
+            Maybe it would be interesting to see what happens when use more than 8 colors (3 bits).<br><br>
+            If you want to generate some CA images with colors like we did here then check out <a href="/wolf.html">this tool</a>.<br><br>
             Good luck!
         </p>
 
-
-
-
-
-        
     </main>
-
-
-
 
   </div>
 
