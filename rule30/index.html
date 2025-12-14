@@ -90,7 +90,7 @@
         It seems as though, if we want to know what a given cell's state is after some number (N) steps, we must compute all prior steps.
         If we tried to look at a window that is smaller than the full output we can't assume that the cells outside our window are dead.
         They might be living or dead and the only way to know for sure would be to run the whole simulation. 
-        The only thing we know for sure is that those cells are either alive or dead. At each step there are possible paths.
+        The only thing we know for sure is that those cells are either alive or dead. At each step there are 4 possible paths.
         </p>
         Lets look at a 5 cell slice of rule 30 and compare it to the output if we assume that the unknown cells are always dead or always alive, or randomly chosen.
         <div class="demoMount" data-demo="rule30slice5steps10"></div>
