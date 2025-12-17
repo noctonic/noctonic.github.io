@@ -1,0 +1,731 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Weighted Trees</title>
+  <style>
+    :root{
+      --bg:#000;
+      --text:#e8eef8;
+      --muted:#a7b3c6;
+      --border:rgba(255,255,255,0.12);
+      --danger:#ff7b72;
+    }
+    * { box-sizing: border-box; }
+    html, body{
+      height: 100%;
+      background: #000;
+    }
+    body{
+      margin:0;
+      font-family: monospace;
+      color:var(--text);
+      background: #000;
+    }
+
+    .wrap{
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 16px 18px 16px;
+      display: grid;
+      grid-template-columns: 420px 1fr;
+      gap: 14px;
+    }
+    @media (max-width: 980px){
+      .wrap { grid-template-columns: 1fr; }
+    }
+    .card{
+      background: rgba(255,255,255,0.03);
+      border:1px solid var(--border);
+      border-radius: 14px;
+      overflow:hidden;
+    }
+    .bd{ padding: 14px; }
+
+    .pill{
+      display:inline-block;
+      border:1px solid var(--border);
+      border-radius:999px;
+      padding:6px 10px;
+      font-size:12px;
+      color: var(--muted);
+      background: rgba(0,0,0,0.35);
+      white-space: nowrap;
+    }
+    .pill.bad{
+      color: var(--danger);
+      border-color: rgba(255,123,114,0.5);
+      background: rgba(255,123,114,0.14);
+    }
+
+    label{
+      display:block;
+      color: var(--muted);
+      font-size: 12px;
+      margin: 10px 0 6px;
+    }
+    input[type="number"], input[type="text"], textarea{
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: rgba(0,0,0,0.35);
+      color: var(--text);
+      padding: 10px 10px;
+      font-size: 13px;
+      outline: none;
+    }
+    textarea{
+      min-height: 340px;
+      resize: vertical;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+    textarea.invalid{
+      border-color: rgba(255,123,114,0.7);
+      box-shadow: 0 0 0 2px rgba(255,123,114,0.12);
+    }
+    input[type="range"]{ width:100%; }
+
+    .row{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .row3{
+      display:grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+    }
+
+    .btns{
+      display:flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 12px;
+      align-items: center;
+    }
+    button{
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(0,0,0,0.35);
+      color: var(--text);
+      padding: 10px 12px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: transform 0.04s ease, background 0.15s ease, border-color 0.15s ease;
+    }
+    button:hover{ background: rgba(0,0,0,0.5); border-color: rgba(255,255,255,0.22); }
+    button:active{ transform: translateY(1px); }
+    button.primary{
+      background: rgba(126,231,135,0.18);
+      border-color: rgba(126,231,135,0.45);
+    }
+
+    .smallnote{ font-size: 12px; color: var(--muted); line-height: 1.45; }
+    .mono{
+      font-family: monospace;
+    }
+
+    .errorBox{
+      margin-top: 10px;
+      padding: 10px 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,123,114,0.5);
+      background: rgba(255,123,114,0.10);
+      color: var(--danger);
+      font-size: 12px;
+      white-space: pre-wrap;
+      display: none;
+    }
+
+    .canvasWrap{ padding: 10px; }
+    canvas{
+      width: 100%;
+      height: 70vh;
+      min-height: 520px;
+      display:block;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(0,0,0,0.35);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="wrap">
+    <section class="card">
+      <div class="bd">
+        <div class="btns">
+          <small class="pill" id="pill" style="display:none;">JSON invalid</small>
+        </div>
+
+        <div class="row3" style="margin-top:10px;">
+          <div>
+            <label for="nodeCount">Nodes</label>
+            <input id="nodeCount" type="number" min="1" max="60" step="1" value="7" />
+          </div>
+          <div>
+            <label for="branches">Branches</label>
+            <input id="branches" type="number" min="1" step="1" value="3" />
+          </div>
+          <div>
+            <label for="rounds">Rounds</label>
+            <input id="rounds" type="number" min="0" max="14" step="1" value="10" />
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label for="decay">Length Decay</label>
+            <input id="decay" type="range" min="0.50" max="0.90" step="0.01" value="0.72" />
+            <div class="smallnote" hidden>Current: <span id="decayVal">0.72</span></div>
+          </div>
+          <div>
+            <label for="jitter">Jitter</label>
+            <input id="jitter" type="range" min="0" max="12" step="0.1" value="2.0" />
+            <div class="smallnote" hidden>Current: <span id="jitterVal">2.0</span>°</div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label for="angleMin">Min Angle</label>
+            <input id="angleMin" type="number" step="0.1" value="-60" />
+          </div>
+          <div>
+            <label for="angleMax">Max Angle</label>
+            <input id="angleMax" type="number" step="0.1" value="60" />
+          </div>
+        </div>
+
+        <div class="btns">
+          <button class="primary" id="btnRandomWeights">Random weights</button>
+          <button class="primary" id="btnRandomAngles">Random angles</button>
+          <button class="primary" id="btnRandomWalk">Random walk</button>
+          <button class="primary" id="btnRandomColors">Random Colors</button>
+          <button id="btnSave">Save PNG</button>
+        </div>
+
+        <label for="nodesJson">Nodes JSON</label>
+
+        <textarea id="nodesJson" class="mono" spellcheck="false"></textarea>
+
+        <div class="errorBox" id="jsonError"></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="bd canvasWrap">
+        <canvas id="cv" width="1200" height="900"></canvas>
+      </div>
+    </section>
+  </div>
+
+  <script src="../color_utils/colorConversion.js"></script>
+
+<script>
+function clamp(x, lo, hi){ return Math.max(lo, Math.min(hi, x)); }
+function lerp(a,b,t){ return a + (b-a)*t; }
+function deg2rad(d){ return d * Math.PI / 180; }
+function fmt(n, k=2){ return Number(n).toFixed(k); }
+
+function xmur3(str) {
+  let h = 1779033703 ^ str.length;
+  for (let i = 0; i < str.length; i++) {
+    h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  return function() {
+    h = Math.imul(h ^ (h >>> 16), 2246822507);
+    h = Math.imul(h ^ (h >>> 13), 3266489909);
+    h ^= h >>> 16;
+    return h >>> 0;
+  };
+}
+function sfc32(a, b, c, d) {
+  return function() {
+    a >>>= 0; b >>>= 0; c >>>= 0; d >>>= 0;
+    let t = (a + b) | 0;
+    a = b ^ (b >>> 9);
+    b = (c + (c << 3)) | 0;
+    c = (c << 21) | (c >>> 11);
+    d = (d + 1) | 0;
+    t = (t + d) | 0;
+    c = (c + t) | 0;
+    return (t >>> 0) / 4294967296;
+  };
+}
+function makeRng(seedStr){
+  if (!seedStr) return () => Math.random();
+  const seed = xmur3(seedStr);
+  return sfc32(seed(), seed(), seed(), seed());
+}
+
+function newSeed(label){
+  let r = "";
+  if (crypto && crypto.getRandomValues) {
+    const u = new Uint32Array(2);
+    crypto.getRandomValues(u);
+    r = `${u[0].toString(16)}${u[1].toString(16)}`;
+  } else {
+    r = Math.random().toString(16).slice(2);
+  }
+  return `${label}|${Date.now()}|${r}`;
+}
+
+function normalizeWeights(ws){
+  const w = ws.map(x => Math.max(0, Number(x) || 0));
+  const sum = w.reduce((a,b)=>a+b,0);
+  if (sum <= 0) return w.map(_=>1/w.length);
+  return w.map(x=>x/sum);
+}
+
+function sampleKIndicesUnique(rng, weightsNorm, k){
+  const n = weightsNorm.length;
+  k = Math.min(k, n);
+  const out = [];
+  const avail = Array.from({length:n}, (_,i)=>i);
+
+  for (let t=0; t<k && avail.length>0; t++){
+    let sum = 0;
+    for (const idx of avail) sum += weightsNorm[idx];
+
+    if (sum <= 0) {
+      const j = Math.floor(rng() * avail.length);
+      out.push(avail[j]);
+      avail.splice(j,1);
+      continue;
+    }
+
+    let r = rng() * sum;
+    let chosenPos = avail.length - 1;
+    for (let pos=0; pos<avail.length; pos++){
+      const idx = avail[pos];
+      r -= weightsNorm[idx];
+      if (r <= 0) { chosenPos = pos; break; }
+    }
+    out.push(avail[chosenPos]);
+    avail.splice(chosenPos, 1);
+  }
+  return out;
+}
+
+function randomHelixParams() {
+  return {
+    startZ: 0,
+    endZ:   Math.random(),
+    turns:  (Math.random() * 2) - 1,
+    amplitude: 0.5 + Math.random() * 1.5,
+    direction: Math.random() < 0.5 ? -1 : 1,
+    scaleX: 0.5 + Math.random(),
+    scaleZ: 0.5 + Math.random(),
+    initialAngleDeg: Math.random() * 360,
+    maxChroma: 80 + Math.random() * 40,
+    numColors: 16
+  };
+}
+
+let helixParams = randomHelixParams();
+let palette = getHelixColors(helixParams);
+
+function randomizeColors(){
+  helixParams = randomHelixParams();
+  palette = getHelixColors(helixParams);
+  scheduleRender();
+}
+
+const el = {
+  nodeCount: document.getElementById("nodeCount"),
+  rounds: document.getElementById("rounds"),
+  branches: document.getElementById("branches"),
+  decay: document.getElementById("decay"),
+  decayVal: document.getElementById("decayVal"),
+  jitter: document.getElementById("jitter"),
+  jitterVal: document.getElementById("jitterVal"),
+  angleMin: document.getElementById("angleMin"),
+  angleMax: document.getElementById("angleMax"),
+
+  btnRandomWeights: document.getElementById("btnRandomWeights"),
+  btnRandomAngles: document.getElementById("btnRandomAngles"),
+  btnRandomWalk: document.getElementById("btnRandomWalk"),
+  btnRandomColors: document.getElementById("btnRandomColors"),
+  btnSave: document.getElementById("btnSave"),
+
+  nodesJson: document.getElementById("nodesJson"),
+  jsonError: document.getElementById("jsonError"),
+  pill: document.getElementById("pill"),
+
+  cv: document.getElementById("cv"),
+};
+
+const ctx = el.cv.getContext("2d");
+
+const DEFAULT_ANGLE_MIN = -60;
+const DEFAULT_ANGLE_MAX = 60;
+const MAX_NODES = 200;
+const TRUNK_LEN = 1.0;
+
+function defaultAnglesForCount(n, lo=DEFAULT_ANGLE_MIN, hi=DEFAULT_ANGLE_MAX){
+  n = Math.max(1, Math.floor(n));
+  if (n === 1) return [0];
+  const out = [];
+  for (let i=0;i<n;i++) out.push(lerp(lo, hi, i/(n-1)));
+  return out;
+}
+
+function makeDefaultNodes(n){
+  const angs = defaultAnglesForCount(n);
+  return angs.map(a => ({ angle: a, weight: 1 }));
+}
+
+let nodes = makeDefaultNodes(Number(el.nodeCount.value) || 7);
+
+let weightsSeed = newSeed("weights");
+let anglesSeed  = newSeed("angles");
+let walkSeed    = newSeed("walk");
+
+let jsonWriteQueued = false;
+let renderQueued = false;
+
+function setJsonInvalid(msg){
+  el.jsonError.textContent = "JSON invalid:\n" + String(msg || "Parse error");
+  el.jsonError.style.display = "block";
+  el.nodesJson.classList.add("invalid");
+  el.pill.textContent = "JSON invalid";
+  el.pill.classList.add("bad");
+  el.pill.style.display = "inline-block";
+}
+function clearJsonInvalid(){
+  el.jsonError.textContent = "";
+  el.jsonError.style.display = "none";
+  el.nodesJson.classList.remove("invalid");
+  el.pill.textContent = "";
+  el.pill.classList.remove("bad");
+  el.pill.style.display = "none";
+}
+
+function nodesToCanonicalJson(n){
+  return JSON.stringify(n.map(x => ({
+    angle: Number(x.angle) || 0,
+    weight: Math.max(0, Number(x.weight) || 0)
+  })), null, 2);
+}
+
+function scheduleNodesJsonWrite(){
+  if (jsonWriteQueued) return;
+  jsonWriteQueued = true;
+  requestAnimationFrame(() => {
+    jsonWriteQueued = false;
+    el.nodesJson.value = nodesToCanonicalJson(nodes);
+    clearJsonInvalid();
+  });
+}
+
+function parseNodesJson(text){
+  let data;
+  try { data = JSON.parse(text); }
+  catch (e) { throw new Error(e && e.message ? e.message : "Could not parse JSON"); }
+
+  if (!Array.isArray(data)) throw new Error("Root must be an array of nodes.");
+  if (data.length < 1) throw new Error("Need at least 1 node.");
+  if (data.length > MAX_NODES) throw new Error(`Too many nodes (${data.length}). Max supported is ${MAX_NODES}.`);
+
+  return data.map((item, i) => {
+    let angle, weight;
+
+    if (typeof item === "number") {
+      angle = item; weight = 1;
+    } else if (Array.isArray(item)) {
+      angle = item[0]; weight = (item.length >= 2) ? item[1] : 1;
+    } else if (item && typeof item === "object") {
+      angle = (item.angle ?? item.a);
+      weight = (item.weight ?? item.w);
+    } else {
+      throw new Error(`Node ${i+1} must be an object, [angle, weight], or a number.`);
+    }
+
+    angle = Number(angle);
+    weight = Number(weight);
+
+    if (!Number.isFinite(angle)) throw new Error(`Node ${i+1} angle must be a number.`);
+    if (!Number.isFinite(weight)) throw new Error(`Node ${i+1} weight must be a number.`);
+
+    return { angle, weight: Math.max(0, weight) };
+  });
+}
+
+function syncBranchesLimit(){
+  const n = Math.max(1, nodes.length);
+  el.branches.max = String(n);
+
+  const current = Number(el.branches.value) || 1;
+  const clamped = clamp(Math.floor(current), 1, n);
+  if (clamped !== current) el.branches.value = String(clamped);
+}
+
+function setNodeCount(nextCount){
+  const n = clamp(Math.floor(Number(nextCount) || 1), 1, MAX_NODES);
+  const oldN = nodes.length;
+  if (n === oldN) return;
+
+  if (n < oldN){
+    nodes = nodes.slice(0, n);
+  } else {
+    const targets = defaultAnglesForCount(n);
+    for (let i=oldN; i<n; i++){
+      nodes.push({ angle: targets[i], weight: 1 });
+    }
+  }
+
+  syncBranchesLimit();
+  scheduleNodesJsonWrite();
+  scheduleRender();
+}
+
+function generateTree(params){
+  const { rounds, branches, decay, jitterDeg, walkSeedStr } = params;
+
+  const rng = makeRng(walkSeedStr);
+  const angles = nodes.map(n => n.angle);
+  const wNorm = normalizeWeights(nodes.map(n => n.weight));
+
+  const segmentsByDepth = [];
+  for (let d=0; d<=rounds; d++) segmentsByDepth.push([]);
+
+  const base = { x:0, y:0, theta: Math.PI/2, L: TRUNK_LEN };
+  const trunkTip = {
+    x: base.x + base.L * Math.cos(base.theta),
+    y: base.y + base.L * Math.sin(base.theta),
+    theta: base.theta,
+    L: TRUNK_LEN
+  };
+
+  segmentsByDepth[0].push({ x1:base.x, y1:base.y, x2:trunkTip.x, y2:trunkTip.y });
+
+  let tips = [trunkTip];
+
+  const MAX_SEGMENTS = 180000;
+  let segCount = 1;
+
+  for (let depth=1; depth<=rounds; depth++){
+    const newTips = [];
+
+    for (const tip of tips){
+      const idxs = sampleKIndicesUnique(rng, wNorm, branches);
+
+      for (const idx of idxs){
+        const offset = deg2rad(angles[idx]);
+        const jitter = deg2rad((rng()*2 - 1) * jitterDeg);
+        const theta = tip.theta + offset + jitter;
+
+        const len = tip.L * decay;
+        const x2 = tip.x + len * Math.cos(theta);
+        const y2 = tip.y + len * Math.sin(theta);
+
+        segmentsByDepth[depth].push({ x1:tip.x, y1:tip.y, x2, y2 });
+        newTips.push({ x:x2, y:y2, theta, L:len });
+
+        segCount++;
+        if (segCount >= MAX_SEGMENTS){
+          return { segmentsByDepth, capped:true, segCount, max:MAX_SEGMENTS };
+        }
+      }
+    }
+    tips = newTips;
+  }
+
+  return { segmentsByDepth, capped:false, segCount, max:MAX_SEGMENTS };
+}
+
+function computeBounds(segmentsByDepth){
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const segs of segmentsByDepth){
+    for (const s of segs){
+      minX = Math.min(minX, s.x1, s.x2);
+      maxX = Math.max(maxX, s.x1, s.x2);
+      minY = Math.min(minY, s.y1, s.y2);
+      maxY = Math.max(maxY, s.y1, s.y2);
+    }
+  }
+  if (!isFinite(minX)) return {minX:0,maxX:1,minY:0,maxY:1};
+  const pad = 0.08 * Math.max(1e-6, maxX-minX, maxY-minY);
+  return { minX:minX-pad, maxX:maxX+pad, minY:minY-pad, maxY:maxY+pad };
+}
+
+function drawTree(tree, rounds){
+  const { segmentsByDepth } = tree;
+
+  const rect = el.cv.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  el.cv.width = Math.floor(rect.width * dpr);
+  el.cv.height = Math.floor(rect.height * dpr);
+
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+
+  ctx.clearRect(0,0,rect.width,rect.height);
+  ctx.fillStyle = "rgba(0,0,0,0.40)";
+  ctx.fillRect(0,0,rect.width,rect.height);
+
+  const B = computeBounds(segmentsByDepth);
+  const w = rect.width, h = rect.height;
+  const rangeX = Math.max(1e-9, B.maxX - B.minX);
+  const rangeY = Math.max(1e-9, B.maxY - B.minY);
+
+  const padPx = 24;
+  const sx = (w - 2*padPx) / rangeX;
+  const sy = (h - 2*padPx) / rangeY;
+  const s = Math.min(sx, sy);
+
+  function mapX(x){ return padPx + (x - B.minX) * s; }
+  function mapY(y){ return h - padPx - (y - B.minY) * s; }
+
+  for (let depth=0; depth<segmentsByDepth.length; depth++){
+    const segs = segmentsByDepth[depth];
+    if (!segs.length) continue;
+
+    const t = rounds <= 0 ? 0 : (depth / Math.max(1, rounds));
+    ctx.lineWidth = lerp(3.2, 0.6, t);
+
+    const color = palette[depth % palette.length];
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = lerp(0.90, 0.35, t);
+
+    ctx.beginPath();
+    for (const sgm of segs){
+      ctx.moveTo(mapX(sgm.x1), mapY(sgm.y1));
+      ctx.lineTo(mapX(sgm.x2), mapY(sgm.y2));
+    }
+    ctx.stroke();
+  }
+
+  ctx.globalAlpha = 1;
+}
+
+function updateLabels(){
+  el.decayVal.textContent = fmt(el.decay.value, 2);
+  el.jitterVal.textContent = fmt(el.jitter.value, 1);
+}
+
+function readParams(){
+  const rounds = clamp(Number(el.rounds.value)||0, 0, 14);
+  const n = Math.max(1, nodes.length);
+  const branches = clamp(Math.floor(Number(el.branches.value)||1), 1, n);
+
+  const decay = clamp(Number(el.decay.value)||0.72, 0.5, 0.95);
+  const jitterDeg = clamp(Number(el.jitter.value)||0, 0, 45);
+
+  return { rounds, branches, decay, jitterDeg, walkSeedStr: walkSeed };
+}
+
+function scheduleRender(){
+  if (renderQueued) return;
+  renderQueued = true;
+  requestAnimationFrame(() => {
+    renderQueued = false;
+    doRender();
+  });
+}
+
+function doRender(){
+  syncBranchesLimit();
+  const p = readParams();
+  const tree = generateTree(p);
+  drawTree(tree, p.rounds);
+}
+
+function readAngleBounds(){
+  let lo = Number(el.angleMin.value);
+  let hi = Number(el.angleMax.value);
+  if (!Number.isFinite(lo)) lo = DEFAULT_ANGLE_MIN;
+  if (!Number.isFinite(hi)) hi = DEFAULT_ANGLE_MAX;
+  if (lo > hi) [lo, hi] = [hi, lo];
+  lo = clamp(lo, -360, 360);
+  hi = clamp(hi, -360, 360);
+  return { lo, hi };
+}
+
+function randomizeWeights(){
+  weightsSeed = newSeed("weights");
+  const rng = makeRng(weightsSeed);
+  nodes = nodes.map(n => ({ ...n, weight: (rng() * 1.0) + 0.05 }));
+  scheduleNodesJsonWrite();
+  scheduleRender();
+}
+
+function randomizeAngles(){
+  anglesSeed = newSeed("angles");
+  const rng = makeRng(anglesSeed);
+
+  const { lo, hi } = readAngleBounds();
+  nodes = nodes.map(n => ({ ...n, angle: lerp(lo, hi, rng()) }));
+
+  scheduleNodesJsonWrite();
+  scheduleRender();
+}
+
+function randomizeWalk(){
+  walkSeed = newSeed("walk");
+  scheduleRender();
+}
+
+el.nodeCount.addEventListener("input", () => {
+  const n = clamp(Math.floor(Number(el.nodeCount.value) || 1), 1, MAX_NODES);
+  el.nodeCount.value = String(n);
+  setNodeCount(n);
+});
+el.branches.addEventListener("input", () => { syncBranchesLimit(); scheduleRender(); });
+
+el.rounds.addEventListener("input", () => scheduleRender());
+el.decay.addEventListener("input", () => { updateLabels(); scheduleRender(); });
+el.jitter.addEventListener("input", () => { updateLabels(); scheduleRender(); });
+
+el.angleMin.addEventListener("input", () => scheduleRender());
+el.angleMax.addEventListener("input", () => scheduleRender());
+
+el.nodesJson.addEventListener("input", () => {
+  const text = el.nodesJson.value;
+  try {
+    const parsed = parseNodesJson(text);
+    clearJsonInvalid();
+
+    const lenChanged = parsed.length !== nodes.length;
+    nodes = parsed;
+
+    el.nodeCount.value = String(nodes.length);
+    syncBranchesLimit();
+
+    if (lenChanged) scheduleRender();
+    scheduleRender();
+  } catch (e) {
+    setJsonInvalid(e.message || String(e));
+  }
+});
+
+el.btnRandomWeights.addEventListener("click", randomizeWeights);
+el.btnRandomAngles.addEventListener("click", randomizeAngles);
+el.btnRandomWalk.addEventListener("click", randomizeWalk);
+el.btnRandomColors.addEventListener("click", randomizeColors);
+
+el.btnSave.addEventListener("click", () => {
+  const a = document.createElement("a");
+  a.href = el.cv.toDataURL("image/png");
+  a.download = "weighted_angle_tree.png";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+});
+
+window.addEventListener("resize", () => scheduleRender());
+
+(function init(){
+  updateLabels();
+  randomizeWeights();
+  randomizeColors();
+  el.nodesJson.value = nodesToCanonicalJson(nodes);
+  syncBranchesLimit();
+  doRender();
+})();
+</script>
+</body>
+</html>
