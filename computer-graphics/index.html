@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Retro Canvas</title>
+    <link rel="stylesheet" href="./vendor/codemirror/codemirror.min.css" />
+    <link rel="stylesheet" href="./vendor/codemirror/material-darker.min.css" />
+
+    <style>
+      :root {
+        --bg: #0b1020;
+        --panel: rgba(255, 255, 255, 0.06);
+        --panel-2: rgba(255, 255, 255, 0.08);
+        --border: rgba(255, 255, 255, 0.12);
+        --text: rgba(255, 255, 255, 0.88);
+        --muted: rgba(255, 255, 255, 0.62);
+        --accent: #7c5cff;
+        --accent-2: #34d399;
+        --danger: #fb7185;
+        --shadow: rgba(0, 0, 0, 0.45);
+        --radius: 14px;
+      }
+
+      * { box-sizing: border-box; }
+      html, body { height: 100%; }
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial,
+          "Apple Color Emoji", "Segoe UI Emoji";
+        background: var(--bg);
+        color: var(--text);
+        overflow: hidden;
+      }
+
+      .app {
+        height: 100%;
+        display: grid;
+        grid-template-rows: auto 1fr;
+      }
+
+      .topbar {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        padding: 14px 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        background: #0b0f18;
+        border-bottom: 1px solid var(--border);
+        backdrop-filter: blur(10px);
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 240px;
+      }
+      .brand h1 {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.1;
+        letter-spacing: 0.2px;
+      }
+      .brand .sub {
+        margin-top: 2px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .controls {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+
+      .btn {
+        height: 36px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--text);
+        padding: 0 12px;
+        outline: none;
+        box-shadow: 0 10px 24px var(--shadow);
+      }
+
+      .btn {
+        cursor: pointer;
+        transition: transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
+      }
+
+      .btn:disabled {
+        cursor: not-allowed;
+        opacity: 0.5;
+        box-shadow: none;
+      }
+
+      .btn.primary {
+        background: #121826;
+        border: none;
+        color: white;
+      }
+
+      .btn.secondary {
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      .main {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+        padding: 14px;
+        height: calc(100vh - 70px);
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: 0 20px 40px var(--shadow);
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+
+      .panel-header {
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .panel-body {
+        padding: 12px 14px;
+        flex: 1;
+        overflow: auto;
+      }
+
+      .editor-host {
+        min-height: 320px;
+        flex: 1;
+      }
+
+      .CodeMirror {
+        height: 100%;
+        border-radius: var(--radius);
+        background: rgba(0, 0, 0, 0.25);
+      }
+
+      .panel-body.layout-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .collapsible {
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: rgba(255, 255, 255, 0.04);
+        padding: 10px 12px;
+      }
+
+      .collapsible summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        cursor: pointer;
+        list-style: none;
+      }
+
+      .collapsible summary::-webkit-details-marker { display: none; }
+
+      .collapsible .summary-text {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 600;
+      }
+
+      .collapsible .summary-meta {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .collapsible[open] .collapsible-body {
+        margin-top: 10px;
+      }
+
+      canvas {
+        image-rendering: pixelated;
+        background: #0b1020;
+      }
+
+      .log-card {
+        background: rgba(255, 255, 255, 0.04);
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+        padding: 12px;
+        min-height: 140px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .log-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      .log-lines {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 12px;
+        line-height: 1.4;
+        white-space: pre-wrap;
+        overflow: auto;
+        flex: 1;
+        max-height: 200px;
+      }
+
+      .hint {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .palette-json {
+        width: 100%;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.04);
+        color: var(--text);
+        padding: 10px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 13px;
+        resize: vertical;
+        min-height: 110px;
+        max-height: 220px;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+      }
+
+      .preview-panel .panel-body {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 10px;
+      }
+
+      .preview-stage {
+        position: relative;
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.02);
+      }
+
+      .preview-stage canvas {
+        border-radius: 0;
+        box-shadow: none;
+        max-width: 100%;
+        max-height: 100%;
+      }
+
+      .engine-meta {
+        align-self: flex-start;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .canvas-info-pill {
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: rgba(11, 16, 32, 0.85);
+        border: 1px solid var(--border);
+        font-size: 12px;
+        color: var(--text);
+        box-shadow: 0 10px 24px var(--shadow);
+      }
+
+      .engine-info {
+        color: var(--muted);
+      }
+      
+      @media (max-width: 1080px) {
+        body { overflow: auto; }
+        .main {
+          grid-template-columns: 1fr;
+          height: auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">
+          <div>
+            <h1>Retro Canvas</h1>
+            <div class="sub">Simple Computer Graphics</div>
+          </div>
+        </div>
+        <div class="controls">
+          <button class="btn primary" id="start">Start</button>
+          <button class="btn" id="pause">Pause</button>
+          <button class="btn secondary" id="restart">Restart</button>
+          <button class="btn" id="share">Share</button>
+        </div>
+      </header>
+
+      <main class="main">
+        <section class="panel">
+          <div class="panel-header">
+            <strong>Lua Editor</strong>
+            <span class="hint">Shift+Ctrl+Enter to restart</span>
+          </div>
+          <div class="panel-body layout-stack">
+            <div class="editor-host">
+              <textarea id="editor" aria-label="Lua editor"></textarea>
+            </div>
+
+            <details class="collapsible" open>
+              <summary>
+                <span class="summary-text">Palette JSON</span>
+                <span class="summary-meta">JSON array of hex colors (#RRGGBB)</span>
+              </summary>
+              <div class="collapsible-body">
+                <textarea id="paletteJson" class="palette-json" rows="6" aria-label="Palette JSON"></textarea>
+              </div>
+            </details>
+
+            <details class="collapsible" open>
+              <summary>
+                <span class="summary-text">Logs</span>
+              </summary>
+              <div class="collapsible-body">
+                <div class="log-lines" id="logLines"></div>
+              </div>
+            </details>
+          </div>
+        </section>
+
+          <section class="panel preview-panel">
+            <div class="panel-body">
+              <div class="preview-stage" id="canvasWrap">
+                <canvas id="preview" width="320" height="240"></canvas>
+              </div>
+              <div class="engine-meta">
+                <span class="hint engine-info" id="engineInfo">Booting...</span>
+                <span class="canvas-info-pill" id="canvasInfo"></span>
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
+
+    <script src="./vendor/codemirror/codemirror.min.js"></script>
+    <script src="./vendor/codemirror/lua.min.js"></script>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
