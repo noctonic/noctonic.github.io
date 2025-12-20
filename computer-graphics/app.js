@@ -28,6 +28,7 @@ end`;
 
 const DEFAULT_PALETTE_JSON =
   '["#000000","#240F1B","#3B1638","#48245B","#483681","#344CA3","#0063BF","#0079D3","#008EDC","#00A2DE","#00B5D9","#00C6D2","#5ED6CD","#9EE4D1","#D3F1E0","#FFFFFF"]';
+const DEFAULT_PALETTE = JSON.parse(DEFAULT_PALETTE_JSON);
 
 let editor;
 let worker = null;
@@ -39,15 +40,21 @@ let canvasSize = { w: 128, h: 128 };
 let isRunning = false;
 let isPaused = false;
 
+function padBase64(b64) {
+  const missing = (4 - (b64.length % 4)) % 4;
+  if (missing === 0) return b64;
+  return b64 + '='.repeat(missing);
+}
+
 function base64EncodeUnicode(str) {
   const utf8 = encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (_, p1) =>
     String.fromCharCode(parseInt(p1, 16)),
   );
-  return btoa(utf8);
+  return btoa(utf8).replace(/=+$/, '');
 }
 
 function base64DecodeUnicode(b64) {
-  const binary = atob(b64);
+  const binary = atob(padBase64(b64));
   const pairs = Array.from(binary, (ch) => `%${ch.charCodeAt(0).toString(16).padStart(2, '0')}`);
   return decodeURIComponent(pairs.join(''));
 }
@@ -149,6 +156,41 @@ function parsePaletteJson(text) {
   });
 
   return parsed;
+}
+
+function normalizePaletteEntry(entry) {
+  const hex = entry.startsWith('#') ? entry.slice(1) : entry;
+  return hex.toUpperCase();
+}
+
+function palettesMatchDefault(palette) {
+  if (palette.length !== DEFAULT_PALETTE.length) return false;
+  return palette.every(
+    (color, index) => normalizePaletteEntry(color) === normalizePaletteEntry(DEFAULT_PALETTE[index]),
+  );
+}
+
+function encodePaletteParam(palette) {
+  return palette.map(normalizePaletteEntry).join(',');
+}
+
+function decodePaletteParam(param) {
+  const colors = param.split(',').filter((entry) => entry.length > 0);
+  if (colors.length === 0) {
+    throw new Error('Palette parameter is empty');
+  }
+
+  const decoded = colors.map((color, index) => {
+    const hex = color.toUpperCase();
+    if (!/^[0-9A-F]{6}([0-9A-F]{2})?$/.test(hex)) {
+      throw new Error(`Palette entry ${index} is not a valid hex color`);
+    }
+    return `#${hex}`;
+  });
+
+  const json = JSON.stringify(decoded);
+  parsePaletteJson(json);
+  return json;
 }
 
 function encodeSharePayload(payload) {
@@ -306,22 +348,27 @@ async function restartRun() {
 }
 
 async function shareState() {
-  const payload = {
-    code: editor.getValue(),
-    palette: paletteJsonInput.value.trim(),
-  };
+  const code = editor.getValue();
+  const paletteText = paletteJsonInput.value.trim();
 
-  let encoded;
+  let palette;
   try {
-    encoded = encodeSharePayload(payload);
+    palette = parsePaletteJson(paletteText);
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to encode share data';
+    const message = err instanceof Error ? err.message : 'Palette is invalid';
     appendLog(message);
     return;
   }
 
   const url = new URL(window.location.href);
-  url.searchParams.set('share', encoded);
+  url.searchParams.delete('share');
+  url.searchParams.set('c', base64EncodeUnicode(code));
+
+  if (palettesMatchDefault(palette)) {
+    url.searchParams.delete('p');
+  } else {
+    url.searchParams.set('p', encodePaletteParam(palette));
+  }
   const shareUrl = url.toString();
 
   window.history.replaceState(null, '', url);
@@ -347,21 +394,38 @@ function applySharedState(payload) {
 
 function loadSharedState() {
   const params = new URL(window.location.href).searchParams;
-  const encoded = params.get('share');
-  if (!encoded) {
-    return false;
+  const encodedCode = params.get('c');
+  const encodedPalette = params.get('p');
+  const legacyShare = params.get('share');
+
+  if (encodedCode) {
+    try {
+      const code = base64DecodeUnicode(encodedCode);
+      const paletteJson = encodedPalette ? decodePaletteParam(encodedPalette) : DEFAULT_PALETTE_JSON;
+      applySharedState({ code, palette: paletteJson });
+      appendLog('Loaded shared state from URL.');
+      return true;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load shared data';
+      appendLog(message);
+      return false;
+    }
   }
 
-  try {
-    const payload = decodeSharePayload(encoded);
-    applySharedState(payload);
-    appendLog('Loaded shared state from URL.');
-    return true;
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to load shared data';
-    appendLog(message);
-    return false;
+  if (legacyShare) {
+    try {
+      const payload = decodeSharePayload(legacyShare);
+      applySharedState(payload);
+      appendLog('Loaded shared state from URL.');
+      return true;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load shared data';
+      appendLog(message);
+      return false;
+    }
   }
+
+  return false;
 }
 
 function togglePause() {
