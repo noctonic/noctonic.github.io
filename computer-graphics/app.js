@@ -489,9 +489,8 @@ function boot() {
   spawnWorker();
   startButton.disabled = true;
   pauseButton.disabled = true;
-  if (shouldAutoStart) {
-    startRun();
-  }
+  startRun();
+
 }
 
 boot();
