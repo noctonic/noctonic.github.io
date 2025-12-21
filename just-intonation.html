@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Just Intonation</title>
+  <style>
+    :root{
+      --bg: #0b0f19;
+      --card: rgba(255,255,255,0.06);
+      --card2: rgba(255,255,255,0.09);
+      --stroke: rgba(255,255,255,0.14);
+      --stroke2: rgba(255,255,255,0.22);
+      --text: rgba(255,255,255,0.92);
+      --muted: rgba(255,255,255,0.68);
+      --muted2: rgba(255,255,255,0.52);
+      --shadow: 0 16px 40px rgba(0,0,0,0.45);
+    }
+
+    *{ box-sizing:border-box; }
+
+    body{
+      font-family: monospace;
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      background: linear-gradient(180deg, #0a0a0a, #111418);
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+    }
+
+
+    h2{
+      margin: 0 0 14px;
+      letter-spacing: -0.02em;
+      font-size: 22px;
+      color: rgba(255,255,255,0.95);
+    }
+
+    .card{
+      margin: 40px auto;
+      border: 1px solid var(--stroke);
+      border-radius: 18px;
+      padding: 18px;
+      max-width: 1200px;
+      width: 100%;
+      background: #141821;
+      box-shadow: var(--shadow);
+    }
+
+
+    .row{
+      display:flex;
+      gap:12px;
+      flex-wrap:wrap;
+      align-items:center;
+      margin: 12px 0;
+    }
+
+    .mono{ font-family: monospace; }
+
+    input, select, button{
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 1px solid var(--stroke);
+      background: rgba(255,255,255,0.06);
+      color: var(--text);
+      outline: none;
+    }
+
+    label{
+      color: var(--muted);
+      font-weight: 650;
+      display:flex;
+      gap:10px;
+      align-items:center;
+    }
+
+    input[type="number"]{ width: 110px; }
+    input[type="range"]{ accent-color: rgba(255,255,255,0.85); }
+    select{ cursor:pointer; }
+
+    button{
+      cursor:pointer;
+      background: rgba(255,255,255,0.07);
+      border-color: var(--stroke2);
+      font-weight: 750;
+      letter-spacing: 0.2px;
+      transition: transform 120ms ease, background 120ms ease, border-color 120ms ease;
+    }
+    button:hover{
+      background: rgba(255,255,255,0.10);
+      border-color: rgba(255,255,255,0.30);
+    }
+    button:active{ transform: translateY(1px) scale(0.99); }
+    button:disabled{
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .pill{
+      padding: 6px 12px;
+      border: 1px solid var(--stroke);
+      border-radius: 999px;
+      background: rgba(255,255,255,0.06);
+      color: var(--muted);
+    }
+    .pill .mono{ color: rgba(255,255,255,0.92); }
+
+    .radioGroup{
+      display:flex;
+      gap: 8px;
+      align-items:center;
+      flex-wrap: wrap;
+      padding: 6px;
+      border: 1px solid var(--stroke);
+      border-radius: 16px;
+      background: rgba(255,255,255,0.05);
+    }
+
+    .radioPill{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      padding: 9px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.06);
+      user-select:none;
+      cursor: pointer;
+      font-weight: 750;
+      color: var(--muted);
+      transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+    }
+    .radioPill input{ margin: 0; }
+    .radioPill:has(input:checked){
+      border-color: rgba(255,255,255,0.34);
+      background: rgba(255,255,255,0.10);
+      color: rgba(255,255,255,0.92);
+    }
+
+    .octWrap{
+      border: 1px solid var(--stroke);
+      border-radius: 18px;
+      padding: 16px;
+      background: rgba(0,0,0,0.18);
+    }
+
+    .octTitle{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      margin-bottom: 10px;
+    }
+
+    .octaves{
+      display:grid;
+      gap: 12px;
+    }
+
+    .octLabel{ display:none; }
+
+    .octRow{
+      display: grid;
+      grid-template-columns: repeat(7, minmax(84px, 1fr));
+      gap: 10px;
+    }
+
+    .octBtn{
+      height: 76px;
+      display:flex;
+      flex-direction:column;
+      justify-content:center;
+      align-items:center;
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,0.18);
+      user-select:none;
+      background: rgba(255,255,255,0.08);
+      font-weight: 900;
+      letter-spacing: 0.2px;
+      box-shadow: 0 8px 18px rgba(0,0,0,0.25);
+      transition: transform 120ms ease, filter 120ms ease, border-color 120ms ease;
+    }
+
+    .octBtn:hover{
+      transform: translateY(-1px);
+      filter: brightness(1.15);
+      border-color: rgba(255,255,255,0.35);
+    }
+
+
+    .octBtn small{ display:none; }
+
+    @media (max-width: 900px){
+      .octRow{ grid-template-columns: repeat(4, minmax(84px, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  
+  <div class="card">
+    <h2>Just Intonation</h2>
+    <div class="row">
+      <button id="initBtn">Start</button>
+      <button id="stopBtn" disabled>Stop</button>
+
+      <span class="pill">Tonic: <span class="mono" id="tonicReadout">100</span> Hz</span>
+      <span class="pill">Chord: <span class="mono" id="chordReadout">—</span></span>
+    </div>
+
+    <div class="row">
+      <label>Tonic (Hz):
+        <input id="tonicHz" type="number" value="100" min="20" max="500" step="1">
+      </label>
+
+      <div>
+        <div class="mono" style="font-weight:800; margin-bottom:6px;">Chord quality</div>
+        <div class="radioGroup" role="radiogroup" aria-label="Chord quality">
+          <label class="radioPill">
+            <input type="radio" name="quality" value="triad" />
+            Triads
+          </label>
+          <label class="radioPill">
+            <input type="radio" name="quality" value="seventh" checked />
+            7ths
+          </label>
+          <label class="radioPill">
+            <input type="radio" name="quality" value="power" />
+            Power
+          </label>
+        </div>
+      </div>
+
+      <label>Strum speed:
+        <input id="strum" type="range" min="4" max="60" step="1" value="30">
+        <span class="mono" id="strumReadout">30</span>
+      </label>
+
+      <label>Hold (s):
+        <input id="hold" type="range" min="0.0" max="1.0" step="0.05" value="0.25">
+        <span class="mono" id="holdReadout">0.25</span>
+      </label>
+
+      <label>Wave:
+        <select id="wave">
+          <option value="triangle">triangle</option>
+          <option value="sine">sine</option>
+          <option value="square">square</option>
+          <option value="sawtooth">sawtooth</option>
+        </select>
+      </label>
+
+      <label>Volume:
+        <input id="vol" type="range" min="0.00" max="1.0" step="0.05" value="0.75">
+        <span class="mono" id="volReadout">0.75</span>
+      </label>
+    </div>
+
+    <div class="octWrap">
+      <div class="octTitle"></div>
+      <div class="octaves" id="octaves"></div>
+    </div>
+  </div>
+
+<script>
+(() => {
+
+  let ctx = null, master = null;
+  let activeNodes = [];
+
+  function ensureAudio() {
+    if (ctx) return;
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    master = ctx.createGain();
+    master.gain.value = 0.75;
+    master.connect(ctx.destination);
+  }
+
+  function stopAll() {
+    if (!ctx) return;
+    const now = ctx.currentTime;
+
+    for (const n of activeNodes) {
+      try {
+        n.gain.gain.cancelScheduledValues(now);
+        n.gain.gain.setValueAtTime(n.gain.gain.value, now);
+        n.gain.gain.linearRampToValueAtTime(0.0001, now + 0.03);
+        n.osc.stop(now + 0.05);
+      } catch {}
+    }
+    activeNodes = [];
+  }
+
+  function schedulePluck(freq, wave, startTime, holdSec, perNoteGain) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = wave;
+    osc.frequency.setValueAtTime(freq, startTime);
+
+    gain.gain.setValueAtTime(0.0001, startTime);
+
+    const attack = 0.008;
+    const decay = Math.min(0.22, holdSec * 0.35);
+    const release = Math.min(0.28, holdSec * 0.40);
+    const sustainLevel = 0.45;
+
+    gain.gain.linearRampToValueAtTime(perNoteGain, startTime + attack);
+    gain.gain.linearRampToValueAtTime(perNoteGain * sustainLevel, startTime + attack + decay);
+    gain.gain.setValueAtTime(
+      perNoteGain * sustainLevel,
+      Math.max(startTime + attack + decay, startTime + holdSec - release)
+    );
+    gain.gain.linearRampToValueAtTime(0.0001, startTime + holdSec);
+
+    osc.connect(gain);
+    gain.connect(master);
+
+    osc.start(startTime);
+    osc.stop(startTime + holdSec + 0.02);
+
+    activeNodes.push({ osc, gain });
+  }
+
+  const SCALE = {
+    I:   { roman: "I",   ratio: 1/1 },
+    ii:  { roman: "ii",  ratio: 9/8 },
+    iii: { roman: "iii", ratio: 5/4 },
+    IV:  { roman: "IV",  ratio: 4/3 },
+    V:   { roman: "V",   ratio: 3/2 },
+    vi:  { roman: "vi",  ratio: 5/3 },
+    VII: { roman: "VII", ratio: 15/8 },
+  };
+
+  const TRIADS = {
+    I:   ["I", "iii", "V"],
+    ii:  ["ii", "IV", "vi"],
+    iii: ["iii", "V", "VII"],
+    IV:  ["IV", "vi", "I"],
+    V:   ["V", "VII", "ii"],
+    vi:  ["vi", "I", "iii"],
+    VII: ["VII", "ii", "IV"],
+  };
+
+  const SEVENTHS = {
+    I:   ["I", "iii", "V", "VII"],
+    ii:  ["ii", "IV", "vi", "I"],
+    iii: ["iii", "V", "VII", "ii"],
+    IV:  ["IV", "vi", "I", "iii"],
+    V:   ["V", "VII", "ii", "IV"],
+    vi:  ["vi", "I", "iii", "V"],
+    VII: ["VII", "ii", "IV", "vi"],
+  };
+
+  const POWERS = {
+    I:   ["I", "V"],
+    ii:  ["ii", "vi"],
+    iii: ["iii", "VII"],
+    IV:  ["IV", "I"],
+    V:   ["V", "ii"],
+    vi:  ["vi", "iii"],
+    VII: ["VII", "IV"],
+  };
+
+  function currentQuality() {
+    const el = document.querySelector('input[name="quality"]:checked');
+    return el ? el.value : "triad";
+  }
+
+  function degreesForQuality(rootRoman) {
+    const q = currentQuality();
+    if (q === "triad") return TRIADS[rootRoman];
+    if (q === "seventh") return SEVENTHS[rootRoman];
+    return POWERS[rootRoman];
+  }
+
+  function chordFrequencies(tonicHz, chordDegrees, rootDegree, rootOctaveShift) {
+    const baseRoot = tonicHz * SCALE[rootDegree].ratio * Math.pow(2, rootOctaveShift);
+    const freqs = [];
+    let last = 0;
+
+    for (let i = 0; i < chordDegrees.length; i++) {
+      const deg = chordDegrees[i];
+      let f = tonicHz * SCALE[deg].ratio * Math.pow(2, rootOctaveShift);
+
+      while (f < baseRoot) f *= 2;
+      while (i > 0 && f <= last) f *= 2;
+
+      freqs.push(f);
+      last = f;
+    }
+    return freqs;
+  }
+
+  let activeChordRoot = null;
+  let activeChordDegrees = null;
+
+  function setActiveChord(rootRoman) {
+    activeChordRoot = rootRoman;
+    activeChordDegrees = degreesForQuality(rootRoman);
+    chordReadout.textContent = `${rootRoman} : ${activeChordDegrees.join(" ")}`;
+  }
+
+  function playChord(rootRoman, rootOctaveShift, direction="down") {
+    ensureAudio();
+
+    const tonic = +tonicHzInput.value;
+    const wave = waveSel.value;
+    const holdSec = +holdSlider.value;
+    const vol = +volSlider.value;
+    const strumRate = +strumSlider.value;
+    const dt = 1 / strumRate;
+
+    const chordDegrees = degreesForQuality(rootRoman);
+    const freqs = chordFrequencies(tonic, chordDegrees, rootRoman, rootOctaveShift);
+    const ordered = (direction === "up") ? [...freqs].reverse() : freqs;
+
+    const perNoteGain = (vol * 0.55) / Math.sqrt(ordered.length);
+
+    const now = ctx.currentTime;
+    for (let i = 0; i < ordered.length; i++) {
+      schedulePluck(ordered[i], wave, now + i * dt, holdSec, perNoteGain);
+    }
+
+    setActiveChord(rootRoman);
+  }
+
+  const initBtn = document.getElementById("initBtn");
+  const stopBtn = document.getElementById("stopBtn");
+  const tonicHzInput = document.getElementById("tonicHz");
+  const tonicReadout = document.getElementById("tonicReadout");
+  const chordReadout = document.getElementById("chordReadout");
+
+  const strumSlider = document.getElementById("strum");
+  const strumReadout = document.getElementById("strumReadout");
+  const holdSlider = document.getElementById("hold");
+  const holdReadout = document.getElementById("holdReadout");
+  const waveSel = document.getElementById("wave");
+  const volSlider = document.getElementById("vol");
+  const volReadout = document.getElementById("volReadout");
+
+  const octavesDiv = document.getElementById("octaves");
+
+  function sync() {
+    tonicReadout.textContent = (+tonicHzInput.value).toFixed(3);
+    strumReadout.textContent = String(strumSlider.value);
+    holdReadout.textContent = (+holdSlider.value).toFixed(2);
+    volReadout.textContent = (+volSlider.value).toFixed(2);
+    if (master) master.gain.value = (+volSlider.value);
+
+    if (activeChordRoot) setActiveChord(activeChordRoot);
+  }
+
+  function renderThreeOctavesChordButtons() {
+    octavesDiv.innerHTML = "";
+
+    const romans = ["I","ii","iii","IV","V","vi","VII"];
+    const octaveShifts = [0, 1, 2];
+
+    octaveShifts.forEach((shift, rowIdx) => {
+      const wrap = document.createElement("div");
+
+      const row = document.createElement("div");
+      row.className = "octRow";
+
+      romans.forEach((r, i) => {
+        const btn = document.createElement("button");
+        btn.className = "octBtn";
+        btn.style.background = `hsl(${(i * 360) / romans.length}, 25%, 32%)`;
+        btn.style.color = "rgba(255,255,255,0.95)";
+        btn.innerHTML = `<div class="mono">${r}</div>`;
+        btn.onclick = async () => {
+          ensureAudio();
+          if (ctx.state === "suspended") await ctx.resume();
+          playChord(r, shift, "down");
+        };
+        row.appendChild(btn);
+      });
+
+      wrap.appendChild(row);
+      octavesDiv.appendChild(wrap);
+    });
+
+    setActiveChord("I");
+  }
+
+  initBtn.addEventListener("click", async () => {
+    ensureAudio();
+    if (ctx.state === "suspended") await ctx.resume();
+    initBtn.textContent = "Audio Ready";
+    initBtn.disabled = true;
+    stopBtn.disabled = false;
+  });
+
+  stopBtn.addEventListener("click", () => stopAll());
+
+  tonicHzInput.addEventListener("input", () => sync());
+  strumSlider.addEventListener("input", () => sync());
+  holdSlider.addEventListener("input", () => sync());
+  volSlider.addEventListener("input", () => sync());
+  waveSel.addEventListener("change", () => sync());
+
+  document.querySelectorAll('input[name="quality"]').forEach(r => {
+    r.addEventListener("change", () => sync());
+  });
+
+  sync();
+  renderThreeOctavesChordButtons();
+})();
+</script>
+</body>
+</html>
