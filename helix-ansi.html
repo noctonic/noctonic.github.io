@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Helix ANSI</title>
+    <style>
+      * { box-sizing: border-box; }
+
+      body {
+        font-family: "Roboto", sans-serif;
+        background-color: #1e1e1e;
+        color: #f0f0f0;
+        margin: 0;
+        padding: 0;
+      }
+
+      .container {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+
+      h1 { text-align: center; margin: 0 0 16px 0; }
+
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        margin-bottom: 18px;
+        justify-content: space-between;
+      }
+
+      .control-group {
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 170px;
+        min-width: 160px;
+        padding: 10px;
+        border: 1px solid #2f2f2f;
+        border-radius: 8px;
+        background: #191919;
+      }
+
+      .control-group label {
+        font-weight: 600;
+        margin-bottom: 6px;
+      }
+
+      .control-group input[type="range"] { width: 100%; margin: 0; }
+      .slider-value { text-align: right; margin-top: 6px; font-size: 0.9em; color: #bbb; }
+      .numeric-input { width: 84px; margin-top: 6px; }
+
+      .section {
+        margin-top: 16px;
+        padding: 12px;
+        border: 1px solid #2f2f2f;
+        border-radius: 10px;
+        background: #161616;
+      }
+
+      .section h2 {
+        margin: 0 0 10px 0;
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .colors-container {
+        display: flex;
+        flex-wrap: nowrap;
+        gap: 0;
+        height: 72px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        border: 1px solid #2b2b2b;
+        border-radius: 8px;
+        background: #111;
+      }
+
+      .color-swatch {
+        width: 56px;
+        height: 56px;
+        border: none;
+        margin: 0;
+        flex: 0 0 auto;
+        position: relative;
+      }
+
+      .swatch-label {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        padding: 2px 4px;
+        font-family: monospace;
+        font-size: 11px;
+        text-align: center;
+        background: rgba(0,0,0,0.55);
+        color: #fff;
+        user-select: none;
+      }
+
+      .script-output {
+        width: 100%;
+        height: 220px;
+        margin-top: 10px;
+        font-family: monospace;
+        resize: vertical;
+        border: 1px solid #2b2b2b;
+        padding: 10px;
+        border-radius: 8px;
+        background-color: #101010;
+        color: #eaeaea;
+        white-space: pre;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="container">
+      <h1>Helix ANSI</h1>
+
+      <div class="controls">
+        <div class="control-group">
+          <label for="startZ">Start Z</label>
+          <input type="range" id="startZ" min="-1" max="1" step="0.01" value="-0.5" />
+          <span id="startZVal" class="slider-value">-0.5</span>
+        </div>
+
+        <div class="control-group">
+          <label for="endZ">End Z</label>
+          <input type="range" id="endZ" min="-1" max="1" step="0.01" value="0.5" />
+          <span id="endZVal" class="slider-value">0.5</span>
+        </div>
+
+        <div class="control-group">
+          <label for="turns">Turns</label>
+          <input type="range" id="turns" min="-10" max="10" step="0.01" value="0.60" />
+          <span id="turnsVal" class="slider-value">0.60</span>
+        </div>
+
+        <div class="control-group">
+          <label for="amplitude">Amplitude</label>
+          <input type="range" id="amplitude" min="-1" max="1" step="0.01" value="1" />
+          <span id="amplitudeVal" class="slider-value">1</span>
+        </div>
+
+        <div class="control-group">
+          <label for="direction">Direction</label>
+          <input type="range" id="direction" min="-1" max="1" step="0.01" value="-1" />
+          <span id="directionVal" class="slider-value">-1</span>
+        </div>
+
+        <div class="control-group">
+          <label for="scaleX">Ellipse X</label>
+          <input type="range" id="scaleX" min="0.1" max="3" step="0.01" value="1" />
+          <span id="scaleXVal" class="slider-value">1</span>
+        </div>
+
+        <div class="control-group">
+          <label for="scaleZ">Ellipse Z</label>
+          <input type="range" id="scaleZ" min="0.1" max="3" step="0.01" value="1" />
+          <span id="scaleZVal" class="slider-value">1</span>
+        </div>
+
+        <div class="control-group">
+          <label for="initialAngle">Initial Angle</label>
+          <input type="range" id="initialAngle" min="0" max="360" step="0.1" value="0" />
+          <span id="initialAngleVal" class="slider-value">0</span>
+        </div>
+
+        <div class="control-group">
+          <label for="maxChroma">Max Chroma</label>
+          <input type="range" id="maxChroma" min="1" max="400" step="1" value="60" />
+          <span id="maxChromaVal" class="slider-value">60</span>
+        </div>
+
+        <div class="control-group">
+          <label for="numColors"># Colors</label>
+          <input type="number" id="numColors" min="1" max="256" value="10" class="numeric-input" />
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Truecolor</h2>
+        <div id="rawOutput" class="colors-container"></div>
+      </div>
+
+      <div class="section">
+        <h2>ANSI palette</h2>
+        <div id="ansiOutput" class="colors-container"></div>
+      </div>
+
+      <div class="section">
+        <textarea id="scriptOutput" class="script-output" readonly></textarea>
+      </div>
+    </div>
+
+    <script src="./color_utils/colorConversion.js"></script>
+
+    <script>
+      function buildXterm256() {
+        const base16 = [
+          "#000000", "#800000", "#008000", "#808000",
+          "#000080", "#800080", "#008080", "#C0C0C0",
+          "#808080", "#FF0000", "#00FF00", "#FFFF00",
+          "#0000FF", "#FF00FF", "#00FFFF", "#FFFFFF"
+        ];
+
+        const steps = [0, 95, 135, 175, 215, 255];
+        const colors = [];
+
+        for (let i = 0; i < 256; i++) {
+          let r, g, b;
+
+          if (i < 16) {
+            [r, g, b] = hex2rgb(base16[i]);
+          } else if (i < 232) {
+            const idx = i - 16;
+            const ri = Math.floor(idx / 36);
+            const gi = Math.floor((idx % 36) / 6);
+            const bi = idx % 6;
+            r = steps[ri];
+            g = steps[gi];
+            b = steps[bi];
+          } else {
+            const v = 8 + (i - 232) * 10;
+            r = g = b = v;
+          }
+
+          colors.push({
+            index: i,
+            r, g, b,
+            hex: rgb2hex([r, g, b])
+          });
+        }
+
+        return colors;
+      }
+
+      const XTERM256 = buildXterm256();
+      const XTERM256_CAM16 = XTERM256.map(c => rgb2cam16ucs([c.r, c.g, c.b]));
+      const ANSI_MIN_INDEX = 16;
+
+      function snapToAnsiCam16(hex) {
+        const rgb = hex2rgb(hex);
+
+        let bestIndex = ANSI_MIN_INDEX;
+        let bestDist = Infinity;
+
+        const cam = rgb2cam16ucs(rgb);
+
+        for (let i = ANSI_MIN_INDEX; i < 256; i++) {
+          const c = XTERM256_CAM16[i];
+          const dJ = cam.Jp - c.Jp;
+          const da = cam.aP - c.aP;
+          const db = cam.bP - c.bP;
+          const d2 = dJ*dJ + da*da + db*db;
+          if (d2 < bestDist) {
+            bestDist = d2;
+            bestIndex = i;
+          }
+        }
+
+        return { ...XTERM256[bestIndex] };
+      }
+
+      const els = {
+        startZ: document.getElementById("startZ"),
+        endZ: document.getElementById("endZ"),
+        turns: document.getElementById("turns"),
+        amplitude: document.getElementById("amplitude"),
+        direction: document.getElementById("direction"),
+        scaleX: document.getElementById("scaleX"),
+        scaleZ: document.getElementById("scaleZ"),
+        initialAngle: document.getElementById("initialAngle"),
+        maxChroma: document.getElementById("maxChroma"),
+        numColors: document.getElementById("numColors"),
+
+        startZVal: document.getElementById("startZVal"),
+        endZVal: document.getElementById("endZVal"),
+        turnsVal: document.getElementById("turnsVal"),
+        amplitudeVal: document.getElementById("amplitudeVal"),
+        directionVal: document.getElementById("directionVal"),
+        scaleXVal: document.getElementById("scaleXVal"),
+        scaleZVal: document.getElementById("scaleZVal"),
+        initialAngleVal: document.getElementById("initialAngleVal"),
+        maxChromaVal: document.getElementById("maxChromaVal"),
+
+        rawOutput: document.getElementById("rawOutput"),
+        ansiOutput: document.getElementById("ansiOutput"),
+
+        scriptOutput: document.getElementById("scriptOutput"),
+      };
+
+      function clampInt(n, lo, hi, fallback) {
+        const v = Number.isFinite(n) ? Math.trunc(n) : fallback;
+        return Math.max(lo, Math.min(hi, v));
+      }
+
+      function setLabel(el, v) { el.textContent = String(v); }
+      function clearNode(el) { while (el.firstChild) el.removeChild(el.firstChild); }
+
+      function renderSwatches(container, items, { showLabel = false, labelKey = "label" } = {}) {
+        clearNode(container);
+        for (const it of items) {
+          const sw = document.createElement("div");
+          sw.className = "color-swatch";
+          sw.style.backgroundColor = it.hex;
+          sw.title = it.title || it.hex;
+
+          if (showLabel) {
+            const lab = document.createElement("div");
+            lab.className = "swatch-label";
+            lab.textContent = it[labelKey];
+            sw.appendChild(lab);
+          }
+
+          container.appendChild(sw);
+        }
+      }
+
+      function buildScript(indicesStr) {
+        return `#!/bin/sh
+
+colors="${indicesStr}"
+
+for bg in $colors; do
+  for fg in $colors; do
+    printf "\\033[48;5;%sm\\033[38;5;%smX\\033[0m" "$bg" "$fg"
+  done
+  printf "\\n"
+done
+`;
+      }
+
+      function update() {
+        const helixParams = {
+          startZ: parseFloat(els.startZ.value),
+          endZ: parseFloat(els.endZ.value),
+          turns: parseFloat(els.turns.value),
+          amplitude: parseFloat(els.amplitude.value),
+          direction: parseFloat(els.direction.value),
+          initialAngleDeg: parseFloat(els.initialAngle.value),
+          scaleX: parseFloat(els.scaleX.value),
+          scaleZ: parseFloat(els.scaleZ.value),
+          maxChroma: parseFloat(els.maxChroma.value),
+          numColors: clampInt(parseInt(els.numColors.value, 10), 1, 256, 32)
+        };
+
+        setLabel(els.startZVal, helixParams.startZ);
+        setLabel(els.endZVal, helixParams.endZ);
+        setLabel(els.turnsVal, helixParams.turns);
+        setLabel(els.amplitudeVal, helixParams.amplitude);
+        setLabel(els.directionVal, helixParams.direction);
+        setLabel(els.initialAngleVal, helixParams.initialAngleDeg);
+        setLabel(els.scaleXVal, helixParams.scaleX);
+        setLabel(els.scaleZVal, helixParams.scaleZ);
+        setLabel(els.maxChromaVal, helixParams.maxChroma);
+
+        const rawHex = getHelixColors(helixParams);
+
+        const snapped = rawHex.map((hex) => {
+          const snappedColor = snapToAnsiCam16(hex);
+          return {
+            inputHex: hex,
+            index: snappedColor.index,
+            hex: snappedColor.hex
+          };
+        });
+
+        renderSwatches(
+          els.rawOutput,
+          rawHex.map(h => ({ hex: h, title: h })),
+          { showLabel: false }
+        );
+
+        renderSwatches(
+          els.ansiOutput,
+          snapped.map(s => ({
+            hex: s.hex,
+            label: String(s.index),
+            title: `ANSI ${s.index}  ${s.hex}\n(from ${s.inputHex})`
+          })),
+          { showLabel: true, labelKey: "label" }
+        );
+
+        const indicesStr = snapped.map(s => s.index).join(" ");
+        els.scriptOutput.value = buildScript(indicesStr);
+      }
+
+      [
+        "startZ","endZ","turns","amplitude","direction",
+        "scaleX","scaleZ","initialAngle","maxChroma"
+      ].forEach(id => els[id].addEventListener("input", update));
+
+      els.numColors.addEventListener("input", update);
+
+      update();
+    </script>
+  </body>
+</html>
