@@ -2,7 +2,7 @@ const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 const FORMAT_IDS = { indexed: 1, rgba: 2 };
 const FRAME_INTERVAL_MS = 1000 / 30;
-const INSTRUCTION_BUDGET = 5000000;
+const INSTRUCTION_BUDGET = 0;
 
 let enginePromise = loadEngine();
 let running = false;
@@ -334,9 +334,20 @@ async function tick(now = performance.now()) {
   loopHandle = null;
   const { exports, memory } = await enginePromise;
   const frameTime = Number.isFinite(now) ? now : performance.now();
+  const dtSeconds = Math.max(0, (frameTime - lastTime) / 1000);
   lastTime = frameTime;
 
   try {
+    if (typeof exports.engine_call_update === 'function') {
+      const updateStatus = exports.engine_call_update(dtSeconds);
+      if (updateStatus !== 0) {
+        throw new Error(
+          readBufferString(memory, exports.engine_last_error_ptr(), exports.engine_last_error_len()) ||
+            `update failed (${updateStatus})`
+        );
+      }
+    }
+
     drawFrame(exports, memory, frameTime);
   } catch (err) {
     stopLoop();
@@ -372,6 +383,7 @@ self.onmessage = async (event) => {
         break;
       case 'resume':
         paused = false;
+        lastTime = performance.now();
         scheduleLoop();
         break;
       case 'stop':
