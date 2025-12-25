@@ -59,6 +59,70 @@ function base64DecodeUnicode(b64) {
   return decodeURIComponent(pairs.join(''));
 }
 
+function base64EncodeBytes(bytes) {
+  const chunkSize = 0x8000;
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary).replace(/=+$/, '');
+}
+
+function base64DecodeToBytes(b64) {
+  const binary = atob(padBase64(b64));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+async function gzipEncodeString(value) {
+  if (typeof CompressionStream === 'undefined') {
+    throw new Error('CompressionStream is not supported in this browser');
+  }
+  const stream = new CompressionStream('gzip');
+  const writer = stream.writable.getWriter();
+  writer.write(new TextEncoder().encode(value));
+  writer.close();
+  const buffer = await new Response(stream.readable).arrayBuffer();
+  return new Uint8Array(buffer);
+}
+
+async function gzipDecodeString(bytes) {
+  if (typeof DecompressionStream === 'undefined') {
+    throw new Error('DecompressionStream is not supported in this browser');
+  }
+  const stream = new DecompressionStream('gzip');
+  const writer = stream.writable.getWriter();
+  writer.write(bytes);
+  writer.close();
+  const buffer = await new Response(stream.readable).arrayBuffer();
+  return new TextDecoder().decode(buffer);
+}
+
+async function encodeShareString(value) {
+  const compressed = await gzipEncodeString(value);
+  return base64EncodeBytes(compressed);
+}
+
+async function decodeShareString(encoded) {
+  try {
+    const bytes = base64DecodeToBytes(encoded);
+    return await gzipDecodeString(bytes);
+  } catch (err) {
+    return base64DecodeUnicode(encoded);
+  }
+}
+
+function getHashParams(hash) {
+  const raw = hash.replace(/^#/, '');
+  if (!raw) {
+    return new URLSearchParams();
+  }
+  return new URLSearchParams(raw.replace(/\+/g, '%2B'));
+}
+
 function settleWorkerReady(error) {
   if (readyResolvers.length === 0) return;
   const pending = readyResolvers;
@@ -193,12 +257,12 @@ function decodePaletteParam(param) {
   return json;
 }
 
-function encodeSharePayload(payload) {
-  return base64EncodeUnicode(JSON.stringify(payload));
+async function encodeSharePayload(payload) {
+  return encodeShareString(JSON.stringify(payload));
 }
 
-function decodeSharePayload(encoded) {
-  const raw = base64DecodeUnicode(encoded);
+async function decodeSharePayload(encoded) {
+  const raw = await decodeShareString(encoded);
   const parsed = JSON.parse(raw);
   if (!parsed || typeof parsed !== 'object') {
     throw new Error('Shared payload is not valid JSON');
@@ -362,22 +426,29 @@ async function shareState() {
 
   const url = new URL(window.location.href);
   url.searchParams.delete('share');
-  url.searchParams.set('c', base64EncodeUnicode(code));
-
-  if (palettesMatchDefault(palette)) {
-    url.searchParams.delete('p');
-  } else {
-    url.searchParams.set('p', encodePaletteParam(palette));
-  }
-  const shareUrl = url.toString();
-
-  window.history.replaceState(null, '', url);
+  url.searchParams.delete('c');
+  url.searchParams.delete('p');
 
   try {
-    await navigator.clipboard.writeText(shareUrl);
-    appendLog('Share URL copied to clipboard.');
+    const [encodedCode, encodedPalette] = await Promise.all([
+      encodeShareString(code),
+      palettesMatchDefault(palette) ? Promise.resolve(null) : encodeShareString(encodePaletteParam(palette)),
+    ]);
+
+    url.hash = `c=${encodedCode}${encodedPalette ? `&p=${encodedPalette}` : ''}`;
+    const shareUrl = url.toString();
+
+    window.history.replaceState(null, '', url);
+
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      appendLog('Share URL copied to clipboard.');
+    } catch (err) {
+      appendLog(`Share URL ready: ${shareUrl}`);
+    }
   } catch (err) {
-    appendLog(`Share URL ready: ${shareUrl}`);
+    const message = err instanceof Error ? err.message : 'Failed to encode share data';
+    appendLog(message);
   }
 }
 
@@ -392,16 +463,36 @@ function applySharedState(payload) {
   }
 }
 
-function loadSharedState() {
-  const params = new URL(window.location.href).searchParams;
-  const encodedCode = params.get('c');
-  const encodedPalette = params.get('p');
+async function loadSharedState() {
+  const url = new URL(window.location.href);
+  const params = url.searchParams;
+  const hashParams = getHashParams(url.hash);
+  const encodedCode = hashParams.get('c');
+  const encodedPalette = hashParams.get('p');
   const legacyShare = params.get('share');
+  const legacyCode = params.get('c');
+  const legacyPalette = params.get('p');
 
   if (encodedCode) {
     try {
-      const code = base64DecodeUnicode(encodedCode);
-      const paletteJson = encodedPalette ? decodePaletteParam(encodedPalette) : DEFAULT_PALETTE_JSON;
+      const code = await decodeShareString(encodedCode);
+      const paletteJson = encodedPalette
+        ? decodePaletteParam(await decodeShareString(encodedPalette))
+        : DEFAULT_PALETTE_JSON;
+      applySharedState({ code, palette: paletteJson });
+      appendLog('Loaded shared state from URL.');
+      return true;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load shared data';
+      appendLog(message);
+      return false;
+    }
+  }
+
+  if (legacyCode) {
+    try {
+      const code = base64DecodeUnicode(legacyCode);
+      const paletteJson = legacyPalette ? decodePaletteParam(legacyPalette) : DEFAULT_PALETTE_JSON;
       applySharedState({ code, palette: paletteJson });
       appendLog('Loaded shared state from URL.');
       return true;
@@ -414,7 +505,7 @@ function loadSharedState() {
 
   if (legacyShare) {
     try {
-      const payload = decodeSharePayload(legacyShare);
+      const payload = await decodeSharePayload(legacyShare);
       applySharedState(payload);
       appendLog('Loaded shared state from URL.');
       return true;
@@ -480,10 +571,10 @@ function setupControls() {
   window.addEventListener('resize', () => resizeCanvas(canvasSize));
 }
 
-function boot() {
+async function boot() {
   setupEditor();
   setupPaletteInput();
-  const shouldAutoStart = loadSharedState();
+  const shouldAutoStart = await loadSharedState();
   resizeCanvas(canvasSize);
   setupControls();
   spawnWorker();
