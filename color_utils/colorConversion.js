@@ -635,6 +635,7 @@ if (typeof module !== 'undefined' && module.exports) {
     rgb2lch,
     lch2rgb,
     getHelixColors,
-    getMinimumPerceptualDistance
+    getMinimumPerceptualDistance,
+    rgb2cam16ucs
   };
 }

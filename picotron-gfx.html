@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Image to Picotron gfx</title>
+  <style>
+    :root{
+      --bg:#0b0f14;
+      --panel:#0f1621;
+      --panel2:#0c121b;
+      --text:#e7eef8;
+      --muted:#a7b3c5;
+      --border:#223043;
+      --btn:#152131;
+      --btn2:#101a28;
+      --btnHover:#1b2a3f;
+      --accent:#7cc4ff;
+      --danger:#ff6b6b;
+      --ok:#7dffb2;
+    }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 16px; line-height: 1.35; background: var(--bg); color: var(--text); }
+    .row { display:flex; gap:16px; align-items:stretch; }
+    .panel {
+      display:flex;
+      flex-direction:column;
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:12px;
+      min-width:320px;
+      flex:1;
+      background: linear-gradient(180deg, var(--panel), var(--panel2));
+    }
+    h1 { margin: 0 0 10px; font-size: 18px; font-weight: 750; letter-spacing: 0.2px; }
+    label { display:block; margin:10px 0 6px; font-weight:650; color: var(--text); }
+    .small { font-size:12px; color: var(--muted); }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+    .controls { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    button {
+      padding:8px 10px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      background: var(--btn);
+      color: var(--text);
+      cursor:pointer;
+      transition: background .12s ease, transform .04s ease;
+      font-weight: 650;
+    }
+    button:hover { background: var(--btnHover); }
+    button:active { transform: translateY(1px); }
+    button:disabled { opacity:0.5; cursor:not-allowed; }
+    .pad{
+      flex:1;
+      padding:10px;
+      border:1px solid var(--border);
+      border-radius:14px;
+      background: rgba(0,0,0,0.22);
+      overflow:auto;
+    }
+    canvas{
+      border:1px solid var(--border);
+      border-radius:14px;
+      image-rendering: pixelated;
+      background:#05080d;
+      display:block;
+    }
+    textarea{
+      flex:1;
+      width:100%;
+      min-height:0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size:12px;
+      background:#05080d;
+      color:var(--text);
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:10px;
+      outline:none;
+    }
+    textarea:focus { border-color:#2e4563; }
+    input[type="number"]{
+      width:90px;
+      padding:8px 10px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      background:#05080d;
+      color:var(--text);
+      outline:none;
+    }
+    input[type="number"]:focus{ border-color:#2e4563; }
+
+    .btnRow { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .btnPrimary { border-color:#2e4563; background:#0f2a44; }
+    .btnPrimary:hover { background:#133555; }
+    .btnReset { background: var(--btn2); }
+    .btnReset:hover { background:#132033; }
+
+    .statusOk { color: var(--ok); }
+    .statusErr { color: var(--danger); }
+  </style>
+</head>
+<body>
+  <h1>Image to Picotron gfx</h1>
+
+  <div class="row">
+    <div class="panel">
+      <label>Choose Image</label>
+      <input id="file" type="file" accept="image/*" />
+      <div class="small" id="imgInfo"></div>
+
+      <div class="controls">
+        <div class="small mono">x</div>
+        <input id="offX" type="number" value="0" step="1" />
+        <div class="small mono">y</div>
+        <input id="offY" type="number" value="0" step="1" />
+
+        <div class="btnRow">
+          <button id="reset" class="btnReset" title="Reset to 0,0">Reset</button>
+          <button id="gen" class="btnPrimary" disabled>Generate</button>
+          <button id="download" disabled>Download 0.gfx</button>
+        </div>
+      </div>
+
+      <div class="pad">
+        <canvas id="sheet" width="128" height="512"></canvas>
+      </div>
+
+      <div class="small" id="status" style="margin-top:10px;"></div>
+    </div>
+
+    <div class="panel">
+      <label>Output</label>
+      <textarea id="out" spellcheck="false" placeholder="Output will appear here..."></textarea>
+    </div>
+  </div>
+
+  <script src="./color_utils/colorConversion.js"></script>
+
+  <script>
+  (function(){
+    const $ = (id) => document.getElementById(id);
+
+    const TARGET_TILE_W = 16, TARGET_TILE_H = 16;
+    const TARGET_COLS = 8, TARGET_ROWS = 32;
+    const GAP = 3;
+    const PREVIEW_SCALE = 3;
+
+    const PREVIEW_W = (TARGET_COLS * TARGET_TILE_W) + ((TARGET_COLS + 1) * GAP);
+    const PREVIEW_H = (TARGET_ROWS * TARGET_TILE_H) + ((TARGET_ROWS + 1) * GAP);
+
+    const SPRITE_COUNT = 256;
+
+    const fileEl = $("file");
+    const outEl = $("out");
+    const genBtn = $("gen");
+    const dlBtn = $("download");
+    const resetBtn = $("reset");
+    const statusEl = $("status");
+    const infoEl = $("imgInfo");
+
+    const offXEl = $("offX");
+    const offYEl = $("offY");
+
+    const canvas = $("sheet");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+
+    let imgData = null;
+    let imgW = 0, imgH = 0;
+
+
+    const PALETTE_33 = [
+    null,                 // 0 = transparent
+    [0x1d,0x2b,0x53],     // 1
+    [0x7e,0x25,0x53],     // 2
+    [0x00,0x87,0x51],     // 3
+    [0xab,0x52,0x36],     // 4
+    [0x5f,0x57,0x4f],     // 5
+    [0xc2,0xc3,0xc7],     // 6
+    [0xff,0xf1,0xe8],     // 7
+    [0xff,0x00,0x4d],     // 8
+    [0xff,0xa3,0x00],     // 9
+    [0xff,0xec,0x27],     // 10
+    [0x00,0xe4,0x36],     // 11
+    [0x29,0xad,0xff],     // 12
+    [0x83,0x76,0x9c],     // 13
+    [0xff,0x77,0xa8],     // 14
+    [0xff,0xcc,0xaa],     // 15
+    [0x1c,0x5e,0xac],     // 16
+    [0x00,0xa5,0xa1],     // 17
+    [0x75,0x4e,0x97],     // 18
+    [0x12,0x53,0x59],     // 19
+    [0x74,0x2f,0x29],     // 20
+    [0x49,0x2d,0x38],     // 21
+    [0xa2,0x88,0x79],     // 22
+    [0xff,0xac,0xc5],     // 23
+    [0xc3,0x00,0x4c],     // 24
+    [0xeb,0x6b,0x00],     // 25
+    [0x90,0xec,0x42],     // 26
+    [0x00,0xb2,0x51],     // 27
+    [0x64,0xdf,0xf6],     // 28
+    [0xbd,0x9a,0xdf],     // 29
+    [0xe4,0x0d,0xab],     // 30
+    [0xff,0x85,0x6d],     // 31
+    [0x00,0x00,0x00],     // 32 = black
+    ];
+
+
+    
+
+    const CAM_OPTS = {
+    whitepoint: 'D65',
+    adapting_luminance: 40,
+    background_luminance: 20,
+    surround: 'average',
+    discounting: false
+    };
+
+    const PALETTE_CAM = [];
+    const PALETTE_INDEX = [];
+
+    for (let i = 1; i < PALETTE_33.length; i++) {
+    PALETTE_CAM.push(rgb2cam16ucs(PALETTE_33[i], CAM_OPTS));
+    PALETTE_INDEX.push(i);
+    }
+
+
+    const rgbToIndexCache = new Map();
+
+    function nearestPaletteIndexPerceptual(r,g,b) {
+    const key = (r<<16)|(g<<8)|b;
+    const cached = rgbToIndexCache.get(key);
+    if (cached !== undefined) return cached;
+
+    const cam = rgb2cam16ucs([r,g,b], CAM_OPTS);
+
+    let bestIdx = 1;
+    let bestD = Infinity;
+
+    for (let i = 0; i < PALETTE_CAM.length; i++) {
+        const p = PALETTE_CAM[i];
+        const dJ = cam.Jp - p.Jp;
+        const da = cam.aP - p.aP;
+        const db = cam.bP - p.bP;
+        const d2 = dJ*dJ + da*da + db*db;
+        if (d2 < bestD) {
+        bestD = d2;
+        bestIdx = PALETTE_INDEX[i];
+        }
+    }
+
+    rgbToIndexCache.set(key, bestIdx);
+    return bestIdx;
+    }
+
+    function setStatus(msg, kind="") {
+      statusEl.className = "small " + (kind === "ok" ? "statusOk" : kind === "err" ? "statusErr" : "");
+      statusEl.textContent = msg;
+    }
+
+    function loadPNG(file) {
+      return new Promise((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onerror = () => reject(new Error("FileReader failed"));
+        fr.onload = () => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = () => reject(new Error("Failed to decode image"));
+          img.src = fr.result;
+        };
+        fr.readAsDataURL(file);
+      });
+    }
+
+    function byteToHex(b) {
+      return (b < 16 ? "0" : "") + b.toString(16);
+    }
+
+    function spriteEntryLua(hex, w, h) {
+      return `{bmp=userdata("u8",${w},${h},"${hex}"),flags=0,pan_x=0,pan_y=0,zoom=8}`;
+    }
+
+    function getOffset() {
+      return {
+        x: (parseInt(offXEl.value || "0", 10) | 0),
+        y: (parseInt(offYEl.value || "0", 10) | 0),
+      };
+    }
+
+    function setOffset(x, y) {
+      offXEl.value = String(x|0);
+      offYEl.value = String(y|0);
+    }
+
+    function pixelIndexAtTarget(tx, ty) {
+      if (!imgData) return 0;
+      const {x: ox, y: oy} = getOffset();
+      const sx = tx + ox;
+      const sy = ty + oy;
+
+      if (sx < 0 || sy < 0 || sx >= imgW || sy >= imgH) return 0;
+
+      const d = imgData.data;
+      const i = (sy * imgW + sx) * 4;
+      const r = d[i], g = d[i+1], b = d[i+2], a = d[i+3];
+      if (a < 128) return 0;
+
+      return nearestPaletteIndexPerceptual(r, g, b);
+    }
+
+    function applyPreviewScale() {
+      canvas.style.width = (PREVIEW_W * PREVIEW_SCALE) + "px";
+      canvas.style.height = (PREVIEW_H * PREVIEW_SCALE) + "px";
+    }
+
+    function renderPreview() {
+      if (!imgData) return;
+
+      canvas.width = PREVIEW_W;
+      canvas.height = PREVIEW_H;
+
+      const img = ctx.createImageData(PREVIEW_W, PREVIEW_H);
+      const data = img.data;
+
+      const bg = [5,8,13,255];
+      for (let p = 0; p < data.length; p += 4) {
+        data[p] = bg[0]; data[p+1] = bg[1]; data[p+2] = bg[2]; data[p+3] = bg[3];
+      }
+
+      for (let sprite = 0; sprite < SPRITE_COUNT; sprite++) {
+        const col = sprite % TARGET_COLS;
+        const row = (sprite / TARGET_COLS) | 0;
+
+        const dx0 = GAP + col * (TARGET_TILE_W + GAP);
+        const dy0 = GAP + row * (TARGET_TILE_H + GAP);
+
+        const sx0 = col * TARGET_TILE_W;
+        const sy0 = row * TARGET_TILE_H;
+
+        for (let y = 0; y < TARGET_TILE_H; y++) {
+          for (let x = 0; x < TARGET_TILE_W; x++) {
+            const idx = pixelIndexAtTarget(sx0 + x, sy0 + y);
+            const rgb = PALETTE_33[idx] || [0,0,0];
+
+            const px = dx0 + x;
+            const py = dy0 + y;
+            const p = (py * PREVIEW_W + px) * 4;
+            data[p] = rgb[0];
+            data[p+1] = rgb[1];
+            data[p+2] = rgb[2];
+            data[p+3] = 255;
+          }
+        }
+      }
+
+      ctx.putImageData(img, 0, 0);
+      applyPreviewScale();
+    }
+
+    function buildGfxPod() {
+      if (!imgData) throw new Error("No image loaded");
+
+      const entries = new Array(SPRITE_COUNT);
+
+      for (let i = 0; i < SPRITE_COUNT; i++) {
+        const col = i % TARGET_COLS;
+        const row = (i / TARGET_COLS) | 0;
+
+        const x0 = col * TARGET_TILE_W;
+        const y0 = row * TARGET_TILE_H;
+
+        const hexParts = new Array(TARGET_TILE_W * TARGET_TILE_H);
+        let k = 0;
+
+        for (let y = 0; y < TARGET_TILE_H; y++) {
+          for (let x = 0; x < TARGET_TILE_W; x++) {
+            const idx = pixelIndexAtTarget(x0 + x, y0 + y);
+            hexParts[k++] = byteToHex(idx);
+          }
+        }
+        entries[i] = spriteEntryLua(hexParts.join(""), TARGET_TILE_W, TARGET_TILE_H);
+      }
+
+      const body = `{[0]=${entries[0]},\n${entries.slice(1).join(",\n")}}\n`;
+      return `--[[pod]]\n${body}`;
+    }
+
+    async function onFilePicked() {
+      const f = fileEl.files && fileEl.files[0];
+      if (!f) return;
+
+      try {
+        setStatus("Loading…");
+        rgbToIndexCache.clear();
+
+        const img = await loadPNG(f);
+        imgW = img.naturalWidth;
+        imgH = img.naturalHeight;
+
+        const tmp = document.createElement("canvas");
+        tmp.width = imgW;
+        tmp.height = imgH;
+        const tctx = tmp.getContext("2d", { willReadFrequently: true });
+        tctx.imageSmoothingEnabled = false;
+        tctx.clearRect(0,0,imgW,imgH);
+        tctx.drawImage(img, 0, 0);
+        imgData = tctx.getImageData(0,0,imgW,imgH);
+
+        infoEl.innerHTML = `Image: <span class="mono">${imgW}×${imgH}</span>`;
+
+        outEl.value = "";
+        genBtn.disabled = false;
+        dlBtn.disabled = true;
+
+        setOffset(0, 0);
+        renderPreview();
+        setStatus("Loaded.", "ok");
+      } catch (e) {
+        console.error(e);
+        setStatus(e.message || String(e), "err");
+        imgData = null;
+        imgW = imgH = 0;
+        infoEl.textContent = "";
+        genBtn.disabled = true;
+        dlBtn.disabled = true;
+      }
+    }
+
+    fileEl.addEventListener("change", onFilePicked);
+
+    function onOffsetChange() {
+      if (!imgData) return;
+      renderPreview();
+    }
+
+    offXEl.addEventListener("input", onOffsetChange);
+    offYEl.addEventListener("input", onOffsetChange);
+
+    resetBtn.addEventListener("click", () => {
+      setOffset(0, 0);
+      if (imgData) renderPreview();
+    });
+
+    genBtn.addEventListener("click", () => {
+      try {
+        setStatus("Generating…");
+        const pod = buildGfxPod();
+        outEl.value = pod;
+        dlBtn.disabled = false;
+        setStatus("Done.", "ok");
+      } catch (e) {
+        console.error(e);
+        setStatus(e.message || String(e), "err");
+      }
+    });
+
+    dlBtn.addEventListener("click", () => {
+      const text = outEl.value;
+      if (!text) return;
+      const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "0.gfx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    });
+
+    canvas.width = PREVIEW_W;
+    canvas.height = PREVIEW_H;
+    applyPreviewScale();
+    setStatus("");
+  })();
+  </script>
+</body>
+</html>
