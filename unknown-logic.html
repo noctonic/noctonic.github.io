@@ -1,0 +1,777 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Unknown Logic</title>
+  <style>
+    :root{
+      --bg:#070b18;
+      --panel: rgba(18,26,51,0.82);
+      --ink:#e8ecff;
+      --muted:#aab4ff;
+      --line: rgba(72,86,160,0.35);
+      --shadow: 0 18px 60px rgba(0,0,0,0.45);
+    }
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background:
+        radial-gradient(1200px 700px at 20% 20%, rgba(96,165,250,0.10), transparent 60%),
+        radial-gradient(900px 600px at 80% 60%, rgba(74,222,128,0.10), transparent 60%),
+        radial-gradient(900px 600px at 70% 20%, rgba(251,113,133,0.08), transparent 55%),
+        var(--bg);
+      color: var(--ink);
+      overflow:hidden;
+    }
+
+    .sidebar{
+      position:fixed;
+      left:0; top:0; bottom:0;
+      width: 360px;
+      max-width: min(360px, 92vw);
+      background: var(--panel);
+      border-right: 1px solid var(--line);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+      padding: 14px;
+      overflow:auto;
+      z-index: 10;
+    }
+    .title{
+      font-size: 12px;
+      color: var(--muted);
+      letter-spacing: 0.3px;
+      margin: 0 0 10px 0;
+      display:flex; align-items:center; justify-content:space-between;
+    }
+    .btn{
+      padding: 8px 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.06);
+      color: var(--ink);
+      cursor:pointer;
+      user-select:none;
+    }
+    .btn:hover{ background: rgba(255,255,255,0.10); }
+    .btn:active{ transform: translateY(1px); }
+
+    .card{
+      background: rgba(0,0,0,0.18);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    .card h3{
+      margin: 0 0 10px 0;
+      font-size: 12px;
+      color: rgba(170,180,255,0.85);
+      font-weight: 650;
+      letter-spacing: 0.2px;
+    }
+    .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .row + .row{ margin-top: 10px; }
+    label{
+      font-size: 12px;
+      color: rgba(170,180,255,0.85);
+      display:flex;
+      gap:8px;
+      align-items:center;
+    }
+    input[type="number"], input[type="text"], input[type="range"]{
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(0,0,0,0.22);
+      color: var(--ink);
+      padding: 8px 9px;
+      outline:none;
+    }
+    input[type="number"], input[type="text"]{ width: 94px; }
+    input[type="range"]{ width: 170px; }
+    .toggle{ display:flex; align-items:center; gap:8px; }
+    .toggle input{ transform: translateY(1px); }
+
+    .hint{
+      font-size: 11px;
+      color: rgba(170,180,255,0.70);
+      line-height:1.4;
+      margin-top: 8px;
+    }
+
+    .strip{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      padding: 8px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(0,0,0,0.14);
+      max-height: 260px;
+      overflow:auto;
+    }
+    .chip{
+      display:flex; align-items:center; gap:8px;
+      padding: 7px 9px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.10);
+      background: rgba(255,255,255,0.04);
+      user-select:none;
+    }
+    .chip b{ font-size: 12px; color: rgba(170,180,255,0.85); }
+
+    .tri{
+      display:flex; gap:4px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.10);
+      padding: 2px; border-radius: 999px;
+    }
+    .tri button{
+      padding: 6px 8px;
+      border-radius:999px;
+      border:0;
+      background: transparent;
+      color: var(--ink);
+      cursor:pointer;
+      font-size: 12px;
+      opacity:0.9;
+    }
+    .tri button.active{ background: rgba(255,255,255,0.16); opacity:1; }
+
+    .viz{
+      position: fixed;
+      left: 360px; right: 0; top: 0; bottom: 0;
+      overflow:hidden;
+    }
+    @media (max-width: 760px){
+      .viz{ left: min(360px, 92vw); }
+    }
+    svg{ width:100%; height:100%; display:block; }
+
+    .nodeHalo{ transition: opacity 650ms ease, fill 650ms ease; }
+    .nodeCore{ transition: fill 650ms ease, stroke 650ms ease, stroke-width 650ms ease; }
+    .edge{ opacity:0.75; }
+
+    .outLabel{
+      font-size: 11px;
+      fill: rgba(255,255,255,0.45);
+      letter-spacing: 0.6px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="sidebar">
+  <div class="title">
+    <span>Unknown Logic Gates</span>
+    <button class="btn" id="regen">New graph</button>
+  </div>
+
+  <div class="card">
+    <h3>Graph</h3>
+    <div class="row">
+      <label>Inputs <input type="number" id="nInputs" min="2" max="40" value="5" /></label>
+      <label>Gates <input type="number" id="nGates" min="3" max="260" value="10" /></label>
+      <label>Max-in <input type="number" id="fanIn" min="2" max="6" value="2" /></label>
+      <label>Seed <input type="text" id="seed" value="" placeholder="random" /></label>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Motion</h3>
+    <div class="row">
+      <label class="toggle"><input type="checkbox" id="autoDrift" checked /> Random Motion</label>
+      <label>pace <input type="range" id="pace" min="35" max="2000" value="700" /></label>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Inputs</h3>
+    <div class="strip" id="inputs"></div>
+    <div class="hint" id="inputVector"></div>
+  </div>
+</div>
+
+<div class="viz">
+  <svg id="svg" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid meet"></svg>
+</div>
+
+<script>
+function xmur3(str) {
+  let h = 1779033703 ^ str.length;
+  for (let i = 0; i < str.length; i++) {
+    h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  return function() {
+    h = Math.imul(h ^ (h >>> 16), 2246822507);
+    h = Math.imul(h ^ (h >>> 13), 3266489909);
+    return (h ^= h >>> 16) >>> 0;
+  };
+}
+function mulberry32(a) {
+  return function() {
+    let t = a += 0x6D2B79F5;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function makeRng(seedStr) { return mulberry32(xmur3(seedStr)()); }
+function pick(rng, arr) { return arr[Math.floor(rng() * arr.length)]; }
+function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
+function randHex(n=8){
+  const chars = "0123456789abcdef";
+  let s="";
+  for(let i=0;i<n;i++) s += chars[Math.floor(Math.random()*chars.length)];
+  return s;
+}
+function autoSeedIfBlank(seedInputValue){
+  const s = (seedInputValue || "").trim();
+  return s === "" ? `auto-${Date.now()}-${randHex(6)}` : s;
+}
+
+const POS_COLOR = "#00CAD0";
+const NEG_COLOR = "#493178";
+const NEUTRAL_COLOR = "#9ca3af";
+
+function hexToRgb(hex) {
+  const h = hex.replace("#", "");
+  return {
+    r: parseInt(h.slice(0, 2), 16),
+    g: parseInt(h.slice(2, 4), 16),
+    b: parseInt(h.slice(4, 6), 16),
+  };
+}
+function rgba(hex, a = 1) {
+  const { r, g, b } = hexToRgb(hex);
+  return `rgba(${r},${g},${b},${a})`;
+}
+function mixHex(a, b, t) {
+  const A = hexToRgb(a);
+  const B = hexToRgb(b);
+  const m = (x, y) => Math.round(x * (1 - t) + y * t);
+  return `rgb(${m(A.r, B.r)},${m(A.g, B.g)},${m(A.b, B.b)})`;
+}
+function colorForTri(v) {
+  if (v === 1)  return rgba(POS_COLOR, 1);
+  if (v === -1) return rgba(NEG_COLOR, 1);
+  return rgba(NEUTRAL_COLOR, 0.28);
+}
+function glowForTri(v) {
+  if (v === 1)  return rgba(POS_COLOR, 0.55);
+  if (v === -1) return rgba(NEG_COLOR, 0.55);
+  return rgba(NEUTRAL_COLOR, 0.12);
+}
+function outlineForTri(v) {
+  if (v === 1)  return rgba(mixHex(POS_COLOR, "#000000", 0.65), 0.95);
+  if (v === -1) return rgba(mixHex(NEG_COLOR, "#000000", 0.65), 0.95);
+  return rgba(mixHex(NEUTRAL_COLOR, "#000000", 0.55), 0.45);
+}
+
+function possFromTri(v){
+  if (v === 1) return { y:true,  n:false };
+  if (v === -1) return { y:false, n:true };
+  return { y:true,  n:true };
+}
+function triFromPoss(p){
+  if (p.y && !p.n) return 1;
+  if (!p.y && p.n) return -1;
+  return 0;
+}
+function enumBoolCombos(possArr, fn){
+  const k = possArr.length;
+  let canTrue = false;
+  let canFalse = false;
+
+  function rec(i, args){
+    if (i === k){
+      const out = fn(args);
+      if (out) canTrue = true; else canFalse = true;
+      return;
+    }
+    const p = possArr[i];
+    if (p.y) rec(i+1, args.concat(true));
+    if (p.n) rec(i+1, args.concat(false));
+  }
+  rec(0, []);
+  return { y: canTrue, n: canFalse };
+}
+function boolFn(type, args){
+  switch(type){
+    case "AND":    return args.every(Boolean);
+    case "OR":     return args.some(Boolean);
+    case "NOT":    return !args[0];
+    case "NAND":   return !args.every(Boolean);
+    case "NOR":    return !args.some(Boolean);
+    case "XOR": {
+      let t = 0; for (const a of args) t ^= (a ? 1 : 0);
+      return t === 1;
+    }
+    case "XNOR": {
+      let t = 0; for (const a of args) t ^= (a ? 1 : 0);
+      return t === 0;
+    }
+    case "IMPLIES": {
+      const A = args[0], B = args[1];
+      return (!A) || B;
+    }
+    default:
+      return false;
+  }
+}
+function gatePoss(type, childPoss){
+  if (type === "NOT"){
+    const p = childPoss[0];
+    return { y: p.n, n: p.y };
+  }
+  return enumBoolCombos(childPoss, (args) => boolFn(type, args));
+}
+
+const GATE_TYPES = ["AND","OR","NOT","NAND","NOR","XOR","XNOR","IMPLIES"];
+
+function buildNetwork(nInputs, nGates, fanIn, seed) {
+  const rng = makeRng(seed);
+
+  const inputs = Array.from({length: nInputs}, (_, i) => ({ id: `I${i}`, kind: "IN", index: i }));
+  const inputIds = inputs.map(x => x.id);
+
+  function pickGateType(){
+    const bag = ["AND","OR","AND","OR","NOT","NAND","NOR","XOR","XNOR","IMPLIES"];
+    return pick(rng, bag);
+  }
+
+  const gates = Array.from({length: nGates}, (_, i) => ({
+    id: `G${i}`,
+    kind: "GATE",
+    type: pickGateType(),
+    deps: []
+  }));
+  const rootId = `G${nGates-1}`;
+
+  const windowSize = Math.max(4, Math.floor(Math.sqrt(nGates) * 2));
+
+  const inputsToIntroduce = inputIds.slice();
+  for (let i = inputsToIntroduce.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [inputsToIntroduce[i], inputsToIntroduce[j]] = [inputsToIntroduce[j], inputsToIntroduce[i]];
+  }
+
+  function prevGates(i) {
+    const start = Math.max(0, i - windowSize);
+    const arr = [];
+    for (let k = start; k < i; k++) arr.push(`G${k}`);
+    return arr;
+  }
+
+  for (let i = 0; i < nGates; i++) {
+    const g = gates[i];
+    let k;
+    if (g.type === "NOT") k = 1;
+    else if (g.type === "IMPLIES") k = 2;
+    else k = clamp(Math.floor(rng() * fanIn) + 2, 2, fanIn);
+
+    const deps = [];
+    const prev = prevGates(i);
+
+    if (prev.length && rng() < 0.85) deps.push(pick(rng, prev));
+
+    while (inputsToIntroduce.length && deps.length < k && rng() < 0.85) {
+      deps.push(inputsToIntroduce.pop());
+    }
+
+    const pool = [...prev, ...inputIds];
+    while (deps.length < k) {
+      const c = pick(rng, pool);
+      if (!deps.includes(c)) deps.push(c);
+    }
+
+    g.deps = deps.slice(0, k);
+  }
+
+  const inputUsed = new Map();
+  for (const iid of inputIds) inputUsed.set(iid, 0);
+  for (const g of gates) for (const d of g.deps) if (d.startsWith("I")) inputUsed.set(d, (inputUsed.get(d)||0) + 1);
+
+  for (const iid of inputIds) {
+    if ((inputUsed.get(iid) || 0) > 0) continue;
+    const targetIndex = (rng() < 0.7) ? (nGates - 1) : Math.floor(rng() * nGates);
+    const target = gates[targetIndex];
+    if (target.type === "NOT") target.deps[0] = iid;
+    else if (target.type === "IMPLIES") target.deps[1] = iid;
+    else {
+      const idx = Math.floor(rng() * target.deps.length);
+      target.deps[idx] = iid;
+    }
+  }
+
+  return { inputs, gates, rootId };
+}
+
+function evaluate(net, inputVals) {
+  const tri = new Map();
+  const poss = new Map();
+
+  for (const inp of net.inputs) {
+    const v = inputVals[inp.index] ?? 0;
+    tri.set(inp.id, v);
+    poss.set(inp.id, possFromTri(v));
+  }
+
+  for (const g of net.gates) {
+    const childPoss = g.deps.map(d => poss.get(d));
+    const p = gatePoss(g.type, childPoss);
+    poss.set(g.id, p);
+    tri.set(g.id, triFromPoss(p));
+  }
+
+  return { tri, poss };
+}
+
+function computeOutDegree(net) {
+  const outDeg = new Map();
+  for (const inp of net.inputs) outDeg.set(inp.id, 0);
+  for (const g of net.gates) outDeg.set(g.id, 0);
+
+  for (const g of net.gates) {
+    for (const dep of g.deps) outDeg.set(dep, (outDeg.get(dep) || 0) + 1);
+  }
+  return outDeg;
+}
+
+function layout(net) {
+  const depth = new Map();
+  for (const inp of net.inputs) depth.set(inp.id, 0);
+  for (const g of net.gates) {
+    const d = 1 + Math.max(...g.deps.map(id => depth.get(id) ?? 0));
+    depth.set(g.id, d);
+  }
+
+  const layers = new Map();
+  const all = [...net.inputs, ...net.gates];
+  let maxD = 0;
+  for (const n of all) {
+    const d = depth.get(n.id) ?? 0;
+    maxD = Math.max(maxD, d);
+    if (!layers.has(d)) layers.set(d, []);
+    layers.get(d).push(n.id);
+  }
+
+  const pos = new Map();
+  const W = 1200, H = 800;
+  const padX = 120, padY = 70;
+
+  for (let d = 0; d <= maxD; d++) {
+    const ids = layers.get(d) ?? [];
+    const x = padX + (d / Math.max(1, maxD)) * (W - 2*padX);
+    const n = ids.length;
+    for (let i = 0; i < n; i++) {
+      const y = padY + (i + 1) * ((H - 2*padY) / (n + 1));
+      pos.set(ids[i], { x, y });
+    }
+  }
+
+  const outDeg = computeOutDegree(net);
+  const terminals = [];
+  for (const g of net.gates) {
+    if ((outDeg.get(g.id) || 0) === 0) terminals.push(g.id);
+  }
+
+  const outX = W - padX;
+  const m = terminals.length || 1;
+  for (let i = 0; i < terminals.length; i++) {
+    const y = padY + (i + 1) * ((H - 2*padY) / (m + 1));
+    pos.set(terminals[i], { x: outX, y });
+  }
+
+  return { pos, terminals, outX, padY, H };
+}
+
+function labelForNode(node){
+  if (!node) return "?";
+  return node.kind === "IN" ? "IN" : node.type;
+}
+
+let net = null;
+let inputVals = [];
+let driftHandle = null;
+
+let svgNodeEls = null;
+let svgLayout = null;
+
+function buildSvgForGraph(net) {
+  const svg = document.getElementById("svg");
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+  svgLayout = layout(net);
+  const { pos, terminals, outX, padY, H } = svgLayout;
+
+  const nodeById = new Map();
+  for (const inp of net.inputs) nodeById.set(inp.id, inp);
+  for (const g of net.gates) nodeById.set(g.id, g);
+
+  const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+  defs.innerHTML = `
+    <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(255,255,255,0.18)"></path>
+    </marker>
+    <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2.2" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  `;
+  svg.appendChild(defs);
+
+  const guide = document.createElementNS("http://www.w3.org/2000/svg", "line");
+  guide.setAttribute("x1", outX);
+  guide.setAttribute("x2", outX);
+  guide.setAttribute("y1", padY);
+  guide.setAttribute("y2", H - padY);
+  guide.setAttribute("stroke", "rgba(255,255,255,0.05)");
+  guide.setAttribute("stroke-width", "2");
+  svg.appendChild(guide);
+
+  const outText = document.createElementNS("http://www.w3.org/2000/svg", "text");
+  outText.setAttribute("x", outX);
+  outText.setAttribute("y", padY - 18);
+  outText.setAttribute("text-anchor", "middle");
+  outText.setAttribute("class", "outLabel");
+  outText.textContent = "OUT";
+  svg.appendChild(outText);
+
+  const edgeGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  svg.appendChild(edgeGroup);
+
+  function addEdge(fromId, toId) {
+    const a = pos.get(fromId), b = pos.get(toId);
+    if (!a || !b) return;
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    const mx = (a.x + b.x) / 2;
+    const d = `M ${a.x} ${a.y} C ${mx} ${a.y}, ${mx} ${b.y}, ${b.x} ${b.y}`;
+    path.setAttribute("d", d);
+    path.setAttribute("fill", "none");
+    path.setAttribute("stroke", "rgba(255,255,255,0.14)");
+    path.setAttribute("stroke-width", "1.1");
+    path.setAttribute("marker-end", "url(#arrow)");
+    path.setAttribute("class", "edge");
+    edgeGroup.appendChild(path);
+  }
+  for (const g of net.gates) for (const dep of g.deps) addEdge(dep, g.id);
+
+  const nodeGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  svg.appendChild(nodeGroup);
+
+  const haloMap = new Map();
+  const coreMap = new Map();
+
+  function addNode(id) {
+    const p = pos.get(id);
+    const node = nodeById.get(id);
+
+    const gg = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    gg.setAttribute("transform", `translate(${p.x},${p.y})`);
+    nodeGroup.appendChild(gg);
+
+    const halo = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    halo.setAttribute("r", 28);
+    halo.setAttribute("fill", "rgba(255,255,255,0)");
+    halo.setAttribute("opacity", "0.0");
+    halo.setAttribute("filter","url(#softGlow)");
+    halo.setAttribute("class","nodeHalo");
+    gg.appendChild(halo);
+
+    const core = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    core.setAttribute("r", 22);
+    core.setAttribute("fill", "rgba(255,255,255,0.06)");
+    core.setAttribute("stroke", "rgba(255,255,255,0.14)");
+    core.setAttribute("stroke-width", "2");
+    core.setAttribute("filter","url(#softGlow)");
+    core.setAttribute("class","nodeCore");
+    gg.appendChild(core);
+
+    const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    label.setAttribute("text-anchor", "middle");
+    label.setAttribute("dominant-baseline", "central");
+    label.setAttribute("font-size", "12");
+    label.setAttribute("fill", "rgba(255,255,255,0.92)");
+    label.textContent = labelForNode(node);
+    gg.appendChild(label);
+
+    if (terminals.includes(id)) {
+      const t = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      t.setAttribute("x1", -10); t.setAttribute("x2", 10);
+      t.setAttribute("y1", 28);  t.setAttribute("y2", 28);
+      t.setAttribute("stroke", "rgba(255,255,255,0.18)");
+      t.setAttribute("stroke-width", "2");
+      gg.appendChild(t);
+    }
+
+    haloMap.set(id, halo);
+    coreMap.set(id, core);
+  }
+
+  for (const inp of net.inputs) addNode(inp.id);
+  for (const gate of net.gates) addNode(gate.id);
+
+  svgNodeEls = { halo: haloMap, core: coreMap };
+}
+
+function updateSvgColors(evalRes) {
+  if (!svgNodeEls) return;
+
+  for (const [id, core] of svgNodeEls.core.entries()) {
+    const v = evalRes.tri.get(id);
+    const p = evalRes.poss.get(id);
+    const halo = svgNodeEls.halo.get(id);
+
+    core.style.fill = colorForTri(v);
+    core.style.stroke = outlineForTri(v);
+
+    const isKnown = (v !== 0);
+    core.style.strokeWidth = isKnown ? "3" : "2";
+
+    halo.style.fill = glowForTri(v);
+    const forced = (p.y && !p.n) || (!p.y && p.n);
+    const base = (v === 0) ? 0.06 : 0.28;
+    const op = forced ? Math.max(base, 0.40) : base;
+    halo.style.opacity = String(op);
+  }
+}
+
+function renderInputControls(n) {
+  const inputsDiv = document.getElementById("inputs");
+  inputsDiv.innerHTML = "";
+  for (let i = 0; i < n; i++) {
+    const chip = document.createElement("div");
+    chip.className = "chip";
+    const label = document.createElement("b");
+    label.textContent = `x${i}`;
+    chip.appendChild(label);
+
+    const tri = document.createElement("div");
+    tri.className = "tri";
+
+    const buttons = [
+      { v: -1, text: "-1" },
+      { v:  0, text: "0" },
+      { v:  1, text: "1" },
+    ].map(({v, text}) => {
+      const b = document.createElement("button");
+      b.textContent = text;
+      b.onclick = () => { inputVals[i] = v; update(); };
+      tri.appendChild(b);
+      return b;
+    });
+
+    chip.appendChild(tri);
+    inputsDiv.appendChild(chip);
+    chip._buttons = buttons;
+  }
+}
+function syncInputButtons() {
+  const inputsDiv = document.getElementById("inputs");
+  [...inputsDiv.children].forEach((chip, i) => {
+    const v = inputVals[i] ?? 0;
+    for (const b of chip._buttons) {
+      const bv = parseInt(b.textContent, 10);
+      b.classList.toggle("active", bv === v);
+    }
+  });
+}
+
+function enforceCounts(nInputs, nGates, fanIn) {
+  const perGate = Math.max(1, fanIn - 1);
+  const minGatesForInputs = Math.ceil(nInputs / perGate);
+  const fixedGates = Math.max(nGates, minGatesForInputs, 3);
+  return { nInputs, nGates: fixedGates, fanIn };
+}
+
+function regenerateGraph() {
+  let nInputs = clamp(parseInt(document.getElementById("nInputs").value, 10) || 10, 2, 40);
+  let nGates  = clamp(parseInt(document.getElementById("nGates").value, 10) || 28, 3, 260);
+  let fanIn   = clamp(parseInt(document.getElementById("fanIn").value, 10) || 3, 2, 6);
+
+  ({ nInputs, nGates, fanIn } = enforceCounts(nInputs, nGates, fanIn));
+  document.getElementById("nInputs").value = nInputs;
+  document.getElementById("nGates").value  = nGates;
+  document.getElementById("fanIn").value   = fanIn;
+
+  const seed = autoSeedIfBlank(document.getElementById("seed").value);
+  net = buildNetwork(nInputs, nGates, fanIn, seed);
+
+  inputVals = Array.from({length:nInputs}, () => 0);
+  renderInputControls(nInputs);
+  syncInputButtons();
+
+  buildSvgForGraph(net);
+  update();
+}
+
+function nudgeInputs() {
+  if (!inputVals.length) return;
+  const flips = (Math.random() < 0.30) ? 2 : (Math.random() < 0.75 ? 3 : 4);
+  for (let k = 0; k < flips; k++) {
+    const i = Math.floor(Math.random() * inputVals.length);
+    const v = inputVals[i] ?? 0;
+    inputVals[i] = (v === -1) ? 0 : (v === 0 ? 1 : -1);
+  }
+  update();
+}
+
+function startDriftIfNeeded() {
+  stopDrift();
+  if (!document.getElementById("autoDrift").checked) return;
+
+  const base = parseInt(document.getElementById("pace").value, 10) || 700;
+
+  const tick = () => {
+    if (!document.getElementById("autoDrift").checked) return;
+    nudgeInputs();
+    const jitterFrac = base < 180 ? 0.08 : 0.14;
+    const jitter = (Math.random() * 2 - 1) * (base * jitterFrac);
+    const next = clamp(Math.round(base + jitter), 25, 4000);
+    driftHandle = setTimeout(tick, next);
+  };
+
+  driftHandle = setTimeout(tick, base);
+}
+function stopDrift() {
+  if (driftHandle) { clearTimeout(driftHandle); driftHandle = null; }
+}
+
+function update() {
+  if (!net) return;
+  syncInputButtons();
+
+  const res = evaluate(net, inputVals);
+  updateSvgColors(res);
+}
+
+document.getElementById("regen").addEventListener("click", () => { regenerateGraph(); startDriftIfNeeded(); });
+
+
+document.getElementById("autoDrift").addEventListener("change", () => startDriftIfNeeded());
+document.getElementById("pace").addEventListener("input", () => startDriftIfNeeded());
+
+["nInputs","nGates","fanIn","seed"].forEach(id => {
+  document.getElementById(id).addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { regenerateGraph(); startDriftIfNeeded(); }
+  });
+});
+
+window.addEventListener("keydown", (e) => {
+  if (e.key.toLowerCase() === "g") { regenerateGraph(); startDriftIfNeeded(); }
+  if (e.key.toLowerCase() === "r") nudgeInputs();
+});
+
+regenerateGraph();
+startDriftIfNeeded();
+</script>
+</body>
+</html>
