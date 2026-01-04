@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Bad Private Key Generator</title>
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --panel: rgba(23,23,23,.6);
+      --panel2: #0f0f0f;
+      --text: #f5f5f5;
+      --muted: rgba(245,245,245,.7);
+      --muted2: rgba(245,245,245,.55);
+      --ring: rgba(245,245,245,.9);
+      --line: rgba(245,245,245,.08);
+      --gap: 1px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      background: #000;
+      color: var(--text);
+    }
+    .wrap {
+      max-width: 1024px;
+      margin: 0 auto;
+      padding: 40px 24px 56px;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 30px;
+      letter-spacing: -0.02em;
+    }
+    p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.45;
+      max-width: 740px;
+    }
+    .warn { color: #fca5a5; margin-left: 8px; }
+    .grid2 {
+      margin-top: 32px;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 32px;
+      align-items: start;
+    }
+    @media (min-width: 1024px) {
+      .grid2 {
+        grid-template-columns: 420px 1fr;
+      }
+    }
+    .card {
+      background: var(--panel);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 0 0 1px var(--line);
+    }
+    .canvasCard {
+      padding: 12px;
+      border-radius: 16px;
+      background: var(--panel);
+      box-shadow: 0 0 0 1px var(--line);
+      width: min(420px, 100%);
+    }
+    .canvas {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      border-radius: 12px;
+      background: var(--panel2);
+      padding: 1px;
+      display: grid;
+      grid-template-columns: repeat(16, 1fr);
+      grid-template-rows: repeat(16, 1fr);
+      gap: var(--gap);
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      background-clip: padding-box;
+      outline: none;
+    }
+    .cell {
+      border: 0;
+      padding: 0;
+      margin: 0;
+      border-radius: 2px;
+      background: var(--bg);
+      cursor: crosshair;
+    }
+    .cell.on { background: #f5f5f5; }
+    .cell:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+    .btnRow { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+    button.btn {
+      border: 0;
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn.primary { background: #f5f5f5; color: #0a0a0a; }
+    .btn.primary:hover { background: #ffffff; }
+    .btn.ghost { background: #262626; color: #f5f5f5; }
+    .btn.ghost:hover { background: #303030; }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    .tiny { font-size: 12px; color: var(--muted2); margin-top: 10px; }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+    }
+    .label { font-size: 13px; font-weight: 600; color: rgba(245,245,245,.85); }
+    .hint { font-size: 12px; color: rgba(245,245,245,.55); }
+    .monoBox {
+      margin-top: 12px;
+      border-radius: 12px;
+      background: #050505;
+      padding: 14px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      font-size: 10px;
+      line-height: 1.55;
+      word-break: break-all;
+      box-shadow: inset 0 0 0 1px rgba(245,245,245,.08);
+    }
+    input.hex {
+      width: 100%;
+      border-radius: 12px;
+      background: #050505;
+      border: 0;
+      padding: 10px 12px;
+      color: #f5f5f5;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      font-size: 10px;
+      box-shadow: inset 0 0 0 1px rgba(245,245,245,.12);
+      outline: none;
+    }
+    input.hex:focus { box-shadow: 0 0 0 2px rgba(245,245,245,.9), inset 0 0 0 1px rgba(245,245,245,.12); }
+    ul { margin: 10px 0 0; padding-left: 18px; }
+    li { color: var(--muted); font-size: 14px; margin: 6px 0; }
+    footer { margin-top: 36px; color: rgba(245,245,245,.38); font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Bad Private Key Generator</h1>
+    <p>
+      Draw a 16×16 pattern. Each square is a bit (white = 1, black = 0). Do not use for keys, lol.
+    </p>
+
+    <div class="grid2">
+      <div>
+        <div class="canvasCard">
+          <div id="grid" class="canvas" role="application" aria-label="16 by 16 bit drawing grid"></div>
+        </div>
+
+        <div class="btnRow">
+          <button class="btn primary" id="copyBtn">Copy hex</button>
+          <button class="btn ghost" id="randBtn">Randomize</button>
+          <button class="btn ghost" id="invBtn">Invert</button>
+          <button class="btn ghost" id="clearBtn">Clear</button>
+        </div>
+
+        <div class="tiny">Bits set: <span id="ones">0</span> / 256</div>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:16px;">
+        <div class="card">
+          <div class="row">
+            <div class="label">256-bit key</div>
+            <div class="hint">64 hex chars</div>
+          </div>
+          <div id="hexOut" class="monoBox"></div>
+          <div class="tiny">Bit ordering: row-major; within each byte, the leftmost bit is the most-significant bit.</div>
+        </div>
+
+        <div class="card">
+          <div class="label">Load a hex key into the grid</div>
+          <div class="tiny" style="margin-top:6px;">Paste a 64-character hex string.</div>
+          <div style="margin-top:12px; display:flex; flex-direction:column; gap:10px;">
+            <input class="hex" id="hexIn" placeholder="e.g. 0x..." />
+            <div style="display:flex; align-items:center; gap:10px;">
+              <button class="btn primary" id="loadBtn" disabled>Load</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const SIZE = 16;
+    const CELLS = SIZE * SIZE;
+
+    function bitsToHex(bits) {
+      const bytes = new Uint8Array(CELLS / 8);
+      for (let i = 0; i < bytes.length; i++) {
+        let b = 0;
+        for (let j = 0; j < 8; j++) {
+          const bit = bits[i * 8 + j] ? 1 : 0;
+          b = (b << 1) | bit;
+        }
+        bytes[i] = b;
+      }
+      return Array.from(bytes).map(x => x.toString(16).padStart(2, "0")).join("");
+    }
+
+    function hexToBits(hex) {
+      const cleaned = (hex || "").trim().toLowerCase().replace(/^0x/, "");
+      if (!/^[0-9a-f]*$/.test(cleaned)) return null;
+      if (cleaned.length !== 64) return null;
+      const bits = new Array(CELLS).fill(0);
+      for (let i = 0; i < 32; i++) {
+        const byte = parseInt(cleaned.slice(i * 2, i * 2 + 2), 16);
+        for (let j = 0; j < 8; j++) {
+          bits[i * 8 + j] = (byte >> (7 - j)) & 1;
+        }
+      }
+      return bits;
+    }
+
+    function randBits() {
+      const bits = new Array(CELLS).fill(0);
+      const bytes = new Uint8Array(CELLS / 8);
+      if (window.crypto && window.crypto.getRandomValues) {
+        window.crypto.getRandomValues(bytes);
+      } else {
+        for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+      }
+      for (let i = 0; i < bytes.length; i++) {
+        for (let j = 0; j < 8; j++) {
+          bits[i * 8 + j] = (bytes[i] >> (7 - j)) & 1;
+        }
+      }
+      return bits;
+    }
+
+    function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
+
+    let bits = new Array(CELLS).fill(0);
+    let isDown = false;
+    let paintValue = 1;
+
+    const grid = document.getElementById("grid");
+    const hexOut = document.getElementById("hexOut");
+    const onesEl = document.getElementById("ones");
+    const copyBtn = document.getElementById("copyBtn");
+    const randBtn = document.getElementById("randBtn");
+    const invBtn = document.getElementById("invBtn");
+    const clearBtn = document.getElementById("clearBtn");
+    const hexIn = document.getElementById("hexIn");
+    const loadBtn = document.getElementById("loadBtn");
+    const hexStatus = document.getElementById("hexStatus");
+
+    const cellButtons = [];
+    for (let i = 0; i < CELLS; i++) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "cell";
+      btn.title = `bit ${i}: 0`;
+      btn.setAttribute("aria-label", `Cell ${i + 1} of ${CELLS} (0)`);
+      btn.addEventListener("click", () => toggleCell(i));
+      cellButtons.push(btn);
+      grid.appendChild(btn);
+    }
+
+    function render() {
+      for (let i = 0; i < CELLS; i++) {
+        const on = bits[i] ? 1 : 0;
+        const btn = cellButtons[i];
+        btn.classList.toggle("on", !!on);
+        btn.title = `bit ${i}: ${on}`;
+        btn.setAttribute("aria-label", `Cell ${i + 1} of ${CELLS} (${on})`);
+      }
+      const hex = bitsToHex(bits);
+      hexOut.textContent = hex;
+      hexIn.value = hex;
+      onesEl.textContent = bits.reduce((a, b) => a + (b ? 1 : 0), 0);
+      validateHexInput();
+    }
+
+    function setCell(idx, value) {
+      if (bits[idx] === value) return;
+      bits[idx] = value;
+      const btn = cellButtons[idx];
+      btn.classList.toggle("on", !!value);
+      btn.title = `bit ${idx}: ${value}`;
+      btn.setAttribute("aria-label", `Cell ${idx + 1} of ${CELLS} (${value})`);
+      const hex = bitsToHex(bits);
+      hexOut.textContent = hex;
+      hexIn.value = hex;
+      onesEl.textContent = bits.reduce((a, b) => a + (b ? 1 : 0), 0);
+      validateHexInput();
+    }
+
+    function toggleCell(idx) {
+      setCell(idx, bits[idx] ? 0 : 1);
+    }
+
+    function indexFromEvent(e) {
+      const rect = grid.getBoundingClientRect();
+      const x = clamp(e.clientX - rect.left, 0, rect.width - 0.01);
+      const y = clamp(e.clientY - rect.top, 0, rect.height - 0.01);
+      const cellW = rect.width / SIZE;
+      const cellH = rect.height / SIZE;
+      const col = Math.floor(x / cellW);
+      const row = Math.floor(y / cellH);
+      return row * SIZE + col;
+    }
+
+    grid.addEventListener("pointerdown", (e) => {
+      grid.setPointerCapture?.(e.pointerId);
+      const idx = indexFromEvent(e);
+      paintValue = bits[idx] ? 0 : 1;
+      isDown = true;
+      setCell(idx, paintValue);
+    });
+
+    grid.addEventListener("pointermove", (e) => {
+      if (!isDown) return;
+      const idx = indexFromEvent(e);
+      setCell(idx, paintValue);
+    });
+
+    function pointerUp() { isDown = false; }
+    grid.addEventListener("pointerup", pointerUp);
+    grid.addEventListener("pointercancel", pointerUp);
+    grid.addEventListener("pointerleave", pointerUp);
+
+    copyBtn.addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(bitsToHex(bits)); } catch {}
+    });
+    randBtn.addEventListener("click", () => { bits = randBits(); render(); });
+    invBtn.addEventListener("click", () => { bits = bits.map(b => b ? 0 : 1); render(); });
+    clearBtn.addEventListener("click", () => { bits = new Array(CELLS).fill(0); render(); });
+
+    function validateHexInput() {
+      const parsed = hexToBits(hexIn.value);
+      if (!parsed) {
+        loadBtn.disabled = true;
+        hexStatus.textContent = "Enter exactly 64 hex chars.";
+      } else {
+        loadBtn.disabled = false;
+        hexStatus.textContent = "Looks valid.";
+      }
+    }
+
+    loadBtn.addEventListener("click", () => {
+      const parsed = hexToBits(hexIn.value);
+      if (!parsed) return;
+      bits = parsed;
+      render();
+    });
+
+    bits = new Array(CELLS).fill(0);
+    render();
+  </script>
+</body>
+</html>
