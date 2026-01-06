@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Lame Curves</title>
+
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: #0b0f14;
+      color: #e8eef6;
+    }
+    .wrap {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 12px;
+      padding: 12px;
+    }
+    .panel {
+      background: #111823;
+      border: 1px solid #1d2a3a;
+      border-radius: 12px;
+      padding: 12px;
+    }
+    .panel h1 { font-size: 16px; margin: 0 0 8px; }
+    label { display: block; font-size: 12px; opacity: 0.9; margin-top: 10px; }
+    input[type="number"] {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 8px;
+      border-radius: 10px;
+      border: 1px solid #2a3a52;
+      background: #0b0f14;
+      color: #e8eef6;
+    }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    button {
+      padding: 9px 12px;
+      border-radius: 10px;
+      border: 1px solid #2a3a52;
+      background: #162235;
+      color: #e8eef6;
+      cursor: pointer;
+    }
+    canvas {
+      width: 100%;
+      height: calc(100vh - 24px);
+      background: #070a0f;
+      border-radius: 12px;
+      border: 1px solid #1d2a3a;
+    }
+    code {
+      background: #0b0f14;
+      border: 1px solid #1d2a3a;
+      padding: 1px 6px;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+
+<body>
+<div class="wrap">
+  <div class="panel">
+    <h1><code>x^(b/a) + y^(b/a) = a^(b/a)</code></h1>
+
+    <label>a &gt; 0</label>
+    <input id="a" type="number" step="0.01" value="1" min="0.01" />
+
+    <div class="row">
+      <div>
+        <label>b min</label>
+        <input id="bMin" type="number" step="0.1" value="-2" />
+      </div>
+      <div>
+        <label>b max</label>
+        <input id="bMax" type="number" step="0.1" value="2" />
+      </div>
+    </div>
+
+    <label>b step</label>
+    <input id="bStep" type="number" step="0.01" value="0.1" />
+
+    <div class="row">
+      <div>
+        <label>line width</label>
+        <input id="lineWidth" type="number" step="0.25" value="2" />
+      </div>
+      <div>
+        <label>zoom</label>
+        <input id="zoom" type="number" step="0.25" value="2" min="0.5" />
+      </div>
+    </div>
+
+    <label>
+      <input id="showGrid" type="checkbox" checked />
+      Show grid + axes
+    </label>
+  </div>
+
+  <canvas id="c"></canvas>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  const el = id => document.getElementById(id);
+
+  const SAMPLES = 600;
+
+  function debounce(fn, ms = 60) {
+    let t;
+    return (...args) => {
+      clearTimeout(t);
+      t = setTimeout(() => fn(...args), ms);
+    };
+  }
+
+  function resizeCanvas() {
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const r = canvas.getBoundingClientRect();
+    canvas.width = Math.floor(r.width * dpr);
+    canvas.height = Math.floor(r.height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    draw();
+  }
+
+  function drawGrid(xMax, yMax, toX, toY, plotRect) {
+    const { left, top, size } = plotRect;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(left, top, size, size);
+    ctx.clip();
+
+    ctx.strokeStyle = 'rgba(180,210,255,0.08)';
+    ctx.lineWidth = 1;
+
+    const steps = 8;
+    for (let i = 0; i <= steps; i++) {
+      const x = (xMax * i) / steps;
+      const y = (yMax * i) / steps;
+
+      ctx.beginPath();
+      ctx.moveTo(toX(x), toY(0));
+      ctx.lineTo(toX(x), toY(yMax));
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(toX(0), toY(y));
+      ctx.lineTo(toX(xMax), toY(y));
+      ctx.stroke();
+    }
+
+    ctx.strokeStyle = 'rgba(220,240,255,0.18)';
+    ctx.strokeRect(left, top, size, size);
+
+    ctx.restore();
+  }
+
+  function draw() {
+    const a = +el('a').value;
+    const bMin = +el('bMin').value;
+    const bMax = +el('bMax').value;
+    const bStep = +el('bStep').value;
+    const lineWidth = +el('lineWidth').value;
+    const zoom = +el('zoom').value;
+    const showGrid = el('showGrid').checked;
+
+    const W = canvas.getBoundingClientRect().width;
+    const H = canvas.getBoundingClientRect().height;
+
+    ctx.clearRect(0, 0, W, H);
+    if (!(a > 0) || !(bStep > 0) || !(zoom > 0)) return;
+
+    const xMax = a * zoom;
+    const yMax = xMax;
+
+    const pad = 18;
+    const plotW = W - 2 * pad;
+    const plotH = H - 2 * pad;
+    const size = Math.min(plotW, plotH);
+
+    const left = (W - size) / 2;
+    const top  = (H - size) / 2;
+    const plotRect = { left, top, size };
+
+    const toX = x => left + (x / xMax) * size;
+    const toY = y => top + (1 - y / yMax) * size;
+
+    if (showGrid) drawGrid(xMax, yMax, toX, toY, plotRect);
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(plotRect.left, plotRect.top, plotRect.size, plotRect.size);
+    ctx.clip();
+
+    let idx = 0;
+    const total = Math.max(1, Math.floor((bMax - bMin) / bStep) + 1);
+
+    for (let b = bMin; b <= bMax + 1e-12; b += bStep) {
+      const n = b / a;
+      if (Math.abs(n) < 1e-12) continue;
+
+      ctx.strokeStyle = `hsl(${(idx++ * 280) / Math.max(1, total - 1)},90%,65%)`;
+      ctx.lineWidth = lineWidth;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+
+      const C = Math.pow(a, n);
+      const xStart = n > 0 ? 0 : a * 1.001;
+
+      ctx.beginPath();
+      let started = false;
+
+      for (let i = 0; i <= SAMPLES; i++) {
+        const x = xStart + (xMax - xStart) * (i / SAMPLES);
+        let y;
+
+        if (n > 0) {
+          const v = C - Math.pow(x, n);
+          if (v < 0) { started = false; continue; }
+          y = Math.pow(v, 1 / n);
+        } else {
+          const k = -n;
+          const rhs = 1 / Math.pow(a, k) - 1 / Math.pow(x, k);
+          if (rhs <= 0) { started = false; continue; }
+          y = Math.pow(1 / rhs, 1 / k);
+        }
+
+        if (!isFinite(y) || y < 0 || y > yMax) { started = false; continue; }
+
+        const px = toX(x);
+        const py = toY(y);
+
+        if (!started) {
+          ctx.moveTo(px, py);
+          started = true;
+        } else {
+          ctx.lineTo(px, py);
+        }
+      }
+
+      ctx.stroke();
+    }
+
+    ctx.restore();
+
+  }
+
+  const autoDraw = debounce(draw, 50);
+  ['a','bMin','bMax','bStep','lineWidth','zoom','showGrid']
+    .forEach(id => {
+      el(id).addEventListener('input', autoDraw);
+      el(id).addEventListener('change', autoDraw);
+    });
+
+  window.addEventListener('resize', resizeCanvas);
+  resizeCanvas();
+})();
+</script>
+</body>
+</html>
