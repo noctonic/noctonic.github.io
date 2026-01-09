@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>IPv4 + Port Keyspace</title>
+  <style>
+    :root{
+      --bg:#0b1020;
+      --panel:#0f1733;
+      --text:#e8ecff;
+      --muted:#aeb7e6;
+      --accent:#7aa2ff;
+      --accent2:#7dffcc;
+      --danger:#ff6b8b;
+      --border:rgba(255,255,255,.10);
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+    }
+
+    html,body{height:100%;}
+    body{
+      margin:0;
+      font-family:var(--sans);
+      background: radial-gradient(1200px 800px at 30% 10%, rgba(122,162,255,.22), transparent 60%),
+                  radial-gradient(900px 700px at 70% 15%, rgba(125,255,204,.14), transparent 55%),
+                  var(--bg);
+      color:var(--text);
+      letter-spacing:.2px;
+    }
+
+    .wrap{
+      max-width:1200px;
+      margin:0 auto;
+      padding:24px 16px 56px;
+    }
+
+    header{
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      margin-bottom:18px;
+    }
+    header h1{
+      margin:0;
+      font-size: clamp(22px, 2.8vw, 34px);
+      line-height:1.15;
+    }
+    header p{
+      margin:0;
+      color:var(--muted);
+      max-width: 92ch;
+    }
+
+    .grid{
+      display:grid;
+      grid-template-columns: 1.05fr .95fr;
+      gap:16px;
+    }
+    @media (max-width: 980px){
+      .grid{grid-template-columns: 1fr;}
+    }
+
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.03));
+      border:1px solid var(--border);
+      border-radius:14px;
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .card .head{
+      padding:14px 16px 10px;
+      border-bottom:1px solid var(--border);
+      display:flex;
+      align-items:flex-end;
+      justify-content:space-between;
+      gap:12px;
+    }
+    .card .head h2{
+      margin:0;
+      font-size:18px;
+      letter-spacing:.3px;
+    }
+    .badge{
+      font-family:var(--mono);
+      font-size:12px;
+      color:rgba(255,255,255,.85);
+      border:1px solid rgba(255,255,255,.14);
+      padding:4px 8px;
+      border-radius:999px;
+      background:rgba(0,0,0,.18);
+      white-space:nowrap;
+    }
+    .content{ padding:14px 16px 16px; }
+
+    .row{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px 12px;
+      align-items:center;
+      margin: 10px 0;
+    }
+    label{
+      font-size:13px;
+      color:var(--muted);
+    }
+    input[type="text"], input[type="number"], select{
+      background: rgba(0,0,0,.20);
+      border:1px solid rgba(255,255,255,.15);
+      color:var(--text);
+      border-radius:10px;
+      padding:10px 10px;
+      font-size:14px;
+      outline:none;
+      min-width: 160px;
+    }
+    input[type="number"]{ min-width: 120px; }
+    input[type="text"]{ min-width: 220px; }
+    input:focus, select:focus{
+      border-color: rgba(122,162,255,.65);
+      box-shadow: 0 0 0 4px rgba(122,162,255,.15);
+    }
+
+    .btn{
+      appearance:none;
+      border:1px solid rgba(255,255,255,.16);
+      background: rgba(122,162,255,.16);
+      color:var(--text);
+      padding:10px 12px;
+      border-radius:12px;
+      cursor:pointer;
+      font-weight:600;
+      letter-spacing:.2px;
+      transition: transform .06s ease, background .15s ease, border-color .15s ease;
+      user-select:none;
+    }
+    .btn:hover{ background: rgba(122,162,255,.22); border-color: rgba(122,162,255,.55); }
+    .btn:active{ transform: translateY(1px); }
+    .btn.secondary{ background: rgba(125,255,204,.12); }
+    .btn.secondary:hover{ background: rgba(125,255,204,.18); border-color: rgba(125,255,204,.50); }
+
+    .mono{
+      font-family:var(--mono);
+      letter-spacing:0;
+    }
+    .kv{
+      display:grid;
+      grid-template-columns: 170px 1fr;
+      gap:8px 12px;
+      margin-top:10px;
+      align-items:center;
+    }
+    .kv .k{
+      color:var(--muted);
+      font-size:13px;
+    }
+    .kv .v{
+      font-family:var(--mono);
+      font-size:14px;
+      line-height:1.25;
+      word-break: break-word;
+    }
+
+    .small{
+      font-size:13px;
+      color:var(--muted);
+      line-height:1.35;
+    }
+    .callout{
+      margin-top:10px;
+      padding:12px 12px;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(0,0,0,.18);
+    }
+
+    .range{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      width:100%;
+    }
+    input[type="range"]{
+      width: min(520px, 100%);
+      accent-color: var(--accent);
+    }
+
+    .footer-note{
+      margin-top:14px;
+      color: rgba(255,255,255,.68);
+      font-size:12.5px;
+      line-height:1.35;
+    }
+  </style>
+</head>
+
+<body>
+<div class="wrap">
+  <header>
+    <h1>IPv4 + Port Keyspace</h1>
+  </header>
+
+
+    <div class="content">
+      <div class="small" style="margin-bottom:8px">
+        <span class="mono">IP:port</span> socket address combined keyspace
+      </div>
+      <div class="kv" style="margin-top:0">
+        <div class="k">Bits</div>
+        <div class="v mono">32 + 16 = 48 bits</div>
+        <div class="k">Count</div>
+        <div class="v mono">2<sup>48</sup> = 281,474,976,710,656</div>
+      </div>
+    </div>
+
+
+  <div class="grid">
+    <section class="card" aria-label="IPv4 address keyspace explorer">
+      <div class="head">
+        <h2>IPv4</h2>
+      </div>
+      <div class="content">
+        <div class="row">
+          <div class="range" style="flex-wrap:wrap">
+            <label for="ipRange" style="min-width:160px">Unsigned 32 bit integer</label>
+            <input id="ipRange" type="range" min="0" max="4294967295" step="1" value="3232235777" />
+            <input id="ipInt" type="text" class="mono" inputmode="numeric" aria-label="IPv4 integer input" />
+            <button class="btn" id="ipRandom" type="button" title="Pick a random IPv4 address">Random</button>
+          </div>
+        </div>
+
+        <div class="row">
+          <label for="ipDotted">Dotted decimal</label>
+          <input id="ipDotted" type="text" class="mono" placeholder="e.g. 192.168.1.1" aria-label="IPv4 dotted decimal input" style="flex:1 1 260px" />
+        </div>
+
+        <div class="kv" style="margin-top:0">
+          <div class="k">Address class</div>
+          <div class="v mono" id="ipClassText">—</div>
+        </div>
+
+        <div class="kv">
+          <div class="k">Keyspace</div>
+          <div class="v">2<sup>32</sup> possibilities • integers <span class="mono">0</span> to <span class="mono">4,294,967,295</span></div>
+
+          <div class="k">Hex</div>
+          <div class="v mono" id="ipHex">—</div>
+
+          <div class="k">Binary</div>
+          <div class="v mono" id="ipBinGrouped">—</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" aria-label="Port keyspace explorer">
+      <div class="head">
+        <h2>Port</h2>
+      </div>
+      <div class="content">
+        <div class="row">
+          <div class="range" style="flex-wrap:wrap">
+            <label for="portRange" style="min-width:160px">Unsigned 16 bit integer</label>
+            <input id="portRange" type="range" min="0" max="65535" step="1" value="443" />
+            <input id="portInt" type="number" min="0" max="65535" />
+            <button class="btn" id="portRandom" type="button" title="Pick a random port">Random</button>
+          </div>
+        </div>
+
+        <div class="kv">
+          <div class="k">Keyspace</div>
+          <div class="v">2<sup>16</sup> possibilities • ports <span class="mono">0</span> to <span class="mono">65,535</span></div>
+
+          <div class="k">Port range label</div>
+          <div class="v mono" id="portLabel">—</div>
+
+          <div class="k">Hex</div>
+          <div class="v mono" id="portHex">—</div>
+
+          <div class="k">Binary</div>
+          <div class="v mono" id="portBin">—</div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+(() => {
+  const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+  const clampBig = (x, lo, hi) => (x < lo ? lo : (x > hi ? hi : x));
+
+  const fmtInt = (x) => {
+    const s = (typeof x === "bigint") ? x.toString() : String(x);
+    return s.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  };
+  const padBin = (s, bits) => s.padStart(bits, "0");
+  const groupBits = (bin, groupSize=8, sep=" ") => {
+    const out = [];
+    for (let i=0; i<bin.length; i+=groupSize) out.push(bin.slice(i, i+groupSize));
+    return out.join(sep);
+  };
+  const toHex = (n, width) => n.toString(16).toUpperCase().padStart(width, "0");
+
+  let ip = 3232235777n; // 192.168.1.1
+  let port = 443;
+
+  const ipRange = document.getElementById("ipRange");
+  const ipInt = document.getElementById("ipInt");
+  const ipDotted = document.getElementById("ipDotted");
+  const ipHex = document.getElementById("ipHex");
+  const ipBinGrouped = document.getElementById("ipBinGrouped");
+  const ipRandom = document.getElementById("ipRandom");
+  const ipClassText = document.getElementById("ipClassText");
+
+  const portRange = document.getElementById("portRange");
+  const portInt = document.getElementById("portInt");
+  const portHex = document.getElementById("portHex");
+  const portBin = document.getElementById("portBin");
+  const portLabel = document.getElementById("portLabel");
+  const portRandom = document.getElementById("portRandom");
+
+  function ipToOctets(v){
+    const a = Number((v >> 24n) & 255n);
+    const b = Number((v >> 16n) & 255n);
+    const c = Number((v >> 8n) & 255n);
+    const d = Number(v & 255n);
+    return [a,b,c,d];
+  }
+  function octetsToIp(a,b,c,d){
+    return (BigInt(a) << 24n) | (BigInt(b) << 16n) | (BigInt(c) << 8n) | BigInt(d);
+  }
+  function parseDotted(s){
+    const parts = s.trim().split(".");
+    if (parts.length !== 4) return null;
+    const nums = parts.map(p => {
+      if (!/^\d+$/.test(p)) return null;
+      const n = Number(p);
+      if (!Number.isFinite(n) || n<0 || n>255) return null;
+      return n;
+    });
+    if (nums.some(n => n === null)) return null;
+    return octetsToIp(nums[0], nums[1], nums[2], nums[3]);
+  }
+
+  function classifyIP(a,b,c,d){
+    if (a===0 && b===0 && c===0 && d===0) return {label:"0.0.0.0 (unspecified)"};
+    if (a===255 && b===255 && c===255 && d===255) return {label:"255.255.255.255 (limited broadcast)"};
+
+    if (a===10) return {label:"Private (10.0.0.0/8)"};
+    if (a===172 && b>=16 && b<=31) return {label:"Private (172.16.0.0/12)"};
+    if (a===192 && b===168) return {label:"Private (192.168.0.0/16)"};
+
+    if (a===127) return {label:"Loopback (127.0.0.0/8)"};
+    if (a===169 && b===254) return {label:"Link-local (169.254.0.0/16)"};
+    if (a===100 && b>=64 && b<=127) return {label:"Shared address space / CGNAT (100.64.0.0/10)"};
+
+    if (a===192 && b===0 && c===2) return {label:"Documentation (192.0.2.0/24)"};
+    if (a===198 && b===51 && c===100) return {label:"Documentation (198.51.100.0/24)"};
+    if (a===203 && b===0 && c===113) return {label:"Documentation (203.0.113.0/24)"};
+
+    if (a>=224 && a<=239) return {label:"Multicast (224.0.0.0/4)"};
+    if (a>=240) return {label:"Reserved (240.0.0.0/4)"};
+
+    return {label:"Usable"};
+  }
+
+  function renderIP(){
+    ip = clampBig(ip, 0n, 4294967295n);
+
+    ipRange.value = String(Number(ip));
+    ipInt.value = fmtInt(ip);
+
+    const [a,b,c,d] = ipToOctets(ip);
+    ipDotted.value = `${a}.${b}.${c}.${d}`;
+
+    ipHex.textContent = "0x" + toHex(ip, 8);
+    const bin = padBin(ip.toString(2), 32);
+    ipBinGrouped.textContent = groupBits(bin, 8, " ");
+
+    const cls = classifyIP(a,b,c,d);
+    ipClassText.textContent = cls.label;
+  }
+
+  function labelPort(p){
+    if (p >= 0 && p <= 1023) return "Well-known (0–1023)";
+    if (p >= 1024 && p <= 49151) return "Registered (1024–49151)";
+    return "Dynamic / Ephemeral (49152–65535)";
+  }
+
+  function renderPort(){
+    port = clamp(Number(port), 0, 65535);
+
+    portRange.value = String(port);
+    portInt.value = port;
+
+    portHex.textContent = "0x" + toHex(BigInt(port), 4);
+    const bin = padBin(port.toString(2), 16);
+    portBin.textContent = groupBits(bin, 4, " ");
+    portLabel.textContent = labelPort(port);
+  }
+
+  ipRange.addEventListener("input", () => {
+    ip = BigInt(ipRange.value);
+    renderIP();
+  });
+
+  ipInt.addEventListener("change", () => {
+    const raw = ipInt.value.replace(/,/g,"").trim();
+    if (!/^\d+$/.test(raw)) { renderIP(); return; }
+    ip = clampBig(BigInt(raw), 0n, 4294967295n);
+    renderIP();
+  });
+
+  ipDotted.addEventListener("change", () => {
+    const v = parseDotted(ipDotted.value);
+    if (v === null) { renderIP(); return; }
+    ip = v;
+    renderIP();
+  });
+
+  ipRandom.addEventListener("click", () => {
+    const hi = Math.floor(Math.random()*65536);
+    const lo = Math.floor(Math.random()*65536);
+    ip = (BigInt(hi) << 16n) | BigInt(lo);
+    renderIP();
+  });
+
+  portRange.addEventListener("input", () => {
+    port = Number(portRange.value);
+    renderPort();
+  });
+
+  portInt.addEventListener("input", () => {
+    port = clamp(Number(portInt.value), 0, 65535);
+    renderPort();
+  });
+
+  portRandom.addEventListener("click", () => {
+    port = Math.floor(Math.random()*65536);
+    renderPort();
+  });
+
+  renderIP();
+  renderPort();
+})();
+</script>
+</body>
+</html>
