@@ -1,0 +1,630 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>NVD Configurations Logic (Single CVE)</title>
+  <style>
+    :root{
+      --bg:#070b18;
+      --panel: rgba(18,26,51,0.82);
+      --ink:#e8ecff;
+      --muted:#aab4ff;
+      --line: rgba(72,86,160,0.35);
+      --shadow: 0 18px 60px rgba(0,0,0,0.45);
+    }
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background:
+        radial-gradient(1200px 700px at 20% 20%, rgba(96,165,250,0.10), transparent 60%),
+        radial-gradient(900px 600px at 80% 60%, rgba(74,222,128,0.10), transparent 60%),
+        radial-gradient(900px 600px at 70% 20%, rgba(251,113,133,0.08), transparent 55%),
+        var(--bg);
+      color: var(--ink);
+      overflow:hidden;
+    }
+
+    .sidebar{
+      position:fixed;
+      left:0; top:0; bottom:0;
+      width: 360px;
+      max-width: min(360px, 92vw);
+      background: var(--panel);
+      border-right: 1px solid var(--line);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      padding: 14px;
+      overflow:auto;
+      z-index: 10;
+    }
+    .title{
+      font-size: 12px;
+      color: var(--muted);
+      letter-spacing: 0.3px;
+      margin: 0 0 10px 0;
+      display:flex; align-items:center; justify-content:space-between;
+      gap: 10px;
+    }
+    .btn{
+      padding: 8px 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.06);
+      color: var(--ink);
+      cursor:pointer;
+      user-select:none;
+    }
+    .btn:hover{ background: rgba(255,255,255,0.10); }
+    .btn:active{ transform: translateY(1px); }
+
+    .card{
+      background: rgba(0,0,0,0.18);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    .card h3{
+      margin: 0 0 10px 0;
+      font-size: 12px;
+      color: rgba(170,180,255,0.85);
+      font-weight: 650;
+      letter-spacing: 0.2px;
+    }
+    .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .row + .row{ margin-top: 10px; }
+
+    textarea{
+      width:100%;
+      min-height: 380px;
+      resize: vertical;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(0,0,0,0.22);
+      color: var(--ink);
+      padding: 10px 11px;
+      outline:none;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .hint{
+      font-size: 11px;
+      color: rgba(170,180,255,0.70);
+      line-height:1.4;
+      margin-top: 8px;
+      white-space: pre-wrap;
+    }
+
+    .status{
+      margin-top: 10px;
+      font-size: 12px;
+      color: rgba(170,180,255,0.75);
+      white-space: pre-wrap;
+      line-height: 1.35;
+    }
+    .status.error{
+      color: rgba(255,220,228,0.95);
+      background: rgba(251,113,133,0.10);
+      border: 1px solid rgba(251,113,133,0.22);
+      border-radius: 14px;
+      padding: 10px 10px;
+    }
+
+    .viz{
+      position: fixed;
+      left: 360px; right: 0; top: 0; bottom: 0;
+      overflow:hidden;
+    }
+    @media (max-width: 760px){
+      .viz{ left: min(360px, 92vw); }
+    }
+    svg{ width:100%; height:100%; display:block; }
+
+    .nodeHalo{ transition: opacity 650ms ease, fill 650ms ease; }
+    .nodeCore{ transition: fill 650ms ease, stroke 650ms ease, stroke-width 650ms ease; }
+    .edge{ opacity:0.78; }
+
+    .outLabel{
+      font-size: 11px;
+      fill: rgba(255,255,255,0.45);
+      letter-spacing: 0.6px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="sidebar">
+  <div class="title">
+    <button class="btn" id="renderBtn">Draw</button>
+  </div>
+
+  <div class="card">
+    <h3>Input JSON</h3>
+    <textarea id="input" spellcheck="false" placeholder="Paste NVD JSON here. This renders ONLY cve.configurations (single CVE)."></textarea>
+
+    <div class="row" style="margin-top:10px;">
+      <button class="btn" id="loadExampleBtn" hidden>Reset to example</button>
+      <button class="btn" id="clearBtn" hidden>Clear</button>
+    </div>
+
+    <div id="status" class="status"></div>
+
+  </div>
+</div>
+
+<div class="viz">
+  <svg id="svg" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid meet"></svg>
+</div>
+
+<script>
+const EXAMPLE_JSON = `{
+  "resultsPerPage":1,
+  "startIndex":0,
+  "totalResults":1,
+  "format":"NVD_CVE",
+  "version":"2.0",
+  "timestamp":"2026-01-10T00:28:08.303",
+  "vulnerabilities":[{"cve":{
+    "id":"CVE-2024-4577",
+    "configurations":[
+      {
+        "operator":"AND",
+        "nodes":[
+          {
+            "operator":"OR",
+            "negate":false,
+            "cpeMatch":[
+              {"vulnerable":true,"criteria":"cpe:2.3:a:php:php:*:*:*:*:*:*:*:*","versionStartIncluding":"8.1.0","versionEndExcluding":"8.1.29","matchCriteriaId":"7DC2EEF8-834B-42A1-8DA3-0C2CF22A7070"},
+              {"vulnerable":true,"criteria":"cpe:2.3:a:php:php:*:*:*:*:*:*:*:*","versionStartIncluding":"8.2.0","versionEndExcluding":"8.2.20","matchCriteriaId":"A39988FF-D854-4277-9D66-6911AF371DD3"},
+              {"vulnerable":true,"criteria":"cpe:2.3:a:php:php:*:*:*:*:*:*:*:*","versionStartIncluding":"8.3.0","versionEndExcluding":"8.3.8","matchCriteriaId":"F579FFC1-4F81-4755-B14B-3AA73AC9FF7A"}
+            ]
+          },
+          {
+            "operator":"OR",
+            "negate":false,
+            "cpeMatch":[
+              {"vulnerable":false,"criteria":"cpe:2.3:o:microsoft:windows:-:*:*:*:*:*:*:*","matchCriteriaId":"A2572D17-1DE6-457B-99CC-64AFD54487EA"}
+            ]
+          }
+        ]
+      },
+      {
+        "nodes":[
+          {
+            "operator":"OR",
+            "negate":false,
+            "cpeMatch":[
+              {"vulnerable":true,"criteria":"cpe:2.3:o:fedoraproject:fedora:39:*:*:*:*:*:*:*","matchCriteriaId":"B8EDB836-4E6A-4B71-B9B2-AA3E03E0F646"},
+              {"vulnerable":true,"criteria":"cpe:2.3:o:fedoraproject:fedora:40:*:*:*:*:*:*:*","matchCriteriaId":"CA277A6C-83EC-4536-9125-97B84C4FAF59"}
+            ]
+          }
+        ]
+      }
+    ]
+  }}]
+}`;
+
+const $ = (id) => document.getElementById(id);
+function safeArray(v){ return Array.isArray(v) ? v : []; }
+
+function setStatus(msg, { error=false } = {}) {
+  const el = $("status");
+  el.textContent = msg || "";
+  el.classList.toggle("error", !!error);
+}
+
+const OR_COLOR   = "#00CAD0";
+const AND_COLOR  = "#4ade80";
+const NOT_COLOR  = "#fb7185";
+const LEAF_TRUE  = "#00CAD0";
+const LEAF_FALSE = "#ffd166";
+
+function hexToRgb(hex) {
+  const h = (hex || "").replace("#", "");
+  return {
+    r: parseInt(h.slice(0, 2), 16),
+    g: parseInt(h.slice(2, 4), 16),
+    b: parseInt(h.slice(4, 6), 16),
+  };
+}
+function rgba(hex, a = 1) {
+  const { r, g, b } = hexToRgb(hex);
+  return `rgba(${r},${g},${b},${a})`;
+}
+function mixHex(a, b, t) {
+  const A = hexToRgb(a), B = hexToRgb(b);
+  const m = (x, y) => Math.round(x * (1 - t) + y * t);
+  return `rgb(${m(A.r, B.r)},${m(A.g, B.g)},${m(A.b, B.b)})`;
+}
+function outline(hex){ return rgba(mixHex(hex, "#000000", 0.65), 0.95); }
+function glow(hex){ return rgba(hex, 0.55); }
+
+function extractSingleCve(root){
+  if (!root) return null;
+
+  if (root && typeof root === "object" && Array.isArray(root.vulnerabilities) && root.vulnerabilities.length) {
+    const c = root.vulnerabilities[0] && root.vulnerabilities[0].cve;
+    if (c && typeof c === "object") return c;
+  }
+  if (root && typeof root === "object" && root.cve && typeof root.cve === "object") return root.cve;
+  if (root && typeof root === "object" && typeof root.id === "string" && root.id.startsWith("CVE-")) return root;
+  if (root && typeof root === "object" && Array.isArray(root.configurations)) {
+    return { id: root.id || "(no CVE id)", configurations: root.configurations };
+  }
+  if (Array.isArray(root)) {
+    return { id: "(no CVE id)", configurations: root };
+  }
+  return null;
+}
+
+let _idSeq = 0;
+function nid(prefix){ _idSeq += 1; return `${prefix}${_idSeq}`; }
+function normalizeOp(op){ return (op === "OR") ? "OR" : "AND"; }
+
+function opNode(op, negate, children){
+  return { id: nid("N"), kind:"OP", op: normalizeOp(op), negate: !!negate, children: children || [] };
+}
+function cpeLeaf(match){
+  return { id: nid("L"), kind:"CPE", match: match || {}, children: [] };
+}
+
+function buildFromNvdNode(node){
+  if (!node || typeof node !== "object") return null;
+
+  const op = normalizeOp(node.operator);
+  const negate = !!node.negate;
+  const kids = [];
+
+  for (const m of safeArray(node.cpeMatch)) {
+    if (m && typeof m === "object") kids.push(cpeLeaf(m));
+  }
+
+  const nested = [];
+  if (Array.isArray(node.children)) nested.push(...node.children);
+  if (Array.isArray(node.nodes)) nested.push(...node.nodes);
+  for (const n of nested) {
+    const built = buildFromNvdNode(n);
+    if (built) kids.push(built);
+  }
+
+  if (!kids.length) kids.push(cpeLeaf({ criteria: "(no cpeMatch)", vulnerable: false }));
+
+  return opNode(op, negate, kids);
+}
+
+function buildRootFromConfigurations(configurations){
+  const cfgs = safeArray(configurations);
+  const cfgChildren = [];
+
+  for (const cfg of cfgs) {
+    const cfgOp = normalizeOp(cfg && cfg.operator);
+    const cfgNeg = !!(cfg && cfg.negate);
+    const nodes = safeArray(cfg && cfg.nodes);
+
+    const builtKids = [];
+    for (const n of nodes) {
+      const built = buildFromNvdNode(n);
+      if (built) builtKids.push(built);
+    }
+    if (!builtKids.length) builtKids.push(cpeLeaf({ criteria: "(empty configuration)", vulnerable:false }));
+
+    cfgChildren.push(opNode(cfgOp, cfgNeg, builtKids));
+  }
+
+  if (!cfgChildren.length) cfgChildren.push(opNode("AND", false, [cpeLeaf({ criteria:"(no configurations)", vulnerable:false })]));
+  return opNode("OR", false, cfgChildren);
+}
+
+function simplify(node, isRoot=false){
+  if (!node) return null;
+  if (node.kind === "OP") {
+    node.children = node.children.map(c => simplify(c, false)).filter(Boolean);
+    if (!isRoot && !node.negate && node.children.length === 1) return node.children[0];
+  }
+  return node;
+}
+
+function leafTooltip(m){
+  const lines = [];
+  lines.push(`criteria: ${m.criteria || "(missing)"}`);
+  lines.push(`vulnerable: ${!!m.vulnerable}`);
+  if (m.matchCriteriaId) lines.push(`matchCriteriaId: ${m.matchCriteriaId}`);
+
+  const versions = [];
+  if (m.versionStartIncluding) versions.push("versionStartIncluding=" + m.versionStartIncluding);
+  if (m.versionStartExcluding) versions.push("versionStartExcluding=" + m.versionStartExcluding);
+  if (m.versionEndIncluding) versions.push("versionEndIncluding=" + m.versionEndIncluding);
+  if (m.versionEndExcluding) versions.push("versionEndExcluding=" + m.versionEndExcluding);
+  lines.push("versions: " + (versions.length ? versions.join(", ") : "—"));
+
+  return lines.join("\n");
+}
+
+function fullGraph(root){
+  const edges = [];
+  (function walk(n){
+    for (const c of n.children || []) {
+      edges.push([c.id, n.id]);
+      walk(c);
+    }
+  })(root);
+  return { edges };
+}
+
+function computeDepthFromLeaves(root){
+  const depth = new Map();
+  let maxD = 0;
+
+  function dfs(n){
+    if (!n.children || n.children.length === 0) {
+      depth.set(n.id, 0);
+      return 0;
+    }
+    let childMax = 0;
+    for (const c of n.children) childMax = Math.max(childMax, dfs(c));
+    const d = childMax + 1;
+    depth.set(n.id, d);
+    maxD = Math.max(maxD, d);
+    return d;
+  }
+  dfs(root);
+
+  return { depth, maxD };
+}
+
+function computeYIndices(root){
+  const yIndex = new Map();
+  let leafCounter = 0;
+
+  function dfs(n){
+    const kids = (n.children || []);
+    if (!kids.length) {
+      leafCounter += 1;
+      yIndex.set(n.id, leafCounter);
+      return leafCounter;
+    }
+    let sum = 0;
+    for (const c of kids) sum += dfs(c);
+    const avg = sum / kids.length;
+    yIndex.set(n.id, avg);
+    return avg;
+  }
+  dfs(root);
+
+  return { yIndex, leafCount: leafCounter };
+}
+
+function buildSvg(root, cveId){
+  const svg = $("svg");
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+  const W = 1200, H = 800;
+  const padX = 120, padY = 70;
+
+  const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+  defs.innerHTML = `
+    <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(255,255,255,0.18)"></path>
+    </marker>
+    <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2.2" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  `;
+  svg.appendChild(defs);
+
+  const outX = padX;
+
+  const guide = document.createElementNS("http://www.w3.org/2000/svg", "line");
+  guide.setAttribute("x1", outX);
+  guide.setAttribute("x2", outX);
+  guide.setAttribute("y1", padY);
+  guide.setAttribute("y2", H - padY);
+  guide.setAttribute("stroke", "rgba(255,255,255,0.05)");
+  guide.setAttribute("stroke-width", "2");
+  svg.appendChild(guide);
+
+  const outText = document.createElementNS("http://www.w3.org/2000/svg", "text");
+  outText.setAttribute("x", outX);
+  outText.setAttribute("y", padY - 18);
+  outText.setAttribute("text-anchor", "middle");
+  outText.setAttribute("class", "outLabel");
+  outText.textContent = "OUT (root OR)";
+  svg.appendChild(outText);
+
+  const title = document.createElementNS("http://www.w3.org/2000/svg", "text");
+  title.setAttribute("x", 26);
+  title.setAttribute("y", 34);
+  title.setAttribute("class", "outLabel");
+  title.textContent = `CVE: ${cveId}`;
+  svg.appendChild(title);
+
+  const { edges } = fullGraph(root);
+  const { depth, maxD } = computeDepthFromLeaves(root);
+  const { yIndex, leafCount } = computeYIndices(root);
+
+  const pos = new Map();
+
+  const all = [];
+  (function collect(n){
+    all.push(n);
+    for (const c of n.children || []) collect(c);
+  })(root);
+
+  const spanX = (W - 2*padX);
+  const denom = Math.max(1, maxD);
+
+  function yScale(idx){
+    if (!leafCount) return H/2;
+    return padY + (idx / (leafCount + 1)) * (H - 2*padY);
+  }
+
+  for (const n of all) {
+    const d = depth.get(n.id) ?? 0;
+    const x = padX + ((maxD - d) / denom) * spanX; // flipped horizontally
+    const y = yScale(yIndex.get(n.id) ?? 1);
+    pos.set(n.id, { x, y });
+  }
+
+  const edgeGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  svg.appendChild(edgeGroup);
+
+  function addEdge(fromId, toId){
+    const a = pos.get(fromId), b = pos.get(toId);
+    if (!a || !b) return;
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    const mx = (a.x + b.x) / 2;
+    const d = `M ${a.x} ${a.y} C ${mx} ${a.y}, ${mx} ${b.y}, ${b.x} ${b.y}`;
+    path.setAttribute("d", d);
+    path.setAttribute("fill", "none");
+    path.setAttribute("stroke", "rgba(255,255,255,0.14)");
+    path.setAttribute("stroke-width", "1.1");
+    path.setAttribute("marker-end", "url(#arrow)");
+    path.setAttribute("class", "edge");
+    edgeGroup.appendChild(path);
+  }
+
+  for (const [fromId, toId] of edges) addEdge(fromId, toId);
+
+  const nodeGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  svg.appendChild(nodeGroup);
+
+  function svgTitle(text){
+    const t = document.createElementNS("http://www.w3.org/2000/svg", "title");
+    t.textContent = text;
+    return t;
+  }
+
+  all.sort((a,b) => (a.kind === b.kind) ? 0 : (a.kind === "CPE" ? -1 : 1));
+
+  for (const n of all) {
+    const p = pos.get(n.id);
+    if (!p) continue;
+
+    const gg = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    gg.setAttribute("transform", `translate(${p.x},${p.y})`);
+    nodeGroup.appendChild(gg);
+
+    const halo = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    halo.setAttribute("r", n.kind === "OP" ? 28 : 22);
+    halo.setAttribute("fill", "rgba(255,255,255,0)");
+    halo.setAttribute("opacity", "0.0");
+    halo.setAttribute("filter", "url(#softGlow)");
+    halo.setAttribute("class", "nodeHalo");
+    gg.appendChild(halo);
+
+    const core = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    core.setAttribute("r", n.kind === "OP" ? 22 : 16);
+    core.setAttribute("fill", "rgba(255,255,255,0.06)");
+    core.setAttribute("stroke", "rgba(255,255,255,0.14)");
+    core.setAttribute("stroke-width", "2");
+    core.setAttribute("filter", "url(#softGlow)");
+    core.setAttribute("class", "nodeCore");
+    gg.appendChild(core);
+
+    if (n.kind === "OP") {
+      const base = (n.op === "OR") ? OR_COLOR : AND_COLOR;
+
+      core.style.fill = rgba(base, 0.22);
+      core.style.stroke = outline(base);
+
+      if (n.negate) {
+        core.style.stroke = outline(NOT_COLOR);
+        core.style.strokeWidth = "3";
+      }
+
+      const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      label.setAttribute("text-anchor", "middle");
+      label.setAttribute("dominant-baseline", "central");
+      label.setAttribute("font-size", "12");
+      label.setAttribute("fill", "rgba(255,255,255,0.92)");
+      label.textContent = (n.negate ? "NOT " : "") + n.op;
+      gg.appendChild(label);
+
+      gg.appendChild(svgTitle(`Gate: ${(n.negate ? "NOT " : "")}${n.op}`));
+
+      gg.addEventListener("mouseenter", () => {
+        halo.style.fill = glow(base);
+        halo.style.opacity = "0.20";
+      });
+      gg.addEventListener("mouseleave", () => {
+        halo.style.opacity = "0.0";
+      });
+
+    } else {
+      const v = !!(n.match && n.match.vulnerable);
+      const base = v ? LEAF_TRUE : LEAF_FALSE;
+
+      core.style.fill = rgba(base, 0.22);
+      core.style.stroke = outline(base);
+
+      gg.appendChild(svgTitle(leafTooltip(n.match || {})));
+
+      gg.addEventListener("mouseenter", () => {
+        halo.style.fill = glow(base);
+        halo.style.opacity = "0.22";
+      });
+      gg.addEventListener("mouseleave", () => {
+        halo.style.opacity = "0.0";
+      });
+    }
+  }
+}
+
+function renderFromText(text){
+  _idSeq = 0;
+  const obj = JSON.parse(text);
+  const cve = extractSingleCve(obj);
+  if (!cve) throw new Error("Could not find a CVE/configurations.");
+
+  let root = buildRootFromConfigurations(cve.configurations);
+  root = simplify(root, true);
+
+  const cveId = cve.id || "(missing id)";
+  buildSvg(root, cveId);
+
+  setStatus("");
+}
+
+$("renderBtn").addEventListener("click", () => {
+  try{
+    setStatus("");
+    const text = $("input").value.trim();
+    if (!text) { setStatus("Paste JSON first.", { error:true }); return; }
+    renderFromText(text);
+  } catch (e){
+    console.error(e);
+    setStatus(String(e && e.message ? e.message : e), { error:true });
+  }
+});
+
+$("loadExampleBtn").addEventListener("click", () => {
+  $("input").value = EXAMPLE_JSON;
+  setStatus("");
+  try { renderFromText(EXAMPLE_JSON); } catch {}
+});
+
+$("clearBtn").addEventListener("click", () => {
+  $("input").value = "";
+  const svg = $("svg");
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+  setStatus("");
+});
+
+/* ✅ Render the example on page load */
+window.addEventListener("DOMContentLoaded", () => {
+  $("input").value = EXAMPLE_JSON;
+  try { renderFromText(EXAMPLE_JSON); } catch (e) { setStatus(String(e && e.message ? e.message : e), { error:true }); }
+});
+</script>
+</body>
+</html>
