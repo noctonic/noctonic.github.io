@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>NN Heatmap</title>
+  <style>
+    :root{
+      --bg:#0b0f17; --panel:#121a27; --ink:#e9eef7; --muted:#a9b4c5; --line:#2a3954;
+      --btn:#0c1220;
+    }
+    *{ box-sizing:border-box; }
+    body{ margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; background:var(--bg); color:var(--ink); }
+    header{ padding:14px 16px; border-bottom:1px solid var(--line); background:linear-gradient(180deg,#0f1522,#0b0f17); }
+    header h1{ margin:0; font-size:16px; }
+    header p{ margin:6px 0 0; color:var(--muted); font-size:12px; line-height:1.45; }
+
+    .wrap{ display:grid; grid-template-columns: 380px 1fr; gap:12px; padding:12px; }
+    @media (max-width: 980px){ .wrap{ grid-template-columns:1fr; } }
+
+    .card{ background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:12px; }
+    .titleRow{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+    h2{ margin:0; font-size:14px; }
+    h3{ margin:0; font-size:13px; color:var(--muted); font-weight:600; }
+    .muted{ color:var(--muted); font-size:12px; line-height:1.45; }
+
+    .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    label{ display:block; font-size:12px; color:var(--muted); margin:10px 0 6px; }
+
+    select, input[type="number"], button, textarea{
+      background:var(--btn); color:var(--ink);
+      border:1px solid var(--line); border-radius:10px;
+      padding:8px 10px; font-size:13px; outline:none;
+    }
+    button{ cursor:pointer; }
+    button:hover{ filter:brightness(1.08); }
+    textarea{
+      width:100%;
+      min-height:92px;
+      resize:vertical;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      line-height:1.35;
+    }
+    input[type="range"]{ width:100%; }
+    .divider{ height:1px; background:var(--line); margin:12px 0; }
+
+    .pill{ display:inline-flex; align-items:center; gap:8px; border:1px solid var(--line);
+      border-radius:999px; padding:6px 10px; background:var(--btn); color:var(--muted); font-size:12px; }
+    .kbd{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace; }
+
+    .layerBox{ border:1px solid var(--line); border-radius:12px; padding:10px; background:var(--btn); margin-top:10px; }
+    .layerBox h4{ margin:0 0 8px; font-size:13px; color:var(--muted); font-weight:600; }
+
+    .swatch{
+      height:14px; border-radius:999px; border:1px solid var(--line);
+      background: linear-gradient(90deg, #000, #fff);
+    }
+
+    .heatWrap{ padding:0; display:flex; flex-direction:column; min-height:0; }
+    .heatHeader{ padding:12px 12px 0; }
+    .heatBody{ padding:12px; display:flex; flex-direction:column; gap:10px; min-height:0; }
+
+    .squareFrame{
+      width:100%;
+      aspect-ratio: 1 / 1;
+      max-height: min(72vh, 900px);
+      max-width:  min(72vh, 900px);
+      margin: 0 auto;
+      border:1px solid var(--line);
+      border-radius:14px;
+      background:#070a11;
+      overflow:hidden;
+      display:flex;
+    }
+    canvas{ width:100%; height:100%; display:block; }
+
+    .status{
+      padding:8px 10px;
+      border:1px solid var(--line);
+      border-radius:10px;
+      background:rgba(12,18,32,0.7);
+      font-size:12px;
+      color:var(--muted);
+    }
+    .status.ok{ border-color: rgba(94,201,98,0.35); }
+    .status.bad{ border-color: rgba(255,107,107,0.35); }
+  </style>
+</head>
+<body>
+<header>
+  <h1>Neural Network Heatmap</h1>
+</header>
+
+<div class="wrap">
+  <section class="card">
+    <div class="titleRow">
+      <h3>Network Settings</h3>
+      <div class="row">
+        <button id="randBtn">Randomize</button>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px;">
+
+    </div>
+
+    <label for="numHidden"># hidden layers</label>
+    <input id="numHidden" type="number" min="0" max="10" step="1" value="3"/>
+
+    <div id="hiddenSizes"></div>
+
+    <div class="divider"></div>
+
+    <h3>Heatmap settings</h3>
+
+    <label for="domain">Input domain</label>
+    <select id="domain">
+      <option value="wide">[-6,6] × [-6,6]</option>
+      <option value="wider" selected>[-10,10] × [-10,10]</option>
+      <option value="widest">[-20,20] × [-20,20]</option>
+    </select>
+
+    <label for="resolution">Sampling resolution</label>
+    <input id="resolution" type="range" min="69" max="420" step="1" value="100"/>
+    <div class="muted"><span class="kbd" id="resVal"></span></div>
+
+    <div class="divider"></div>
+
+    <h3>Palette (exact, discrete)</h3>
+
+    <label for="paletteBox">Paste JSON array of hex colors</label>
+    <textarea id="paletteBox"></textarea>
+
+    <div class="row" style="margin-top:10px; justify-content:space-between;">
+      <button id="applyPaletteBtn">Apply palette</button>
+      <button id="resetPaletteBtn">Reset to default</button>
+    </div>
+
+    <div class="row" style="margin-top:10px;">
+      <div class="swatch" id="swatch" style="flex:1;"></div>
+    </div>
+
+    <div id="paletteStatus" class="status ok" style="margin-top:10px;">
+      Palette loaded.
+    </div>
+
+    <div class="divider"></div>
+
+  </section>
+
+  <section class="card heatWrap">
+    <div class="heatHeader">
+    </div>
+    <div class="heatBody">
+      <div class="squareFrame">
+        <canvas id="heat" width="900" height="900"></canvas>
+      </div>
+      <div class="muted" id="readout"></div>
+    </div>
+  </section>
+</div>
+
+<script>
+"use strict";
+
+const DEFAULT_PALETTE_TEXT =
+`["#000000","#17080F","#240F1B","#2F1227","#3A1636","#421B46","#472258","#4A2A6A","#49347C","#443E8E","#39499E","#2753AD","#005EBB","#0069C6","#0074CF","#007ED6","#0088DB","#0092DD","#009CDE","#00A5DD","#00AFDB","#00B7D8","#00C0D4","#00C8D1","#3ED0CE","#65D7CD","#85DECE","#A1E5D1","#BCECD7","#D4F2E1","#EBF8EE","#FFFFFF"]`;
+
+function hexToRgb(hex){
+  const h = String(hex).trim().replace("#","");
+  if(!/^[0-9a-fA-F]{6}$/.test(h)) return null;
+  const v = parseInt(h, 16);
+  return [(v>>16)&255, (v>>8)&255, v&255];
+}
+function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
+
+const ACT = {
+  tanh: z => Math.tanh(z),
+  sigmoid: z => 1 / (1 + Math.exp(-z)),
+};
+
+function makeNeuron(prevSize){
+  return { w: Array(prevSize).fill(0), b: 0 };
+}
+
+const state = {
+  hiddenSizes: [6, 6, 6],
+  net: null,
+  domain: "wider",
+  resolution: 100,
+  paletteText: DEFAULT_PALETTE_TEXT,
+  paletteHex: null,
+  paletteRgb: null,
+};
+
+function buildNet(){
+  const sizes = [2, ...state.hiddenSizes, 1];
+  const layers = [];
+  for(let L=1; L<sizes.length; L++){
+    const prev = sizes[L-1];
+    const cur  = sizes[L];
+    const neurons = [];
+    for(let j=0;j<cur;j++) neurons.push(makeNeuron(prev));
+    layers.push({ neurons });
+  }
+  state.net = { sizes, layers };
+}
+
+function randomizeNet(scale=1.0){
+  const r = () => (Math.random()*2 - 1) * scale;
+  for(const layer of state.net.layers){
+    for(const n of layer.neurons){
+      n.b = r();
+      for(let k=0;k<n.w.length;k++) n.w[k] = r();
+    }
+  }
+}
+
+function dot(w,a){
+  let s=0;
+  for(let i=0;i<w.length;i++) s += w[i]*a[i];
+  return s;
+}
+
+function forward(x0,x1){
+  let a = [x0,x1];
+  const layers = state.net.layers;
+  for(let L=0; L<layers.length; L++){
+    const layer = layers[L];
+    const out = [];
+    const isLast = (L === layers.length - 1);
+    for(const n of layer.neurons){
+      const z = dot(n.w, a) + n.b;
+      out.push(isLast ? ACT.sigmoid(z) : ACT.tanh(z));
+    }
+    a = out;
+  }
+  return a[0];
+}
+
+const numHiddenEl = document.getElementById("numHidden");
+const hiddenSizesEl = document.getElementById("hiddenSizes");
+
+function renderHiddenSizeControls(){
+  hiddenSizesEl.innerHTML = "";
+  const count = parseInt(numHiddenEl.value,10) || 0;
+
+  while(state.hiddenSizes.length < count) state.hiddenSizes.push(6);
+  while(state.hiddenSizes.length > count) state.hiddenSizes.pop();
+
+  for(let i=0;i<count;i++){
+    const box = document.createElement("div");
+    box.className = "layerBox";
+    box.innerHTML = `<h4>Hidden layer ${i+1}</h4>`;
+    const row = document.createElement("div");
+    row.className = "row";
+    const label = document.createElement("span");
+    label.className = "muted";
+    label.textContent = "Nodes:";
+    const inp = document.createElement("input");
+    inp.type = "number";
+    inp.min = "1";
+    inp.max = "128";
+    inp.step = "1";
+    inp.value = String(state.hiddenSizes[i]);
+    inp.addEventListener("input", ()=>{
+      state.hiddenSizes[i] = Math.max(1, Math.min(128, parseInt(inp.value,10) || 1));
+      rebuildNow();
+    });
+    row.appendChild(label);
+    row.appendChild(inp);
+    box.appendChild(row);
+    hiddenSizesEl.appendChild(box);
+  }
+}
+
+function rebuildNow(){
+  buildNet();
+  randomizeNet(1.0);
+  scheduleRender();
+}
+
+const paletteBox = document.getElementById("paletteBox");
+const swatch = document.getElementById("swatch");
+const paletteStatus = document.getElementById("paletteStatus");
+
+function setPaletteStatus(ok, msg){
+  paletteStatus.classList.toggle("ok", ok);
+  paletteStatus.classList.toggle("bad", !ok);
+  paletteStatus.textContent = msg;
+}
+
+function renderSwatchFromHexList(hexList){
+  swatch.style.background = `linear-gradient(90deg, ${hexList.join(", ")})`;
+}
+
+function parsePaletteText(text){
+  let arr;
+  try{
+    arr = JSON.parse(text);
+  }catch(e){
+    return { ok:false, msg:"Palette JSON failed to parse. Must be like [\"#000000\", \"#ffffff\", ...]." };
+  }
+  if(!Array.isArray(arr) || arr.length < 2){
+    return { ok:false, msg:"Palette must be a JSON array with at least 2 hex colors." };
+  }
+
+  const rgb = [];
+  const hex = [];
+  for(const item of arr){
+    if(typeof item !== "string") return { ok:false, msg:"Palette array must contain only strings like \"#RRGGBB\"." };
+    const c = hexToRgb(item);
+    if(!c) return { ok:false, msg:`Invalid color: ${item}. Use 6-digit hex like "#1a2b3c".` };
+    rgb.push(c);
+    hex.push("#" + item.trim().replace("#","").toUpperCase());
+  }
+
+  return { ok:true, rgb, hex, msg:`Loaded palette with ${rgb.length} colors.` };
+}
+
+function applyPaletteFromTextbox(){
+  const text = paletteBox.value.trim();
+  const parsed = parsePaletteText(text);
+  if(!parsed.ok){
+    setPaletteStatus(false, parsed.msg);
+    return false;
+  }
+  state.paletteText = text;
+  state.paletteRgb = parsed.rgb;
+  state.paletteHex = parsed.hex;
+  renderSwatchFromHexList(parsed.hex);
+  setPaletteStatus(true, parsed.msg);
+  scheduleRender();
+  return true;
+}
+
+function resetPaletteToDefault(){
+  paletteBox.value = DEFAULT_PALETTE_TEXT;
+  applyPaletteFromTextbox();
+}
+
+function yToPaletteIndex(y){
+  const n = state.paletteRgb.length;
+  const idx = Math.floor(clamp(y, 0, 0.999999) * n);
+  return clamp(idx, 0, n - 1);
+}
+const heat = document.getElementById("heat");
+const hctx = heat.getContext("2d");
+hctx.imageSmoothingEnabled = false;
+
+let off = document.createElement("canvas");
+let offCtx = off.getContext("2d");
+
+function getDomainBounds(){
+  const d = document.getElementById("domain").value;
+  if(d === "wide")   return {xmin:-6,  xmax:6,  ymin:-6,  ymax:6};
+  if(d === "widest") return {xmin:-20, xmax:20, ymin:-20, ymax:20};
+  return {xmin:-10, xmax:10, ymin:-10, ymax:10};
+}
+
+function drawHeatmap(){
+  const res = state.resolution;
+
+  if(off.width !== res || off.height !== res){
+    off.width = res; off.height = res;
+    offCtx = off.getContext("2d");
+  }
+
+  const {xmin,xmax,ymin,ymax} = getDomainBounds();
+  const img = offCtx.createImageData(res,res);
+  const data = img.data;
+
+  let minY=1, maxY=0;
+
+  for(let j=0;j<res;j++){
+    const x1 = ymax - (j/(res-1))*(ymax - ymin);
+    for(let i=0;i<res;i++){
+      const x0 = xmin + (i/(res-1))*(xmax - xmin);
+
+      const y = forward(x0,x1);
+      if(y < minY) minY = y;
+      if(y > maxY) maxY = y;
+
+      const colorIdx = yToPaletteIndex(y);
+      const rgb = state.paletteRgb[colorIdx];
+
+      const idx = (j*res + i)*4;
+      data[idx+0] = rgb[0];
+      data[idx+1] = rgb[1];
+      data[idx+2] = rgb[2];
+      data[idx+3] = 255;
+    }
+  }
+
+  offCtx.putImageData(img,0,0);
+
+  hctx.clearRect(0,0,heat.width, heat.height);
+  hctx.drawImage(off, 0,0, heat.width, heat.height);
+
+  const nColors = state.paletteRgb.length;
+  document.getElementById("readout").textContent =
+    `domain=${document.getElementById("domain").value} | res=${res}×${res} | colors=${nColors} | binWidth=${(1/nColors).toFixed(4)} | y-range≈[${minY.toFixed(3)}, ${maxY.toFixed(3)}]`;
+}
+
+let renderPending = false;
+function scheduleRender(){
+  if(renderPending) return;
+  renderPending = true;
+  requestAnimationFrame(()=>{
+    renderPending = false;
+    drawHeatmap();
+  });
+}
+
+paletteBox.value = DEFAULT_PALETTE_TEXT;
+document.getElementById("applyPaletteBtn").addEventListener("click", applyPaletteFromTextbox);
+document.getElementById("resetPaletteBtn").addEventListener("click", resetPaletteToDefault);
+
+document.getElementById("domain").addEventListener("input", ()=>{
+  scheduleRender();
+});
+
+const resEl = document.getElementById("resolution");
+const resVal = document.getElementById("resVal");
+function syncRes(){
+  state.resolution = parseInt(resEl.value,10);
+  resVal.textContent = `resolution = ${state.resolution}`;
+}
+resEl.addEventListener("input", ()=>{
+  syncRes();
+  scheduleRender();
+});
+
+document.getElementById("randBtn").addEventListener("click", ()=>{
+  randomizeNet(1.2);
+  scheduleRender();
+});
+
+numHiddenEl.addEventListener("input", ()=>{
+  renderHiddenSizeControls();
+  rebuildNow();
+});
+
+renderHiddenSizeControls();
+syncRes();
+buildNet();
+randomizeNet(1.0);
+resetPaletteToDefault();
+scheduleRender();
+</script>
+</body>
+</html>
