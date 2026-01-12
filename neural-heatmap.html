@@ -13,27 +13,31 @@
     body{ margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; background:var(--bg); color:var(--ink); }
     header{ padding:14px 16px; border-bottom:1px solid var(--line); background:linear-gradient(180deg,#0f1522,#0b0f17); }
     header h1{ margin:0; font-size:16px; }
-    header p{ margin:6px 0 0; color:var(--muted); font-size:12px; line-height:1.45; }
 
     .wrap{ display:grid; grid-template-columns: 380px 1fr; gap:12px; padding:12px; }
     @media (max-width: 980px){ .wrap{ grid-template-columns:1fr; } }
 
     .card{ background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:12px; }
     .titleRow{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
-    h2{ margin:0; font-size:14px; }
     h3{ margin:0; font-size:13px; color:var(--muted); font-weight:600; }
     .muted{ color:var(--muted); font-size:12px; line-height:1.45; }
 
-    .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .row{ display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; }
+    .rowTop{ display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; margin-top:10px; }
+
     label{ display:block; font-size:12px; color:var(--muted); margin:10px 0 6px; }
+    .field{ flex:1; min-width: 160px; }
+    .field label{ margin-top:0; }
 
     select, input[type="number"], button, textarea{
       background:var(--btn); color:var(--ink);
       border:1px solid var(--line); border-radius:10px;
       padding:8px 10px; font-size:13px; outline:none;
+      width:100%;
     }
-    button{ cursor:pointer; }
+    button{ cursor:pointer; width:auto; }
     button:hover{ filter:brightness(1.08); }
+
     textarea{
       width:100%;
       min-height:92px;
@@ -44,8 +48,6 @@
     input[type="range"]{ width:100%; }
     .divider{ height:1px; background:var(--line); margin:12px 0; }
 
-    .pill{ display:inline-flex; align-items:center; gap:8px; border:1px solid var(--line);
-      border-radius:999px; padding:6px 10px; background:var(--btn); color:var(--muted); font-size:12px; }
     .kbd{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace; }
 
     .layerBox{ border:1px solid var(--line); border-radius:12px; padding:10px; background:var(--btn); margin-top:10px; }
@@ -57,7 +59,6 @@
     }
 
     .heatWrap{ padding:0; display:flex; flex-direction:column; min-height:0; }
-    .heatHeader{ padding:12px 12px 0; }
     .heatBody{ padding:12px; display:flex; flex-direction:column; gap:10px; min-height:0; }
 
     .squareFrame{
@@ -100,25 +101,37 @@
       </div>
     </div>
 
-    <div class="row" style="margin-top:10px;">
+    <div class="rowTop">
+      <div class="field">
+        <label for="numHidden"># hidden layers</label>
+        <input id="numHidden" type="number" min="0" max="10" step="1" value="2"/>
+      </div>
 
+      <div class="field">
+        <label for="domain">Input domain</label>
+        <select id="domain">
+          <option value="wide">[-6,6] × [-6,6]</option>
+          <option value="wider" selected>[-10,10] × [-10,10]</option>
+          <option value="widest">[-20,20] × [-20,20]</option>
+        </select>
+      </div>
     </div>
 
-    <label for="numHidden"># hidden layers</label>
-    <input id="numHidden" type="number" min="0" max="10" step="1" value="3"/>
-
     <div id="hiddenSizes"></div>
+
+    <label for="activation">Hidden activation</label>
+    <select id="activation">
+      <option value="tanh">tanh</option>
+      <option value="relu" selected>ReLU</option>
+      <option value="leaky_relu">Leaky ReLU</option>
+      <option value="elu">ELU</option>
+      <option value="linear">Linear</option>
+    </select>
+    <div class="muted">Output activation is always <span class="kbd">sigmoid</span> so palette bins map to (0,1).</div>
 
     <div class="divider"></div>
 
     <h3>Heatmap settings</h3>
-
-    <label for="domain">Input domain</label>
-    <select id="domain">
-      <option value="wide">[-6,6] × [-6,6]</option>
-      <option value="wider" selected>[-10,10] × [-10,10]</option>
-      <option value="widest">[-20,20] × [-20,20]</option>
-    </select>
 
     <label for="resolution">Sampling resolution</label>
     <input id="resolution" type="range" min="69" max="420" step="1" value="100"/>
@@ -145,12 +158,9 @@
     </div>
 
     <div class="divider"></div>
-
   </section>
 
   <section class="card heatWrap">
-    <div class="heatHeader">
-    </div>
     <div class="heatBody">
       <div class="squareFrame">
         <canvas id="heat" width="900" height="900"></canvas>
@@ -163,8 +173,21 @@
 <script>
 "use strict";
 
+
+const MAX_HIDDEN = 10;
+const MAX_LAYERS = MAX_HIDDEN + 1;
+const MAX_SIZES  = MAX_LAYERS + 1;
+const MAX_NODES  = 128;
+
 const DEFAULT_PALETTE_TEXT =
 `["#000000","#17080F","#240F1B","#2F1227","#3A1636","#421B46","#472258","#4A2A6A","#49347C","#443E8E","#39499E","#2753AD","#005EBB","#0069C6","#0074CF","#007ED6","#0088DB","#0092DD","#009CDE","#00A5DD","#00AFDB","#00B7D8","#00C0D4","#00C8D1","#3ED0CE","#65D7CD","#85DECE","#A1E5D1","#BCECD7","#D4F2E1","#EBF8EE","#FFFFFF"]`;
+
+function clampInt(v, lo, hi){
+  v = v|0;
+  if(v < lo) return lo;
+  if(v > hi) return hi;
+  return v;
+}
 
 function hexToRgb(hex){
   const h = String(hex).trim().replace("#","");
@@ -172,117 +195,33 @@ function hexToRgb(hex){
   const v = parseInt(h, 16);
   return [(v>>16)&255, (v>>8)&255, v&255];
 }
-function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
 
-const ACT = {
-  tanh: z => Math.tanh(z),
-  sigmoid: z => 1 / (1 + Math.exp(-z)),
-};
-
-function makeNeuron(prevSize){
-  return { w: Array(prevSize).fill(0), b: 0 };
+function packRGBA_u32(r,g,b,a){
+  return (((r & 255) << 24) | ((g & 255) << 16) | ((b & 255) << 8) | (a & 255)) >>> 0;
 }
 
-const state = {
-  hiddenSizes: [6, 6, 6],
-  net: null,
-  domain: "wider",
-  resolution: 100,
-  paletteText: DEFAULT_PALETTE_TEXT,
-  paletteHex: null,
-  paletteRgb: null,
-};
-
-function buildNet(){
-  const sizes = [2, ...state.hiddenSizes, 1];
-  const layers = [];
-  for(let L=1; L<sizes.length; L++){
-    const prev = sizes[L-1];
-    const cur  = sizes[L];
-    const neurons = [];
-    for(let j=0;j<cur;j++) neurons.push(makeNeuron(prev));
-    layers.push({ neurons });
-  }
-  state.net = { sizes, layers };
+const IS_LE = (() => {
+  const u32 = new Uint32Array([0x0a0b0c0d]);
+  const u8  = new Uint8Array(u32.buffer);
+  return u8[0] === 0x0d;
+})();
+function packRGBA_forImageData(r,g,b,a){
+  return IS_LE
+    ? ((a<<24) | (b<<16) | (g<<8) | (r)) >>> 0
+    : ((r<<24) | (g<<16) | (b<<8) | (a)) >>> 0;
 }
 
-function randomizeNet(scale=1.0){
-  const r = () => (Math.random()*2 - 1) * scale;
-  for(const layer of state.net.layers){
-    for(const n of layer.neurons){
-      n.b = r();
-      for(let k=0;k<n.w.length;k++) n.w[k] = r();
-    }
-  }
-}
-
-function dot(w,a){
-  let s=0;
-  for(let i=0;i<w.length;i++) s += w[i]*a[i];
-  return s;
-}
-
-function forward(x0,x1){
-  let a = [x0,x1];
-  const layers = state.net.layers;
-  for(let L=0; L<layers.length; L++){
-    const layer = layers[L];
-    const out = [];
-    const isLast = (L === layers.length - 1);
-    for(const n of layer.neurons){
-      const z = dot(n.w, a) + n.b;
-      out.push(isLast ? ACT.sigmoid(z) : ACT.tanh(z));
-    }
-    a = out;
-  }
-  return a[0];
-}
-
-const numHiddenEl = document.getElementById("numHidden");
-const hiddenSizesEl = document.getElementById("hiddenSizes");
-
-function renderHiddenSizeControls(){
-  hiddenSizesEl.innerHTML = "";
-  const count = parseInt(numHiddenEl.value,10) || 0;
-
-  while(state.hiddenSizes.length < count) state.hiddenSizes.push(6);
-  while(state.hiddenSizes.length > count) state.hiddenSizes.pop();
-
-  for(let i=0;i<count;i++){
-    const box = document.createElement("div");
-    box.className = "layerBox";
-    box.innerHTML = `<h4>Hidden layer ${i+1}</h4>`;
-    const row = document.createElement("div");
-    row.className = "row";
-    const label = document.createElement("span");
-    label.className = "muted";
-    label.textContent = "Nodes:";
-    const inp = document.createElement("input");
-    inp.type = "number";
-    inp.min = "1";
-    inp.max = "128";
-    inp.step = "1";
-    inp.value = String(state.hiddenSizes[i]);
-    inp.addEventListener("input", ()=>{
-      state.hiddenSizes[i] = Math.max(1, Math.min(128, parseInt(inp.value,10) || 1));
-      rebuildNow();
-    });
-    row.appendChild(label);
-    row.appendChild(inp);
-    box.appendChild(row);
-    hiddenSizesEl.appendChild(box);
-  }
-}
-
-function rebuildNow(){
-  buildNet();
-  randomizeNet(1.0);
-  scheduleRender();
-}
-
-const paletteBox = document.getElementById("paletteBox");
-const swatch = document.getElementById("swatch");
-const paletteStatus = document.getElementById("paletteStatus");
+const numHiddenEl     = document.getElementById("numHidden");
+const hiddenSizesEl   = document.getElementById("hiddenSizes");
+const activationEl    = document.getElementById("activation");
+const paletteBox      = document.getElementById("paletteBox");
+const swatch          = document.getElementById("swatch");
+const paletteStatus   = document.getElementById("paletteStatus");
+const domainEl        = document.getElementById("domain");
+const resEl           = document.getElementById("resolution");
+const resVal          = document.getElementById("resVal");
+const readoutEl       = document.getElementById("readout");
+const heatCanvas      = document.getElementById("heat");
 
 function setPaletteStatus(ok, msg){
   paletteStatus.classList.toggle("ok", ok);
@@ -293,6 +232,63 @@ function setPaletteStatus(ok, msg){
 function renderSwatchFromHexList(hexList){
   swatch.style.background = `linear-gradient(90deg, ${hexList.join(", ")})`;
 }
+
+function getDomainBounds(){
+  const d = domainEl.value;
+  if(d === "wide")   return {xmin:-6,  xmax:6,  ymin:-6,  ymax:6};
+  if(d === "widest") return {xmin:-20, xmax:20, ymin:-20, ymax:20};
+  return {xmin:-10, xmax:10, ymin:-10, ymax:10};
+}
+
+function activationToCode(a){
+  switch(a){
+    case "relu": return 1;
+    case "leaky_relu": return 2;
+    case "elu": return 3;
+    case "linear": return 4;
+    case "tanh":
+    default: return 0;
+  }
+}
+
+const state = {
+  mode: "init",              // "gpu" | "cpu" | "init"
+  hiddenSizes: [10, 10],
+  resolution: 100,
+  activation: "relu",
+
+  paletteText: DEFAULT_PALETTE_TEXT,
+  paletteHex: null,
+  paletteRgb: null,
+  palettePacked: null,
+  palette32CPU: null,
+
+  sizesArr: new Uint32Array(MAX_SIZES),
+  wOffsets: new Uint32Array(MAX_LAYERS),
+  bOffsets: new Uint32Array(MAX_LAYERS),
+  numLayers: 0,
+
+  weights: null,
+  biases: null,
+  wCount: 0,
+  bCount: 0,
+
+  actA: new Float32Array(MAX_NODES),
+  actB: new Float32Array(MAX_NODES),
+
+  cpu: {
+    ctx2d: null,
+    off: null,
+    offCtx: null,
+    img: null,
+    data32: null,
+    coordKey: "",
+    xs: null,
+    ys: null,
+  },
+
+  gpu: null,
+};
 
 function parsePaletteText(text){
   let arr;
@@ -314,7 +310,6 @@ function parsePaletteText(text){
     rgb.push(c);
     hex.push("#" + item.trim().replace("#","").toUpperCase());
   }
-
   return { ok:true, rgb, hex, msg:`Loaded palette with ${rgb.length} colors.` };
 }
 
@@ -325,11 +320,27 @@ function applyPaletteFromTextbox(){
     setPaletteStatus(false, parsed.msg);
     return false;
   }
+
   state.paletteText = text;
   state.paletteRgb = parsed.rgb;
   state.paletteHex = parsed.hex;
+
+  const packed = new Uint32Array(parsed.rgb.length);
+  const packedCPU = new Uint32Array(parsed.rgb.length);
+  for(let i=0;i<parsed.rgb.length;i++){
+    const [r,g,b] = parsed.rgb[i];
+    packed[i] = packRGBA_u32(r,g,b,255);
+    packedCPU[i] = packRGBA_forImageData(r,g,b,255);
+  }
+  state.palettePacked = packed;
+  state.palette32CPU = packedCPU;
+
   renderSwatchFromHexList(parsed.hex);
   setPaletteStatus(true, parsed.msg);
+
+  if(state.mode === "gpu"){
+    gpuUploadPalette();
+  }
   scheduleRender();
   return true;
 }
@@ -339,100 +350,683 @@ function resetPaletteToDefault(){
   applyPaletteFromTextbox();
 }
 
-function yToPaletteIndex(y){
-  const n = state.paletteRgb.length;
-  const idx = Math.floor(clamp(y, 0, 0.999999) * n);
-  return clamp(idx, 0, n - 1);
-}
-const heat = document.getElementById("heat");
-const hctx = heat.getContext("2d");
-hctx.imageSmoothingEnabled = false;
+function compileTopology(){
+  const hiddenCount = clampInt(parseInt(numHiddenEl.value,10) || 0, 0, MAX_HIDDEN);
 
-let off = document.createElement("canvas");
-let offCtx = off.getContext("2d");
+  while(state.hiddenSizes.length < hiddenCount) state.hiddenSizes.push(10);
+  while(state.hiddenSizes.length > hiddenCount) state.hiddenSizes.pop();
 
-function getDomainBounds(){
-  const d = document.getElementById("domain").value;
-  if(d === "wide")   return {xmin:-6,  xmax:6,  ymin:-6,  ymax:6};
-  if(d === "widest") return {xmin:-20, xmax:20, ymin:-20, ymax:20};
-  return {xmin:-10, xmax:10, ymin:-10, ymax:10};
-}
-
-function drawHeatmap(){
-  const res = state.resolution;
-
-  if(off.width !== res || off.height !== res){
-    off.width = res; off.height = res;
-    offCtx = off.getContext("2d");
+  for(let i=0;i<state.hiddenSizes.length;i++){
+    state.hiddenSizes[i] = clampInt(state.hiddenSizes[i], 1, MAX_NODES);
   }
 
-  const {xmin,xmax,ymin,ymax} = getDomainBounds();
-  const img = offCtx.createImageData(res,res);
-  const data = img.data;
+  const sizes = [2, ...state.hiddenSizes.slice(0, hiddenCount), 1];
+  state.numLayers = sizes.length - 1;
 
-  let minY=1, maxY=0;
+  state.sizesArr.fill(0);
+  for(let i=0;i<sizes.length && i<MAX_SIZES;i++){
+    state.sizesArr[i] = sizes[i] >>> 0;
+  }
 
+  state.wOffsets.fill(0);
+  state.bOffsets.fill(0);
+
+  let wCount = 0;
+  let bCount = 0;
+
+  for(let L=0; L<state.numLayers; L++){
+    const prev = sizes[L];
+    const cur  = sizes[L+1];
+    state.wOffsets[L] = wCount >>> 0;
+    state.bOffsets[L] = bCount >>> 0;
+    wCount += prev * cur;
+    bCount += cur;
+  }
+
+  state.wCount = wCount;
+  state.bCount = bCount;
+
+  state.weights = new Float32Array(wCount);
+  state.biases  = new Float32Array(bCount);
+}
+
+function randomizeNet(scale=1.0){
+  const s = scale;
+  const w = state.weights;
+  const b = state.biases;
+  for(let i=0;i<b.length;i++) b[i] = (Math.random()*2 - 1) * s;
+  for(let i=0;i<w.length;i++) w[i] = (Math.random()*2 - 1) * s;
+}
+
+const _tanh = Math.tanh;
+const _exp  = Math.exp;
+
+function activateCPU(z, kind){
+  switch(kind){
+    case "relu": return z > 0 ? z : 0;
+    case "leaky_relu": return z > 0 ? z : 0.01 * z;
+    case "elu": return z > 0 ? z : (_exp(z) - 1);
+    case "linear": return z;
+    case "tanh":
+    default: return _tanh(z);
+  }
+}
+
+function forwardCPU(x0, x1){
+  let aPrev = state.actA;
+  let aNext = state.actB;
+
+  aPrev[0] = x0;
+  aPrev[1] = x1;
+
+  let prevSize = 2;
+
+  for(let L=0; L<state.numLayers; L++){
+    const curSize = state.sizesArr[L+1] | 0;
+    const wBase   = state.wOffsets[L] | 0;
+    const bBase   = state.bOffsets[L] | 0;
+
+    if(L === state.numLayers - 1){
+      for(let j=0; j<curSize; j++){
+        let sum = state.biases[bBase + j];
+        let row = wBase + j*prevSize;
+        for(let k=0; k<prevSize; k++){
+          sum += state.weights[row + k] * aPrev[k];
+        }
+        aNext[j] = 1 / (1 + _exp(-sum));
+      }
+    } else {
+      for(let j=0; j<curSize; j++){
+        let sum = state.biases[bBase + j];
+        let row = wBase + j*prevSize;
+        for(let k=0; k<prevSize; k++){
+          sum += state.weights[row + k] * aPrev[k];
+        }
+        aNext[j] = activateCPU(sum, state.activation);
+      }
+    }
+
+    for(let j=0; j<curSize; j++){
+      aPrev[j] = aNext[j];
+    }
+    prevSize = curSize;
+  }
+
+  return aPrev[0];
+}
+
+function ensureCpu2D(){
+  if(state.cpu.ctx2d) return;
+  const ctx2d = heatCanvas.getContext("2d", { alpha:false });
+  state.cpu.ctx2d = ctx2d;
+  ctx2d.imageSmoothingEnabled = false;
+
+  state.cpu.off = document.createElement("canvas");
+  state.cpu.offCtx = state.cpu.off.getContext("2d", { alpha:false });
+  state.cpu.offCtx.imageSmoothingEnabled = false;
+}
+
+function ensureCpuCoordCache(res, bounds){
+  const key = `${res}|${bounds.xmin}|${bounds.xmax}|${bounds.ymin}|${bounds.ymax}`;
+  if(state.cpu.coordKey === key) return;
+  state.cpu.coordKey = key;
+
+  const xs = state.cpu.xs = new Float32Array(res);
+  const ys = state.cpu.ys = new Float32Array(res);
+
+  const inv = 1 / (res - 1);
+  const dx = (bounds.xmax - bounds.xmin) * inv;
+  const dy = (bounds.ymax - bounds.ymin) * inv;
+
+  for(let i=0;i<res;i++) xs[i] = bounds.xmin + i*dx;
+  for(let j=0;j<res;j++) ys[j] = bounds.ymax - j*dy;
+}
+
+function drawCPU(){
+  ensureCpu2D();
+
+  const res = state.resolution;
+  const bounds = getDomainBounds();
+  ensureCpuCoordCache(res, bounds);
+
+  const off = state.cpu.off;
+  const offCtx = state.cpu.offCtx;
+  if(off.width !== res || off.height !== res){
+    off.width = res;
+    off.height = res;
+    state.cpu.img = offCtx.createImageData(res, res);
+    state.cpu.data32 = new Uint32Array(state.cpu.img.data.buffer);
+  }
+
+  const img = state.cpu.img;
+  const data32 = state.cpu.data32;
+  const xs = state.cpu.xs;
+  const ys = state.cpu.ys;
+  const pal = state.palette32CPU;
+  const nColors = pal.length;
+
+  let p = 0;
   for(let j=0;j<res;j++){
-    const x1 = ymax - (j/(res-1))*(ymax - ymin);
+    const x1 = ys[j];
     for(let i=0;i<res;i++){
-      const x0 = xmin + (i/(res-1))*(xmax - xmin);
-
-      const y = forward(x0,x1);
-      if(y < minY) minY = y;
-      if(y > maxY) maxY = y;
-
-      const colorIdx = yToPaletteIndex(y);
-      const rgb = state.paletteRgb[colorIdx];
-
-      const idx = (j*res + i)*4;
-      data[idx+0] = rgb[0];
-      data[idx+1] = rgb[1];
-      data[idx+2] = rgb[2];
-      data[idx+3] = 255;
+      const x0 = xs[i];
+      const y = forwardCPU(x0, x1);
+      let idx = (y * nColors) | 0;
+      if(idx < 0) idx = 0;
+      else if(idx >= nColors) idx = nColors - 1;
+      data32[p++] = pal[idx];
     }
   }
 
-  offCtx.putImageData(img,0,0);
+  offCtx.putImageData(img, 0, 0);
+  const ctx2d = state.cpu.ctx2d;
+  ctx2d.clearRect(0,0,heatCanvas.width, heatCanvas.height);
+  ctx2d.drawImage(off, 0,0, heatCanvas.width, heatCanvas.height);
 
-  hctx.clearRect(0,0,heat.width, heat.height);
-  hctx.drawImage(off, 0,0, heat.width, heat.height);
+  readoutEl.textContent =
+    `mode=CPU (fallback) | act=${state.activation} | domain=${domainEl.value} | res=${res}×${res} | hidden=${state.hiddenSizes.length} | colors=${nColors}`;
+}
 
-  const nColors = state.paletteRgb.length;
-  document.getElementById("readout").textContent =
-    `domain=${document.getElementById("domain").value} | res=${res}×${res} | colors=${nColors} | binWidth=${(1/nColors).toFixed(4)} | y-range≈[${minY.toFixed(3)}, ${maxY.toFixed(3)}]`;
+const computeWGSL = `
+struct Params {
+  res: u32,
+  numLayers: u32,
+  nColors: u32,
+  activation: u32,  // 0=tanh, 1=relu, 2=leaky_relu, 3=elu, 4=linear
+  xmin: f32,
+  xmax: f32,
+  ymin: f32,
+  ymax: f32,
+};
+
+struct Meta {
+  sizes: array<u32, 12>,
+  wOffsets: array<u32, 11>,
+  bOffsets: array<u32, 11>,
+};
+
+@group(0) @binding(0) var<uniform> params: Params;
+@group(0) @binding(1) var<storage, read> weights: array<f32>;
+@group(0) @binding(2) var<storage, read> biases: array<f32>;
+@group(0) @binding(3) var<storage, read> netMeta: Meta;
+@group(0) @binding(4) var<storage, read> palette: array<u32>;
+@group(0) @binding(5) var outTex: texture_storage_2d<rgba8unorm, write>;
+
+fn sigmoid(x: f32) -> f32 {
+  return 1.0 / (1.0 + exp(-x));
+}
+
+fn activate(z: f32, kind: u32) -> f32 {
+  switch(kind){
+    case 1u { return max(0.0, z); }                          // ReLU
+    case 2u { return select(0.01 * z, z, z > 0.0); }         // Leaky ReLU
+    case 3u { return select(exp(z) - 1.0, z, z > 0.0); }     // ELU (alpha=1)
+    case 4u { return z; }                                    // Linear
+    default { return tanh(z); }                              // tanh
+  }
+}
+
+@compute @workgroup_size(8, 8)
+fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let x = gid.x;
+  let y = gid.y;
+  if (x >= params.res || y >= params.res) {
+    return;
+  }
+
+  let denom = f32(params.res - 1u);
+  let fx = f32(x) / denom;
+  let fy = f32(y) / denom;
+
+  let x0 = params.xmin + fx * (params.xmax - params.xmin);
+  let x1 = params.ymax - fy * (params.ymax - params.ymin);
+
+  var aPrev: array<f32, 128>;
+  var aNext: array<f32, 128>;
+
+  aPrev[0] = x0;
+  aPrev[1] = x1;
+
+  var prevSize: u32 = 2u;
+
+  for (var L: u32 = 0u; L < params.numLayers; L = L + 1u) {
+    let curSize = netMeta.sizes[L + 1u];
+    let wBase = netMeta.wOffsets[L];
+    let bBase = netMeta.bOffsets[L];
+
+    for (var j: u32 = 0u; j < curSize; j = j + 1u) {
+      var sum = biases[bBase + j];
+      let row = wBase + j * prevSize;
+      for (var k: u32 = 0u; k < prevSize; k = k + 1u) {
+        sum = sum + weights[row + k] * aPrev[k];
+      }
+
+      if (L + 1u == params.numLayers) {
+        aNext[j] = sigmoid(sum);                     // output fixed
+      } else {
+        aNext[j] = activate(sum, params.activation); // hidden selectable
+      }
+    }
+
+    for (var j: u32 = 0u; j < curSize; j = j + 1u) {
+      aPrev[j] = aNext[j];
+    }
+    prevSize = curSize;
+  }
+
+  let yOut = aPrev[0];
+
+  var idx = u32(yOut * f32(params.nColors));
+  if (idx >= params.nColors) {
+    idx = params.nColors - 1u;
+  }
+
+  let c = palette[idx]; // 0xRRGGBBAA
+  let r = f32((c >> 24u) & 255u) / 255.0;
+  let g = f32((c >> 16u) & 255u) / 255.0;
+  let b = f32((c >> 8u) & 255u) / 255.0;
+  let a = f32(c & 255u) / 255.0;
+
+  textureStore(outTex, vec2<i32>(i32(x), i32(y)), vec4<f32>(r,g,b,a));
+}
+`;
+
+const renderWGSL = `
+@group(0) @binding(0) var samp: sampler;
+@group(0) @binding(1) var tex: texture_2d<f32>;
+
+struct VSOut {
+  @builtin(position) pos: vec4<f32>,
+  @location(0) uv: vec2<f32>,
+};
+
+@vertex
+fn vs(@builtin(vertex_index) vid: u32) -> VSOut {
+  var pos = array<vec2<f32>, 6>(
+    vec2<f32>(-1.0, -1.0),
+    vec2<f32>( 1.0, -1.0),
+    vec2<f32>(-1.0,  1.0),
+    vec2<f32>(-1.0,  1.0),
+    vec2<f32>( 1.0, -1.0),
+    vec2<f32>( 1.0,  1.0)
+  );
+  var uv = array<vec2<f32>, 6>(
+    vec2<f32>(0.0, 1.0),
+    vec2<f32>(1.0, 1.0),
+    vec2<f32>(0.0, 0.0),
+    vec2<f32>(0.0, 0.0),
+    vec2<f32>(1.0, 1.0),
+    vec2<f32>(1.0, 0.0)
+  );
+
+  var o: VSOut;
+  o.pos = vec4<f32>(pos[vid], 0.0, 1.0);
+  o.uv = uv[vid];
+  return o;
+}
+
+@fragment
+fn fs(in: VSOut) -> @location(0) vec4<f32> {
+  return textureSample(tex, samp, in.uv);
+}
+`;
+
+async function initWebGPU(){
+  if(!("gpu" in navigator)) return false;
+
+  const adapter = await navigator.gpu.requestAdapter();
+  if(!adapter) return false;
+
+  const device = await adapter.requestDevice();
+  const context = heatCanvas.getContext("webgpu");
+  if(!context) return false;
+
+  const format = navigator.gpu.getPreferredCanvasFormat();
+  context.configure({ device, format, alphaMode: "premultiplied" });
+
+  const computeModule = device.createShaderModule({ code: computeWGSL });
+  const renderModule  = device.createShaderModule({ code: renderWGSL });
+
+  computeModule.getCompilationInfo?.().then(info => {
+    for(const m of info.messages){
+      if(m.type === "error") console.error("WGSL error:", m);
+    }
+  });
+
+  let computePipeline, renderPipeline;
+  try{
+    computePipeline = device.createComputePipeline({
+      layout: "auto",
+      compute: { module: computeModule, entryPoint: "main" },
+    });
+
+    renderPipeline = device.createRenderPipeline({
+      layout: "auto",
+      vertex: { module: renderModule, entryPoint: "vs" },
+      fragment: { module: renderModule, entryPoint: "fs", targets: [{ format }] },
+      primitive: { topology: "triangle-list" },
+    });
+  }catch(e){
+    console.error("WebGPU pipeline creation failed:", e);
+    return false;
+  }
+
+  const sampler = device.createSampler({
+    magFilter: "nearest",
+    minFilter: "nearest",
+    addressModeU: "clamp-to-edge",
+    addressModeV: "clamp-to-edge",
+  });
+
+  const paramsBuf = device.createBuffer({
+    size: 32,
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+  });
+
+  state.gpu = {
+    adapter,
+    device,
+    context,
+    format,
+    computePipeline,
+    renderPipeline,
+    sampler,
+    paramsBuf,
+
+    metaBuf: null,
+    weightsBuf: null,
+    biasesBuf: null,
+    paletteBuf: null,
+
+    outTex: null,
+    outView: null,
+    outRes: 0,
+
+    computeBindGroup: null,
+    renderBindGroup: null,
+
+    busy: false,
+    dirtyWhileBusy: false,
+  };
+
+  return true;
+}
+
+function gpuDestroyBuffer(buf){
+  try{ buf?.destroy?.(); }catch(e){}
+}
+function gpuDestroyTexture(tex){
+  try{ tex?.destroy?.(); }catch(e){}
+}
+
+function gpuWriteParams(){
+  const g = state.gpu;
+  const res = state.resolution >>> 0;
+  const numLayers = state.numLayers >>> 0;
+  const nColors = (state.palettePacked?.length || 0) >>> 0;
+  const act = activationToCode(state.activation) >>> 0;
+  const {xmin,xmax,ymin,ymax} = getDomainBounds();
+
+  const ab = new ArrayBuffer(32);
+  const dv = new DataView(ab);
+  dv.setUint32(0,  res, true);
+  dv.setUint32(4,  numLayers, true);
+  dv.setUint32(8,  nColors, true);
+  dv.setUint32(12, act, true);
+  dv.setFloat32(16, xmin, true);
+  dv.setFloat32(20, xmax, true);
+  dv.setFloat32(24, ymin, true);
+  dv.setFloat32(28, ymax, true);
+
+  g.device.queue.writeBuffer(g.paramsBuf, 0, ab);
+}
+
+function gpuEnsureOutTexture(){
+  const g = state.gpu;
+  const res = state.resolution | 0;
+  if(g.outTex && g.outRes === res) return;
+
+  gpuDestroyTexture(g.outTex);
+
+  g.outTex = g.device.createTexture({
+    size: [res, res, 1],
+    format: "rgba8unorm",
+    usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+  });
+  g.outView = g.outTex.createView();
+  g.outRes = res;
+
+  gpuBuildBindGroups();
+}
+
+function gpuBuildBindGroups(){
+  const g = state.gpu;
+  if(!g.weightsBuf || !g.biasesBuf || !g.metaBuf || !g.paletteBuf || !g.outView) return;
+
+  g.computeBindGroup = g.device.createBindGroup({
+    layout: g.computePipeline.getBindGroupLayout(0),
+    entries: [
+      { binding: 0, resource: { buffer: g.paramsBuf } },
+      { binding: 1, resource: { buffer: g.weightsBuf } },
+      { binding: 2, resource: { buffer: g.biasesBuf } },
+      { binding: 3, resource: { buffer: g.metaBuf } },
+      { binding: 4, resource: { buffer: g.paletteBuf } },
+      { binding: 5, resource: g.outView },
+    ],
+  });
+
+  g.renderBindGroup = g.device.createBindGroup({
+    layout: g.renderPipeline.getBindGroupLayout(0),
+    entries: [
+      { binding: 0, resource: g.sampler },
+      { binding: 1, resource: g.outView },
+    ],
+  });
+}
+
+function gpuUploadAll(){
+  const g = state.gpu;
+  const dev = g.device;
+
+  const metaU32 = new Uint32Array(34);
+  metaU32.set(state.sizesArr, 0);
+  metaU32.set(state.wOffsets, 12);
+  metaU32.set(state.bOffsets, 23);
+
+  const needWeights = !g.weightsBuf || (g.weightsBuf.size !== state.weights.byteLength);
+  const needBiases  = !g.biasesBuf  || (g.biasesBuf.size  !== state.biases.byteLength);
+  const needMeta    = !g.metaBuf    || (g.metaBuf.size    !== metaU32.byteLength);
+  const needPal     = !g.paletteBuf || (g.paletteBuf.size !== state.palettePacked.byteLength);
+
+  if(needWeights){
+    gpuDestroyBuffer(g.weightsBuf);
+    g.weightsBuf = dev.createBuffer({
+      size: state.weights.byteLength,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+  }
+  if(needBiases){
+    gpuDestroyBuffer(g.biasesBuf);
+    g.biasesBuf = dev.createBuffer({
+      size: state.biases.byteLength,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+  }
+  if(needMeta){
+    gpuDestroyBuffer(g.metaBuf);
+    g.metaBuf = dev.createBuffer({
+      size: metaU32.byteLength,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+  }
+  if(needPal){
+    gpuDestroyBuffer(g.paletteBuf);
+    g.paletteBuf = dev.createBuffer({
+      size: state.palettePacked.byteLength,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+  }
+
+  dev.queue.writeBuffer(g.weightsBuf, 0, state.weights.buffer, state.weights.byteOffset, state.weights.byteLength);
+  dev.queue.writeBuffer(g.biasesBuf,  0, state.biases.buffer,  state.biases.byteOffset,  state.biases.byteLength);
+  dev.queue.writeBuffer(g.metaBuf,    0, metaU32.buffer,       metaU32.byteOffset,       metaU32.byteLength);
+  dev.queue.writeBuffer(g.paletteBuf, 0, state.palettePacked.buffer, state.palettePacked.byteOffset, state.palettePacked.byteLength);
+
+  gpuEnsureOutTexture();
+  gpuWriteParams();
+  gpuBuildBindGroups();
+}
+
+function gpuUploadWeightsBiases(){
+  const g = state.gpu;
+  g.device.queue.writeBuffer(g.weightsBuf, 0, state.weights.buffer, state.weights.byteOffset, state.weights.byteLength);
+  g.device.queue.writeBuffer(g.biasesBuf,  0, state.biases.buffer,  state.biases.byteOffset,  state.biases.byteLength);
+}
+
+function gpuUploadPalette(){
+  gpuUploadAll();
+}
+
+function drawGPU(){
+  const g = state.gpu;
+  if(!g.computeBindGroup || !g.renderBindGroup) return;
+
+  if(g.busy){
+    g.dirtyWhileBusy = true;
+    return;
+  }
+  g.busy = true;
+  g.dirtyWhileBusy = false;
+
+  gpuEnsureOutTexture();
+  gpuWriteParams();
+
+  const res = state.resolution | 0;
+  const nColors = state.palettePacked.length | 0;
+
+  const t0 = performance.now();
+  const encoder = g.device.createCommandEncoder();
+
+  {
+    const pass = encoder.beginComputePass();
+    pass.setPipeline(g.computePipeline);
+    pass.setBindGroup(0, g.computeBindGroup);
+    const wg = 8;
+    pass.dispatchWorkgroups(Math.ceil(res / wg), Math.ceil(res / wg));
+    pass.end();
+  }
+
+  {
+    const view = g.context.getCurrentTexture().createView();
+    const pass = encoder.beginRenderPass({
+      colorAttachments: [{
+        view,
+        clearValue: { r:0, g:0, b:0, a:1 },
+        loadOp: "clear",
+        storeOp: "store",
+      }]
+    });
+
+    pass.setPipeline(g.renderPipeline);
+    pass.setBindGroup(0, g.renderBindGroup);
+    pass.draw(6);
+    pass.end();
+  }
+
+  g.device.queue.submit([encoder.finish()]);
+
+  g.device.queue.onSubmittedWorkDone().then(() => {
+    g.busy = false;
+    if(g.dirtyWhileBusy){
+      scheduleRender();
+    }
+  });
+
+  const t1 = performance.now();
+  readoutEl.textContent =
+    `mode=WebGPU | act=${state.activation} | domain=${domainEl.value} | res=${res}×${res} | hidden=${state.hiddenSizes.length} | layers=${state.numLayers} | colors=${nColors} | submit≈${(t1 - t0).toFixed(1)}ms`;
+}
+
+function renderHiddenSizeControls(){
+  hiddenSizesEl.innerHTML = "";
+  const count = clampInt(parseInt(numHiddenEl.value,10) || 0, 0, MAX_HIDDEN);
+
+  while(state.hiddenSizes.length < count) state.hiddenSizes.push(10);
+  while(state.hiddenSizes.length > count) state.hiddenSizes.pop();
+
+  for(let i=0;i<count;i++){
+    const box = document.createElement("div");
+    box.className = "layerBox";
+    box.innerHTML = `<h4>Hidden layer ${i+1}</h4>`;
+    const row = document.createElement("div");
+    row.className = "row";
+
+    const label = document.createElement("span");
+    label.className = "muted";
+    label.textContent = "Nodes:";
+
+    const inp = document.createElement("input");
+    inp.type = "number";
+    inp.min = "1";
+    inp.max = String(MAX_NODES);
+    inp.step = "1";
+    inp.value = String(state.hiddenSizes[i]);
+    inp.style.width = "120px";
+
+    inp.addEventListener("input", ()=>{
+      state.hiddenSizes[i] = clampInt(parseInt(inp.value,10) || 1, 1, MAX_NODES);
+      rebuildNow();
+    });
+
+    row.appendChild(label);
+    row.appendChild(inp);
+    box.appendChild(row);
+    hiddenSizesEl.appendChild(box);
+  }
+}
+
+function rebuildNow(){
+  compileTopology();
+  randomizeNet(1.0);
+
+  if(state.mode === "gpu"){
+    gpuUploadAll();
+  }
+  scheduleRender();
 }
 
 let renderPending = false;
 function scheduleRender(){
+  if(state.mode === "init") return;
   if(renderPending) return;
   renderPending = true;
   requestAnimationFrame(()=>{
     renderPending = false;
-    drawHeatmap();
+    if(state.mode === "gpu") drawGPU();
+    else drawCPU();
   });
 }
 
-paletteBox.value = DEFAULT_PALETTE_TEXT;
 document.getElementById("applyPaletteBtn").addEventListener("click", applyPaletteFromTextbox);
 document.getElementById("resetPaletteBtn").addEventListener("click", resetPaletteToDefault);
 
-document.getElementById("domain").addEventListener("input", ()=>{
-  scheduleRender();
-});
+domainEl.addEventListener("input", scheduleRender);
 
-const resEl = document.getElementById("resolution");
-const resVal = document.getElementById("resVal");
 function syncRes(){
-  state.resolution = parseInt(resEl.value,10);
+  state.resolution = parseInt(resEl.value,10) || 100;
   resVal.textContent = `resolution = ${state.resolution}`;
 }
 resEl.addEventListener("input", ()=>{
   syncRes();
+  if(state.mode === "gpu") gpuEnsureOutTexture();
   scheduleRender();
 });
 
 document.getElementById("randBtn").addEventListener("click", ()=>{
   randomizeNet(1.2);
+  if(state.mode === "gpu"){
+    gpuUploadWeightsBiases();
+  }
   scheduleRender();
 });
 
@@ -441,12 +1035,42 @@ numHiddenEl.addEventListener("input", ()=>{
   rebuildNow();
 });
 
-renderHiddenSizeControls();
-syncRes();
-buildNet();
-randomizeNet(1.0);
-resetPaletteToDefault();
-scheduleRender();
+activationEl.addEventListener("input", ()=>{
+  state.activation = activationEl.value;
+  scheduleRender();
+});
+
+(async function init(){
+
+  numHiddenEl.value = "2";
+  state.hiddenSizes = [10, 10];
+
+  activationEl.value = "relu";
+  state.activation = "relu";
+
+  renderHiddenSizeControls();
+
+  syncRes();
+
+  paletteBox.value = DEFAULT_PALETTE_TEXT;
+  applyPaletteFromTextbox();
+
+  compileTopology();
+  randomizeNet(1.0);
+
+  const gpuOk = await initWebGPU();
+  if(gpuOk){
+    state.mode = "gpu";
+    setPaletteStatus(true, (paletteStatus.textContent || "Palette loaded.") + " WebGPU enabled.");
+    gpuUploadAll();
+  } else {
+    state.mode = "cpu";
+    setPaletteStatus(false, (paletteStatus.textContent || "Palette loaded.") + " WebGPU unavailable; using CPU fallback.");
+  }
+
+  scheduleRender();
+})();
 </script>
+
 </body>
 </html>
