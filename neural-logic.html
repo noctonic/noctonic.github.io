@@ -1,0 +1,1139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Logic Gate Neuron Playground (Dark)</title>
+<style>
+  :root{
+    --bg: #0b1220;
+    --panel: #0f172a;
+    --panel-2: #111c33;
+    --border: #243047;
+    --text: #e5e7eb;
+    --muted: #94a3b8;
+
+    --blue: #60a5fa;
+    --red:  #f87171;
+    --axis: #475569;
+
+    --btn: #111827;
+    --btn-border: #2b3a55;
+    --btn-primary: #3b82f6;
+  }
+
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); color:var(--text); }
+  header { padding:12px 16px; background:#0a1020; color:var(--text); border-bottom: 1px solid var(--border); }
+  .muted { color: var(--muted); font-size: 12px; margin-top:4px; }
+
+  .container { display:flex; height: calc(100vh - 64px); }
+  .sidebar { width: 390px; overflow:auto; background:var(--panel); border-right:1px solid var(--border); padding: 12px 12px 64px; }
+  .main { flex:1; overflow:auto; padding: 12px; }
+
+  .card { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:12px; margin-bottom:12px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; }
+
+  label { font-size: 12px; color:var(--muted); display:block; margin-bottom:4px; }
+
+  input[type="number"], select {
+    padding:6px 8px;
+    border:1px solid var(--border);
+    border-radius:8px;
+    font-size: 14px;
+    background: #0a1020;
+    color: var(--text);
+    outline: none;
+  }
+  input[type="number"] { width: 120px; }
+
+  button {
+    padding:8px 10px;
+    border:1px solid var(--btn-border);
+    border-radius:8px;
+    background:var(--btn);
+    color: var(--text);
+    cursor:pointer;
+  }
+  button.primary { background:var(--btn-primary); color:white; border-color:var(--btn-primary); }
+  button:active { transform: translateY(1px); }
+
+  details summary { cursor:pointer; font-weight:700; user-select:none; color: var(--text); }
+  .small { font-size: 12px; color:var(--muted); }
+
+  .neuron-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap:8px; }
+  .neuron-box { border:1px solid var(--border); border-radius:10px; padding:8px; background:var(--panel-2); }
+  .weight-row { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:6px; }
+  .wlabel { font-size: 12px; color: var(--text); min-width: 28px; }
+
+  svg { width:100%; height:260px; border:1px solid var(--border); border-radius:12px; background: #0a1020; }
+  canvas { width:100%; max-width:720px; height:auto; border:1px solid var(--border); border-radius:12px; background: #0a1020; }
+
+  table { width:100%; border-collapse:collapse; font-size:12px; color: var(--text); }
+  th, td { border-bottom:1px solid var(--border); padding:6px 8px; text-align:center; }
+  th { position: sticky; top: 0; background: #0a1020; z-index: 1; color: var(--muted); }
+
+  .pill { display:inline-block; padding:2px 6px; border-radius:999px; font-size:11px; border:1px solid var(--border); }
+  .ok { background: rgba(16,185,129,0.14); border-color: rgba(16,185,129,0.35); color: #a7f3d0; }
+  .bad { background: rgba(248,113,113,0.14); border-color: rgba(248,113,113,0.35); color: #fecaca; }
+</style>
+</head>
+<body>
+<header>
+  <div style="font-weight:800;">Neural Network Logic Gates</div>
+  <div class="muted">
+    Complicating Basic Logic because we can.
+  </div>
+</header>
+
+<div class="container">
+  <aside class="sidebar">
+    <div class="card">
+      <div class="row">
+        <div style="flex:1; min-width:200px;">
+          <label>Preset</label>
+          <select id="presetSelect"></select>
+        </div>
+        <button id="loadPresetBtn" class="primary">Load</button>
+      </div>
+
+      <div class="row" style="margin-top:10px;">
+        <div style="flex:1; min-width:160px;">
+          <label>Activation</label>
+          <select id="activationSelect">
+            <option value="step">Step (Heaviside)</option>
+            <option value="sigmoid">Sigmoid</option>
+          </select>
+        </div>
+        <div style="flex:1; min-width:160px;">
+          <label>Sigmoid threshold (class 0/1)</label>
+          <input id="thresholdInput" type="number" step="0.01" min="0" max="1" value="0.5"/>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px;">
+        <button id="randomizeBtn">Randomize weights</button>
+        <button id="zeroBtn">Zero weights</button>
+        <button id="nudgeBtn">Nudge ±0.2</button>
+      </div>
+
+    </div>
+
+    <div class="card">
+      <div style="font-weight:800; margin-bottom:8px;">Architecture</div>
+
+      <div class="row">
+        <div style="flex:1; min-width:160px;">
+          <label>Hidden layers</label>
+          <input id="hiddenLayerCount" type="number" min="0" max="6" step="1" value="1"/>
+        </div>
+
+        <div style="flex:1; min-width:160px;">
+          <label>Output neurons</label>
+          <input id="outputNeurons" type="number" min="1" max="8" step="1" value="1"/>
+        </div>
+      </div>
+
+      <div id="hiddenLayerSizes" style="margin-top:10px;"></div>
+
+      <div class="row" style="margin-top:10px;">
+        <button id="applyArchBtn" class="primary">Apply architecture</button>
+        <div style="flex:1;"></div>
+        <div style="min-width:220px;">
+          <label>Plot neuron</label>
+          <select id="plotNeuronSelect"></select>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="paramsCard">
+      <div style="font-weight:800; margin-bottom:8px;">Neuron parameters</div>
+      <div class="small" style="margin-bottom:10px;">
+        <b>z = Σ(wᵢ·aᵢ) + b</b>, then <b>a = activation(z)</b>.
+      </div>
+      <div id="paramControls"></div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="card">
+      <div style="font-weight:800; margin-bottom:8px;">Network diagram</div>
+      <svg id="networkSvg" viewBox="0 0 900 260" preserveAspectRatio="xMidYMid meet"></svg>
+    </div>
+
+    <div class="card">
+      <div style="font-weight:800; margin-bottom:8px;">Sampled Output</div>
+      <canvas id="plotCanvas" width="720" height="720"></canvas>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between;">
+        <div>
+          <div style="font-weight:800;">Truth table</div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label>Pre-activation?</label>
+            <select id="showZSelect">
+              <option value="no" selected>No</option>
+              <option value="yes">Yes</option>
+            </select>
+          </div>
+
+          <div>
+            <label>Target gate</label>
+            <select id="targetGateSelect">
+              <option value="none" selected>None</option>
+              <option value="AND">AND</option>
+              <option value="OR">OR</option>
+              <option value="NAND">NAND</option>
+              <option value="NOR">NOR</option>
+              <option value="XOR">XOR</option>
+              <option value="XNOR">XNOR</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div style="overflow:auto; max-height: 340px; margin-top: 10px;">
+        <table id="resultsTable"></table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+(() => {
+  let state = {
+    activation: 'step',
+    threshold: 0.5,
+
+    layerSizes: [2, 2, 1],
+
+    weights: [],
+    biases: [],
+
+    plotLayer: 2,
+    plotNeuron: 0,
+
+    showZ: false,
+    targetGate: 'none',
+  };
+
+  const INPUT_POINTS = [
+    {x:0, y:0},
+    {x:1, y:0},
+    {x:0, y:1},
+    {x:1, y:1},
+  ];
+
+  const presets = {
+    "Custom": null,
+
+    "AND (single neuron)": {
+      layerSizes: [2,1],
+      weights: [null, [[1, 1]]],
+      biases:  [null, [-1.5]],
+      activation: 'step'
+    },
+    "OR (single neuron)": {
+      layerSizes: [2,1],
+      weights: [null, [[1, 1]]],
+      biases:  [null, [-0.5]],
+      activation: 'step'
+    },
+    "NAND (single neuron)": {
+      layerSizes: [2,1],
+      weights: [null, [[-1, -1]]],
+      biases:  [null, [1.5]],
+      activation: 'step'
+    },
+    "NOR (single neuron)": {
+      layerSizes: [2,1],
+      weights: [null, [[-1, -1]]],
+      biases:  [null, [0.5]],
+      activation: 'step'
+    },
+
+    "XOR (2-layer, 2 hidden)": {
+      layerSizes: [2,2,1],
+      weights: [null,
+        [[1,1], [1,1]],
+        [[1,-2]]
+      ],
+      biases: [null,
+        [-0.5, -1.5],
+        [-0.5]
+      ],
+      activation: 'step'
+    },
+
+    "XNOR (2-layer, 2 hidden)": {
+      layerSizes: [2,2,1],
+      weights: [null,
+        [[1,1], [1,1]],
+        [[-1,2]]
+      ],
+      biases: [null,
+        [-0.5, -1.5],
+        [0.5]
+      ],
+      activation: 'step'
+    }
+  };
+
+  const presetSelect = document.getElementById('presetSelect');
+  const loadPresetBtn = document.getElementById('loadPresetBtn');
+
+  const activationSelect = document.getElementById('activationSelect');
+  const thresholdInput = document.getElementById('thresholdInput');
+
+  const randomizeBtn = document.getElementById('randomizeBtn');
+  const zeroBtn = document.getElementById('zeroBtn');
+  const nudgeBtn = document.getElementById('nudgeBtn');
+
+  const hiddenLayerCount = document.getElementById('hiddenLayerCount');
+  const outputNeurons = document.getElementById('outputNeurons');
+  const hiddenLayerSizesDiv = document.getElementById('hiddenLayerSizes');
+  const applyArchBtn = document.getElementById('applyArchBtn');
+  const plotNeuronSelect = document.getElementById('plotNeuronSelect');
+
+  const paramControlsDiv = document.getElementById('paramControls');
+
+  const networkSvg = document.getElementById('networkSvg');
+  const plotCanvas = document.getElementById('plotCanvas');
+  const resultsTable = document.getElementById('resultsTable');
+
+  const showZSelect = document.getElementById('showZSelect');
+  const targetGateSelect = document.getElementById('targetGateSelect');
+
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const deepClone = (obj) => JSON.parse(JSON.stringify(obj));
+  const randUniform = (a,b) => a + Math.random()*(b-a);
+
+  function buildNetwork(layerSizes, oldState) {
+    const L = layerSizes.length;
+    const weights = Array(L).fill(null);
+    const biases  = Array(L).fill(null);
+
+    for (let l = 1; l < L; l++) {
+      const n = layerSizes[l];
+      const prev = layerSizes[l-1];
+
+      weights[l] = Array(n).fill(null).map((_, j) =>
+        Array(prev).fill(0).map((_, k) => {
+          const old = oldState?.weights?.[l]?.[j]?.[k];
+          return (typeof old === 'number') ? old : 0;
+        })
+      );
+
+      biases[l] = Array(n).fill(0).map((_, j) => {
+        const old = oldState?.biases?.[l]?.[j];
+        return (typeof old === 'number') ? old : 0;
+      });
+    }
+    return {weights, biases};
+  }
+
+  function activationFn(z) {
+    if (state.activation === 'sigmoid') return 1 / (1 + Math.exp(-z));
+    return z >= 0 ? 1 : 0;
+  }
+
+  function toClass(a) {
+    if (state.activation === 'sigmoid') return (a >= state.threshold) ? 1 : 0;
+    return a;
+  }
+
+  function forward(inputVec) {
+    const L = state.layerSizes.length;
+    const a = Array(L).fill(null);
+    const z = Array(L).fill(null);
+
+    a[0] = inputVec.slice();
+    z[0] = inputVec.slice();
+
+    for (let l = 1; l < L; l++) {
+      const n = state.layerSizes[l];
+      a[l] = Array(n).fill(0);
+      z[l] = Array(n).fill(0);
+
+      for (let j = 0; j < n; j++) {
+        let s = state.biases[l][j];
+        for (let k = 0; k < state.layerSizes[l-1]; k++) {
+          s += state.weights[l][j][k] * a[l-1][k];
+        }
+        z[l][j] = s;
+        a[l][j] = activationFn(s);
+      }
+    }
+    return {a, z};
+  }
+
+  function targetForGate(gate, x1, x2) {
+    const a = x1, b = x2;
+    switch (gate) {
+      case 'AND':  return (a && b) ? 1 : 0;
+      case 'OR':   return (a || b) ? 1 : 0;
+      case 'NAND': return (!(a && b)) ? 1 : 0;
+      case 'NOR':  return (!(a || b)) ? 1 : 0;
+      case 'XOR':  return (a ^ b) ? 1 : 0;
+      case 'XNOR': return (!(a ^ b)) ? 1 : 0;
+      default: return null;
+    }
+  }
+
+  function computeAllRuns() {
+    return INPUT_POINTS.map(p => {
+      const f = forward([p.x, p.y]);
+      return {p, f};
+    });
+  }
+
+  function renderHiddenLayerSizeInputs() {
+    const count = parseInt(hiddenLayerCount.value, 10);
+    hiddenLayerSizesDiv.innerHTML = '';
+
+    for (let i = 0; i < count; i++) {
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.style.marginBottom = '8px';
+
+      const block = document.createElement('div');
+      block.style.flex = '1';
+      block.style.minWidth = '220px';
+
+      const lab = document.createElement('label');
+      lab.textContent = `Hidden layer ${i+1} neurons`;
+      block.appendChild(lab);
+
+      const inp = document.createElement('input');
+      inp.type = 'number';
+      inp.min = '1';
+      inp.max = '20';
+      inp.step = '1';
+
+      inp.value = (state.layerSizes[1+i] ?? 2).toString();
+
+      block.appendChild(inp);
+      row.appendChild(block);
+      hiddenLayerSizesDiv.appendChild(row);
+    }
+  }
+
+
+  function updatePlotNeuronOptions() {
+    const L = state.layerSizes.length;
+    plotNeuronSelect.innerHTML = '';
+
+    const options = [];
+    for (let l = 1; l < L; l++) {
+      const layerKind = (l === L-1) ? 'Output' : `Hidden ${l}`;
+      for (let j = 0; j < state.layerSizes[l]; j++) {
+        options.push({ layer: l, neuron: j, label: `${layerKind}: L${l}N${j+1}` });
+      }
+    }
+
+    for (const optData of options) {
+      const opt = document.createElement('option');
+      opt.value = `${optData.layer},${optData.neuron}`;
+      opt.textContent = optData.label;
+      plotNeuronSelect.appendChild(opt);
+    }
+
+    const exists = options.some(o => o.layer === state.plotLayer && o.neuron === state.plotNeuron);
+    if (!exists) {
+      state.plotLayer = L-1;
+      state.plotNeuron = 0;
+    }
+    plotNeuronSelect.value = `${state.plotLayer},${state.plotNeuron}`;
+  }
+
+  function applyArchitectureFromUI() {
+    const hCount = parseInt(hiddenLayerCount.value, 10);
+    const outN = parseInt(outputNeurons.value, 10);
+
+    const hiddenSizes = [];
+    const inputs = hiddenLayerSizesDiv.querySelectorAll('input[type="number"]');
+    for (const inp of inputs) hiddenSizes.push(parseInt(inp.value, 10));
+    while (hiddenSizes.length < hCount) hiddenSizes.push(2);
+
+    const newLayerSizes = [2, ...hiddenSizes.slice(0, hCount), outN];
+
+    const old = deepClone(state);
+    state.layerSizes = newLayerSizes;
+    const built = buildNetwork(newLayerSizes, old);
+    state.weights = built.weights;
+    state.biases  = built.biases;
+
+    updatePlotNeuronOptions();
+    renderParameterControls();
+    updateAll();
+  }
+
+  function renderParameterControls() {
+    const L = state.layerSizes.length;
+    paramControlsDiv.innerHTML = '';
+
+    for (let l = 1; l < L; l++) {
+      const details = document.createElement('details');
+      details.open = (l === L-1);
+
+      const summary = document.createElement('summary');
+      summary.textContent = `Layer ${l} (${state.layerSizes[l]} neuron${state.layerSizes[l]===1?'':'s'})`;
+      details.appendChild(summary);
+
+      const grid = document.createElement('div');
+      grid.className = 'neuron-grid';
+      grid.style.marginTop = '10px';
+
+      for (let j = 0; j < state.layerSizes[l]; j++) {
+        const box = document.createElement('div');
+        box.className = 'neuron-box';
+
+        const title = document.createElement('div');
+        title.style.fontWeight = '800';
+        title.textContent = `L${l}-N${j+1}`;
+        box.appendChild(title);
+
+        const prevN = state.layerSizes[l-1];
+
+        for (let k = 0; k < prevN; k++) {
+          const row = document.createElement('div');
+          row.className = 'weight-row';
+
+          const lab = document.createElement('div');
+          lab.className = 'wlabel';
+          lab.textContent = `w${k+1}`;
+          row.appendChild(lab);
+
+          const inp = document.createElement('input');
+          inp.type = 'number';
+          inp.step = '0.1';
+          inp.value = state.weights[l][j][k];
+          inp.addEventListener('input', () => {
+            state.weights[l][j][k] = parseFloat(inp.value);
+            updateAll();
+          });
+          row.appendChild(inp);
+
+          box.appendChild(row);
+        }
+
+        const brow = document.createElement('div');
+        brow.className = 'weight-row';
+        brow.style.marginTop = '8px';
+
+        const blab = document.createElement('div');
+        blab.className = 'wlabel';
+        blab.textContent = 'b';
+        brow.appendChild(blab);
+
+        const binp = document.createElement('input');
+        binp.type = 'number';
+        binp.step = '0.1';
+        binp.value = state.biases[l][j];
+        binp.addEventListener('input', () => {
+          state.biases[l][j] = parseFloat(binp.value);
+          updateAll();
+        });
+        brow.appendChild(binp);
+
+        box.appendChild(brow);
+        grid.appendChild(box);
+      }
+
+      details.appendChild(grid);
+      paramControlsDiv.appendChild(details);
+    }
+  }
+
+  function renderNetworkDiagram() {
+    const W = 900, H = 260;
+    const L = state.layerSizes.length;
+
+    while (networkSvg.firstChild) networkSvg.removeChild(networkSvg.firstChild);
+
+    const padX = 70;
+    const spanX = W - 2*padX;
+    const layerX = Array(L).fill(0).map((_, l) => padX + (L===1 ? 0 : (l/(L-1))*spanX));
+
+    const nodePos = [];
+    for (let l = 0; l < L; l++) {
+      const n = state.layerSizes[l];
+      const padY = 30;
+      const spanY = H - 2*padY;
+      nodePos[l] = [];
+      for (let j = 0; j < n; j++) {
+        const y = padY + (n===1 ? spanY/2 : (j/(n-1))*spanY);
+        nodePos[l][j] = {x: layerX[l], y};
+      }
+    }
+
+   
+    for (let l = 1; l < L; l++) {
+      for (let j = 0; j < state.layerSizes[l]; j++) {
+        for (let k = 0; k < state.layerSizes[l-1]; k++) {
+          const w = state.weights[l][j][k];
+          const from = nodePos[l-1][k];
+          const to   = nodePos[l][j];
+
+          const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          line.setAttribute('x1', from.x);
+          line.setAttribute('y1', from.y);
+          line.setAttribute('x2', to.x);
+          line.setAttribute('y2', to.y);
+
+          const absw = Math.min(4, Math.abs(w));
+          line.setAttribute('stroke-width', (1 + absw).toString());
+          line.setAttribute('stroke', w >= 0 ? '#60a5fa' : '#f87171');
+          line.setAttribute('opacity', '0.55');
+
+          networkSvg.appendChild(line);
+        }
+      }
+    }
+
+   
+    for (let l = 0; l < L; l++) {
+      for (let j = 0; j < state.layerSizes[l]; j++) {
+        const {x,y} = nodePos[l][j];
+
+        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circle.setAttribute('cx', x);
+        circle.setAttribute('cy', y);
+        circle.setAttribute('r', 16);
+        circle.setAttribute('fill', l===0 ? '#111827' : '#0a1020');
+        circle.setAttribute('stroke', '#e5e7eb');
+        circle.setAttribute('stroke-width', '2');
+        networkSvg.appendChild(circle);
+
+        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        text.setAttribute('x', x);
+        text.setAttribute('y', y+4);
+        text.setAttribute('text-anchor', 'middle');
+        text.setAttribute('font-size', '10');
+        text.setAttribute('font-family', 'system-ui, sans-serif');
+        text.setAttribute('fill', '#e5e7eb');
+
+        if (l === 0) text.textContent = (j === 0) ? 'x₁' : 'x₂';
+        else text.textContent = `L${l}N${j+1}`;
+
+        networkSvg.appendChild(text);
+      }
+    }
+
+   
+    for (let l = 0; l < L; l++) {
+      const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      label.setAttribute('x', layerX[l]);
+      label.setAttribute('y', 18);
+      label.setAttribute('text-anchor', 'middle');
+      label.setAttribute('font-size', '12');
+      label.setAttribute('font-family', 'system-ui, sans-serif');
+      label.setAttribute('fill', '#94a3b8');
+
+      label.textContent = (l===0) ? 'Input' : (l===L-1 ? 'Output' : `Hidden ${l}`);
+      networkSvg.appendChild(label);
+    }
+  }
+
+ 
+ 
+  function marchingSquaresSegments(val, thr, xMin, yMin, dx, dy) {
+    const nx = val.length - 1;
+    const ny = val[0].length - 1;
+    const eps = 1e-12;
+
+    const segs = [];
+
+    function interp(p1, p2, v1, v2) {
+      const d1 = v1 - thr;
+      const d2 = v2 - thr;
+
+     
+      if (Math.abs(d1) <= eps && Math.abs(d2) <= eps) return {x:(p1.x+p2.x)/2, y:(p1.y+p2.y)/2};
+      if (Math.abs(d1) <= eps) return {x:p1.x, y:p1.y};
+      if (Math.abs(d2) <= eps) return {x:p2.x, y:p2.y};
+
+      const denom = (v2 - v1);
+      const t = (Math.abs(denom) <= eps) ? 0.5 : (thr - v1) / denom;
+      return {x: p1.x + (p2.x - p1.x) * t, y: p1.y + (p2.y - p1.y) * t};
+    }
+
+   
+    for (let i=0; i<nx; i++) {
+      for (let j=0; j<ny; j++) {
+       
+        const bl = val[i][j];
+        const br = val[i+1][j];
+        const tr = val[i+1][j+1];
+        const tl = val[i][j+1];
+
+       
+        const c0 = (bl >= thr) ? 1 : 0;
+        const c1 = (br >= thr) ? 1 : 0;
+        const c2 = (tr >= thr) ? 1 : 0;
+        const c3 = (tl >= thr) ? 1 : 0;
+
+        const idx = (c0) | (c1<<1) | (c2<<2) | (c3<<3);
+        if (idx === 0 || idx === 15) continue;
+
+        const x0 = xMin + i*dx;
+        const y0 = yMin + j*dy;
+
+        const pBL = {x:x0,     y:y0};
+        const pBR = {x:x0+dx,  y:y0};
+        const pTR = {x:x0+dx,  y:y0+dy};
+        const pTL = {x:x0,     y:y0+dy};
+
+       
+        const pts = {
+          e0: null,
+          e1: null,
+          e2: null,
+          e3: null 
+        };
+
+       
+        const crosses = (vA, vB) => {
+          const dA = vA - thr, dB = vB - thr;
+          return (dA*dB < 0) || (Math.abs(dA) <= eps) || (Math.abs(dB) <= eps);
+        };
+
+        if (crosses(bl, br)) pts.e0 = interp(pBL, pBR, bl, br);
+        if (crosses(br, tr)) pts.e1 = interp(pBR, pTR, br, tr);
+        if (crosses(tl, tr)) pts.e2 = interp(pTL, pTR, tl, tr);
+        if (crosses(bl, tl)) pts.e3 = interp(pBL, pTL, bl, tl);
+
+       
+       
+       
+        const addSeg = (a, b) => { if (a && b) segs.push([a,b]); };
+
+        if (idx === 1)  addSeg(pts.e3, pts.e0);
+        else if (idx === 2)  addSeg(pts.e0, pts.e1);
+        else if (idx === 3)  addSeg(pts.e3, pts.e1);
+        else if (idx === 4)  addSeg(pts.e1, pts.e2);
+        else if (idx === 6)  addSeg(pts.e0, pts.e2);
+        else if (idx === 7)  addSeg(pts.e3, pts.e2);
+        else if (idx === 8)  addSeg(pts.e2, pts.e3);
+        else if (idx === 9)  addSeg(pts.e0, pts.e2);
+        else if (idx === 11) addSeg(pts.e1, pts.e2);
+        else if (idx === 12) addSeg(pts.e1, pts.e3);
+        else if (idx === 13) addSeg(pts.e0, pts.e1);
+        else if (idx === 14) addSeg(pts.e3, pts.e0);
+        else if (idx === 5 || idx === 10) {
+         
+          const center = (bl + br + tr + tl) / 4;
+          const centerInside = center >= thr;
+
+          if (idx === 5) {
+           
+           
+           
+            if (centerInside) {
+              addSeg(pts.e3, pts.e2);
+              addSeg(pts.e0, pts.e1);
+            } else {
+              addSeg(pts.e3, pts.e0);
+              addSeg(pts.e2, pts.e1);
+            }
+          } else {
+           
+            if (centerInside) {
+              addSeg(pts.e0, pts.e3);
+              addSeg(pts.e1, pts.e2);
+            } else {
+              addSeg(pts.e0, pts.e1);
+              addSeg(pts.e3, pts.e2);
+            }
+          }
+        }
+      }
+    }
+    return segs;
+  }
+
+ 
+  function renderPlot() {
+    const ctx = plotCanvas.getContext('2d');
+    const w = plotCanvas.width;
+    const h = plotCanvas.height;
+
+    const xMin = -0.5, xMax = 1.5;
+    const yMin = -0.5, yMax = 1.5;
+    const pad = 56;
+
+    const toPx = (x, y) => {
+      const px = pad + (x - xMin) / (xMax - xMin) * (w - 2*pad);
+      const py = h - pad - (y - yMin) / (yMax - yMin) * (h - 2*pad);
+      return {px, py};
+    };
+
+   
+    ctx.clearRect(0,0,w,h);
+    ctx.fillStyle = '#0a1020';
+    ctx.fillRect(0,0,w,h);
+
+   
+    const res = 64;
+    const dx = (xMax - xMin)/res;
+    const dy = (yMax - yMin)/res;
+
+   
+   
+    const val = Array.from({length: res+1}, () => Array(res+1).fill(0));
+
+   
+    for (let i=0; i<=res; i++) {
+      for (let j=0; j<=res; j++) {
+        const x = xMin + i*dx;
+        const y = yMin + j*dy;
+        const f = forward([x,y]);
+        val[i][j] = f.a[state.plotLayer]?.[state.plotNeuron] ?? 0;
+      }
+    }
+
+   
+    for (let i=0; i<res; i++) {
+      for (let j=0; j<res; j++) {
+        const cx = xMin + (i+0.5)*dx;
+        const cy = yMin + (j+0.5)*dy;
+        const f = forward([cx, cy]);
+        const raw = f.a[state.plotLayer]?.[state.plotNeuron] ?? 0;
+        const cls = toClass(raw);
+
+       
+        ctx.fillStyle = cls ? 'rgba(96,165,250,0.28)' : 'rgba(248,113,113,0.28)';
+
+        const p0 = toPx(cx - dx/2, cy - dy/2);
+        const p1 = toPx(cx + dx/2, cy + dy/2);
+
+        const rx = p0.px;
+        const ry = p1.py;
+        const rw = Math.max(1, p1.px - p0.px);
+        const rh = Math.max(1, p0.py - p1.py);
+
+        ctx.fillRect(rx, ry, rw, rh);
+      }
+    }
+
+   
+    if (state.activation === 'sigmoid') {
+      const thr = state.threshold;
+      const segs = marchingSquaresSegments(val, thr, xMin, yMin, dx, dy);
+
+      ctx.strokeStyle = '#e5e7eb';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      for (const [a,b] of segs) {
+        const pa = toPx(a.x, a.y);
+        const pb = toPx(b.x, b.y);
+        ctx.moveTo(pa.px, pa.py);
+        ctx.lineTo(pb.px, pb.py);
+      }
+      ctx.stroke();
+    }
+
+   
+    ctx.strokeStyle = '#475569';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+   
+    let A = toPx(xMin, 0), B = toPx(xMax, 0);
+    ctx.moveTo(A.px, A.py); ctx.lineTo(B.px, B.py);
+   
+    A = toPx(0, yMin); B = toPx(0, yMax);
+    ctx.moveTo(A.px, A.py); ctx.lineTo(B.px, B.py);
+    ctx.stroke();
+
+   
+    ctx.fillStyle = '#e5e7eb';
+    ctx.font = '12px system-ui, sans-serif';
+    const ticks = [-0.5, 0, 0.5, 1, 1.5];
+    for (const t of ticks) {
+      const px = toPx(t, 0);
+      ctx.beginPath();
+      ctx.moveTo(px.px, px.py-4);
+      ctx.lineTo(px.px, px.py+4);
+      ctx.stroke();
+      ctx.fillText(t.toString(), px.px-10, h - pad + 22);
+
+      const py = toPx(0, t);
+      ctx.beginPath();
+      ctx.moveTo(py.px-4, py.py);
+      ctx.lineTo(py.px+4, py.py);
+      ctx.stroke();
+      ctx.fillText(t.toString(), pad - 40, py.py+4);
+    }
+    ctx.fillText('x₁', w - pad + 10, toPx(xMax, 0).py + 4);
+    ctx.fillText('x₂', toPx(0, yMax).px - 6, pad - 10);
+
+   
+    const runs = computeAllRuns();
+    for (const r of runs) {
+      const {x,y} = r.p;
+      const p = toPx(x,y);
+
+      const raw = r.f.a[state.plotLayer]?.[state.plotNeuron] ?? 0;
+      const out = toClass(raw);
+
+      ctx.beginPath();
+      ctx.arc(p.px, p.py, 10, 0, Math.PI*2);
+      ctx.fillStyle = out ? '#60a5fa' : '#f87171';
+      ctx.fill();
+      ctx.strokeStyle = '#e5e7eb';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.fillStyle = '#e5e7eb';
+      const label = (state.activation === 'sigmoid') ? `${out} (${raw.toFixed(2)})` : `${out}`;
+      ctx.fillText(label, p.px + 14, p.py + 4);
+
+      if (state.targetGate !== 'none') {
+        const tgt = targetForGate(state.targetGate, x, y);
+        if (tgt !== null) {
+          const ok = (tgt === out);
+          ctx.fillStyle = ok ? '#a7f3d0' : '#fecaca';
+          ctx.fillText(`t:${tgt}`, p.px + 14, p.py + 18);
+        }
+      }
+    }
+
+   
+    ctx.fillStyle = '#e5e7eb';
+    ctx.font = '13px system-ui, sans-serif';
+    ctx.fillText(`Plotting neuron: L${state.plotLayer}N${state.plotNeuron+1}`, pad, pad - 22);
+
+    ctx.font = '12px system-ui, sans-serif';
+    ctx.fillStyle = '#60a5fa';
+    ctx.fillRect(pad, pad - 14, 12, 12);
+    ctx.fillStyle = '#e5e7eb';
+    ctx.fillText('class 1 squares', pad + 18, pad - 4);
+
+    ctx.fillStyle = '#f87171';
+    ctx.fillRect(pad + 140, pad - 14, 12, 12);
+    ctx.fillStyle = '#e5e7eb';
+    ctx.fillText('class 0 squares', pad + 158, pad - 4);
+
+    if (state.activation === 'sigmoid') {
+      ctx.fillStyle = '#e5e7eb';
+      ctx.fillText(`contour (marching squares): output = ${state.threshold}`, pad, pad + 16);
+    }
+  }
+
+ 
+  function renderResultsTable() {
+    const runs = computeAllRuns();
+    const L = state.layerSizes.length;
+
+    const headers = ['x₁', 'x₂'];
+    const cols = [];
+
+    for (let l=1; l<L; l++) {
+      for (let j=0; j<state.layerSizes[l]; j++) {
+        headers.push(state.showZ ? `z L${l}N${j+1}` : `a L${l}N${j+1}`);
+        cols.push({layer:l, neuron:j});
+      }
+    }
+
+    if (state.targetGate !== 'none') {
+      headers.push('target');
+      headers.push('correct?');
+    }
+
+    let html = '<thead><tr>';
+    for (const h of headers) html += `<th>${h}</th>`;
+    html += '</tr></thead><tbody>';
+
+    for (const r of runs) {
+      const x1 = r.p.x, x2 = r.p.y;
+      html += '<tr>';
+      html += `<td>${x1}</td><td>${x2}</td>`;
+
+      for (const c of cols) {
+        const val = state.showZ
+          ? (r.f.z[c.layer]?.[c.neuron] ?? 0)
+          : (r.f.a[c.layer]?.[c.neuron] ?? 0);
+
+        let txt = '';
+        if (state.activation === 'sigmoid') {
+          txt = val.toFixed(3);
+        } else {
+          txt = state.showZ ? val.toFixed(2) : val.toString();
+        }
+
+        const isActivation = !state.showZ;
+        const isSigmoid = (state.activation === 'sigmoid');
+        if (isActivation && isSigmoid && c.layer >= 1) {
+          const cls = toClass(val);
+          if (c.layer === L-1) txt = `${cls} (${txt})`;
+        }
+
+        html += `<td>${txt}</td>`;
+      }
+
+      if (state.targetGate !== 'none') {
+        const tgt = targetForGate(state.targetGate, x1, x2);
+        const raw = r.f.a[state.plotLayer]?.[state.plotNeuron] ?? 0;
+        const out = toClass(raw);
+        const ok = (tgt === out);
+        html += `<td>${tgt}</td>`;
+        html += `<td><span class="pill ${ok ? 'ok':'bad'}">${ok ? '✓' : '✗'}</span></td>`;
+      }
+
+      html += '</tr>';
+    }
+
+    html += '</tbody>';
+    resultsTable.innerHTML = html;
+  }
+
+  function updateAll() {
+    renderNetworkDiagram();
+    renderPlot();
+    renderResultsTable();
+  }
+
+ 
+  function randomizeWeights() {
+    const L = state.layerSizes.length;
+    for (let l=1; l<L; l++) {
+      const fanIn = state.layerSizes[l-1];
+      const scale = 1 / Math.sqrt(Math.max(1, fanIn));
+      for (let j=0; j<state.layerSizes[l]; j++) {
+        for (let k=0; k<fanIn; k++) {
+          state.weights[l][j][k] = parseFloat((randUniform(-2, 2) * scale).toFixed(2));
+        }
+        state.biases[l][j] = parseFloat(randUniform(-1, 1).toFixed(2));
+      }
+    }
+    renderParameterControls();
+    updateAll();
+  }
+
+  function zeroWeights() {
+    const L = state.layerSizes.length;
+    for (let l=1; l<L; l++) {
+      for (let j=0; j<state.layerSizes[l]; j++) {
+        for (let k=0; k<state.layerSizes[l-1]; k++) state.weights[l][j][k] = 0;
+        state.biases[l][j] = 0;
+      }
+    }
+    renderParameterControls();
+    updateAll();
+  }
+
+  function nudgeWeights() {
+    const sign = () => (Math.random() < 0.5 ? -1 : 1);
+    const L = state.layerSizes.length;
+    for (let l=1; l<L; l++) {
+      for (let j=0; j<state.layerSizes[l]; j++) {
+        for (let k=0; k<state.layerSizes[l-1]; k++) {
+          state.weights[l][j][k] = parseFloat((state.weights[l][j][k] + 0.2*sign()).toFixed(2));
+        }
+        state.biases[l][j] = parseFloat((state.biases[l][j] + 0.2*sign()).toFixed(2));
+      }
+    }
+    renderParameterControls();
+    updateAll();
+  }
+
+ 
+  function loadPreset(name) {
+    const p = presets[name];
+    if (!p) return;
+
+    state.activation = p.activation ?? 'step';
+    activationSelect.value = state.activation;
+
+    state.layerSizes = p.layerSizes.slice();
+
+    hiddenLayerCount.value = Math.max(0, state.layerSizes.length - 2).toString();
+    outputNeurons.value = state.layerSizes[state.layerSizes.length - 1].toString();
+    renderHiddenLayerSizeInputs();
+
+    const built = buildNetwork(state.layerSizes, null);
+    state.weights = built.weights;
+    state.biases  = built.biases;
+
+    for (let l=1; l<state.layerSizes.length; l++) {
+      for (let j=0; j<state.layerSizes[l]; j++) {
+        for (let k=0; k<state.layerSizes[l-1]; k++) {
+          const w = p.weights?.[l]?.[j]?.[k];
+          if (typeof w === 'number') state.weights[l][j][k] = w;
+        }
+        const b = p.biases?.[l]?.[j];
+        if (typeof b === 'number') state.biases[l][j] = b;
+      }
+    }
+
+    state.plotLayer = state.layerSizes.length - 1;
+    state.plotNeuron = 0;
+    updatePlotNeuronOptions();
+
+    renderParameterControls();
+    updateAll();
+  }
+
+  function init() {
+    for (const name of Object.keys(presets)) {
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      presetSelect.appendChild(opt);
+    }
+
+    const built = buildNetwork(state.layerSizes, null);
+    state.weights = built.weights;
+    state.biases  = built.biases;
+
+    presetSelect.value = "XOR (2-layer, 2 hidden)";
+    loadPreset("XOR (2-layer, 2 hidden)");
+
+    loadPresetBtn.addEventListener('click', () => {
+      const name = presetSelect.value;
+      if (name !== 'Custom') loadPreset(name);
+    });
+
+    activationSelect.addEventListener('change', () => {
+      state.activation = activationSelect.value;
+      updateAll();
+    });
+
+    thresholdInput.addEventListener('input', () => {
+      state.threshold = clamp(parseFloat(thresholdInput.value), 0, 1);
+      updateAll();
+    });
+
+    randomizeBtn.addEventListener('click', randomizeWeights);
+    zeroBtn.addEventListener('click', zeroWeights);
+    nudgeBtn.addEventListener('click', nudgeWeights);
+
+    hiddenLayerCount.addEventListener('change', renderHiddenLayerSizeInputs);
+    applyArchBtn.addEventListener('click', applyArchitectureFromUI);
+
+    plotNeuronSelect.addEventListener('change', () => {
+      const [lStr, jStr] = plotNeuronSelect.value.split(',');
+      state.plotLayer = parseInt(lStr, 10);
+      state.plotNeuron = parseInt(jStr, 10);
+      updateAll();
+    });
+
+    showZSelect.addEventListener('change', () => {
+      state.showZ = (showZSelect.value === 'yes');
+      updateAll();
+    });
+
+    targetGateSelect.addEventListener('change', () => {
+      state.targetGate = targetGateSelect.value;
+      updateAll();
+    });
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
