@@ -1,0 +1,683 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>1D Stochastic Gradient Descent</title>
+  <style>
+    :root {
+      --bg: #0b0f14;
+      --panel: #121a22;
+      --text: #e6edf3;
+      --muted: #aab6c2;
+      --accent: #6ae4ff;
+      --border: #223041;
+    }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .app {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 14px;
+      padding: 14px;
+      box-sizing: border-box;
+      height: 100%;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      box-sizing: border-box;
+      overflow: auto;
+    }
+    h1 { font-size: 18px; margin: 0 0 10px 0; letter-spacing: 0.2px; }
+    h2 {
+      font-size: 14px;
+      margin: 14px 0 8px 0;
+      color: var(--muted);
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+    }
+    label {
+      display: grid;
+      grid-template-columns: 1fr 120px;
+      align-items: center;
+      gap: 10px;
+      margin: 8px 0;
+      font-size: 13px;
+      color: var(--text);
+    }
+    input[type="number"] {
+      width: 120px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #0d141c;
+      color: var(--text);
+      outline: none;
+      box-sizing: border-box;
+    }
+    input[type="checkbox"] { transform: scale(1.1); }
+    .row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin: 10px 0;
+      flex-wrap: wrap;
+    }
+    button {
+      padding: 9px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: #0d141c;
+      color: var(--text);
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button:hover { border-color: #2f4a66; }
+    .pill {
+      font-size: 12px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      background: #0d141c;
+    }
+    .stats {
+      margin-top: 8px;
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: #0d141c;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+    .stats b { color: var(--accent); }
+    .small {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+    pre {
+      margin: 10px 0 0 0;
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: #0d141c;
+      color: var(--text);
+      overflow: auto;
+      font-size: 12px;
+      line-height: 1.35;
+      white-space: pre-wrap;
+    }
+    .main {
+      display: grid;
+      grid-template-rows: 1.1fr 0.9fr;
+      gap: 14px;
+      min-width: 0;
+      min-height: 0;
+    }
+    .grid2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      min-width: 0;
+      min-height: 0;
+    }
+    .canvasWrap {
+      position: relative;
+      height: 100%;
+      min-height: 260px;
+    }
+    canvas {
+      width: 100%;
+      height: 100%;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: #070b10;
+    }
+    .sliderRow {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      margin-top: 10px;
+    }
+    input[type="range"] { width: 100%; }
+    .hide { display: none; }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <div class="panel" id="controls">
+      <h1>1D Stochastic Gradient Descent</h1>
+
+      <h2>Target function</h2>
+      <label>
+        Target slope (m)
+        <input id="targetA" type="number" step="0.001" value="0.457" />
+      </label>
+      <label>
+        Target intercept (b)
+        <input id="targetB" type="number" step="0.001" value="0.311" />
+      </label>
+
+      <h2>Dataset</h2>
+      <label>
+        Num samples (N)
+        <input id="numSamples" type="number" step="1" value="100" min="2" />
+      </label>
+      <label>
+        x min
+        <input id="xMin" type="number" step="0.1" value="-1.0" />
+      </label>
+      <label>
+        x max
+        <input id="xMax" type="number" step="0.1" value="1.0" />
+      </label>
+      <label>
+        Random seed
+        <input id="dataSeed" type="number" step="1" value="1" />
+      </label>
+
+      <div class="row">
+        <button id="btnGenerate">Generate data</button>
+        <span class="pill" id="pillData">N=100</span>
+      </div>
+
+      <h2>Training</h2>
+      <div class="row" style="justify-content: space-between;">
+        <label style="grid-template-columns: 1fr auto; margin: 0;">
+          Fit bias? (ŷ = weight·x + bias)
+          <input id="fitBias" type="checkbox" checked />
+        </label>
+      </div>
+
+      <label>
+        Learning rate (η)
+        <input id="eta" type="number" step="0.001" value="0.10" min="0.00001" />
+      </label>
+      <label>
+        Iterations
+        <input id="iters" type="number" step="1" value="200" min="1" />
+      </label>
+      <label>
+        Init w
+        <input id="initW" type="number" step="0.001" value="0.000" />
+      </label>
+      <label id="initBLabel">
+        Init b
+        <input id="initB" type="number" step="0.001" value="0.000" />
+      </label>
+      <label>
+        Random seed
+        <input id="sgdSeed" type="number" step="1" value="2" />
+      </label>
+
+      <div class="row">
+        <button id="btnTrain">Run SGD</button>
+        <span class="pill" id="pillTrain">iters=200</span>
+      </div>
+
+      <div class="sliderRow">
+        <input id="iterSlider" type="range" min="0" max="200" value="200" />
+        <span class="pill" id="iterLabel">i=200</span>
+      </div>
+
+      <div class="stats" id="statsBox"></div>
+
+      <h2>SGD update rule</h2>
+      <pre id="formulaBox"></pre>
+    </div>
+
+    <div class="main">
+      <div class="panel">
+        <h2 style="margin-top:0;">Data + Lines (scrub iterations)</h2>
+        <div class="canvasWrap">
+          <canvas id="canvasData"></canvas>
+        </div>
+      </div>
+
+      <div class="grid2">
+        <div class="panel">
+          <h2 style="margin-top:0;">Slope w over time</h2>
+          <div class="canvasWrap">
+            <canvas id="canvasW"></canvas>
+          </div>
+        </div>
+
+        <div class="panel" id="biasPanel">
+          <h2 style="margin-top:0;">Bias b over time</h2>
+          <div class="canvasWrap">
+            <canvas id="canvasB"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function() {
+    a += 0x6D2B79F5;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+function mse(x, y, w, b) {
+  let s = 0;
+  for (let i = 0; i < x.length; i++) {
+    const e = (w * x[i] + b) - y[i];
+    s += e * e;
+  }
+  return s / x.length;
+}
+
+function fmt(v, digits=6) {
+  if (!Number.isFinite(v)) return String(v);
+  return Number(v).toFixed(digits);
+}
+
+function $(id) { return document.getElementById(id); }
+
+function setupCanvas(canvas) {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  const w = Math.max(1, Math.floor(rect.width * dpr));
+  const h = Math.max(1, Math.floor(rect.height * dpr));
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return ctx;
+}
+
+function drawAxes(ctx, W, H, pad, xMin, xMax, yMin, yMax) {
+  ctx.save();
+  ctx.clearRect(0, 0, W, H);
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  ctx.lineWidth = 1;
+  const gridN = 5;
+  for (let i = 0; i <= gridN; i++) {
+    const gx = pad + (W - 2*pad) * (i / gridN);
+    const gy = pad + (H - 2*pad) * (i / gridN);
+    ctx.beginPath(); ctx.moveTo(gx, pad); ctx.lineTo(gx, H - pad); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(pad, gy); ctx.lineTo(W - pad, gy); ctx.stroke();
+  }
+
+  function mapX(x) { return pad + (x - xMin) / (xMax - xMin) * (W - 2*pad); }
+  function mapY(y) { return H - pad - (y - yMin) / (yMax - yMin) * (H - 2*pad); }
+
+  const y0 = (0 >= yMin && 0 <= yMax) ? mapY(0) : (H - pad);
+  const x0 = (0 >= xMin && 0 <= xMax) ? mapX(0) : pad;
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+  ctx.lineWidth = 1.25;
+  ctx.beginPath(); ctx.moveTo(pad, y0); ctx.lineTo(W - pad, y0); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x0, pad); ctx.lineTo(x0, H - pad); ctx.stroke();
+
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.font = '12px system-ui, sans-serif';
+
+  for (let i = 0; i <= gridN; i++) {
+    const xv = xMin + (xMax - xMin) * (i / gridN);
+    const px = mapX(xv);
+    ctx.beginPath(); ctx.moveTo(px, y0 - 4); ctx.lineTo(px, y0 + 4); ctx.stroke();
+    ctx.fillText(xv.toFixed(2), px - 12, Math.min(H - 2, y0 + 18));
+  }
+
+  for (let i = 0; i <= gridN; i++) {
+    const yv = yMin + (yMax - yMin) * (i / gridN);
+    const py = mapY(yv);
+    ctx.beginPath(); ctx.moveTo(x0 - 4, py); ctx.lineTo(x0 + 4, py); ctx.stroke();
+    ctx.fillText(yv.toFixed(2), Math.max(2, x0 + 8), py + 4);
+  }
+
+  ctx.restore();
+
+  return { mapX, mapY };
+}
+
+function niceBounds(minV, maxV, padFrac=0.12) {
+  if (!Number.isFinite(minV) || !Number.isFinite(maxV)) return {min: -1, max: 1};
+  if (minV === maxV) {
+    const eps = (minV === 0) ? 1 : Math.abs(minV) * 0.5;
+    return {min: minV - eps, max: maxV + eps};
+  }
+  const range = maxV - minV;
+  return {min: minV - range * padFrac, max: maxV + range * padFrac};
+}
+
+function drawLine(ctx, map, xMin, xMax, f, color, dash, width) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  ctx.setLineDash(dash || []);
+  const n = 120;
+  ctx.beginPath();
+  for (let i = 0; i <= n; i++) {
+    const x = xMin + (xMax - xMin) * (i / n);
+    const y = f(x);
+    const px = map.mapX(x);
+    const py = map.mapY(y);
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawScatterWithLines(canvas, x, y, targetLine, modelLine) {
+  const ctx = setupCanvas(canvas);
+  const W = canvas.getBoundingClientRect().width;
+  const H = canvas.getBoundingClientRect().height;
+  const pad = 42;
+
+  const xBounds = niceBounds(Math.min(...x), Math.max(...x), 0.10);
+
+  const yDataMin = Math.min(...y), yDataMax = Math.max(...y);
+  const yT1 = targetLine(xBounds.min), yT2 = targetLine(xBounds.max);
+  const yM1 = modelLine(xBounds.min),  yM2 = modelLine(xBounds.max);
+
+  const yBounds = niceBounds(
+    Math.min(yDataMin, yT1, yT2, yM1, yM2),
+    Math.max(yDataMax, yT1, yT2, yM1, yM2),
+    0.12
+  );
+
+  const map = drawAxes(ctx, W, H, pad, xBounds.min, xBounds.max, yBounds.min, yBounds.max);
+
+  ctx.save();
+  ctx.fillStyle = '#6ae4ff';
+  for (let i = 0; i < x.length; i++) {
+    const px = map.mapX(x[i]);
+    const py = map.mapY(y[i]);
+    ctx.beginPath();
+    ctx.arc(px, py, 3.0, 0, Math.PI*2);
+    ctx.fill();
+  }
+  ctx.restore();
+
+  drawLine(ctx, map, xBounds.min, xBounds.max, targetLine, '#fb7185', [6, 6], 2.0);
+
+  drawLine(ctx, map, xBounds.min, xBounds.max, modelLine, '#4ade80', [], 2.2);
+}
+
+function drawSeries(canvas, series, targetValue, markerIndex, titleText) {
+  const ctx = setupCanvas(canvas);
+  const W = canvas.getBoundingClientRect().width;
+  const H = canvas.getBoundingClientRect().height;
+  const pad = 42;
+
+  const xMin = 0, xMax = Math.max(1, series.length - 1);
+  const minV = Math.min(...series, targetValue);
+  const maxV = Math.max(...series, targetValue);
+  const yBounds = niceBounds(minV, maxV, 0.18);
+
+  const map = drawAxes(ctx, W, H, pad, xMin, xMax, yBounds.min, yBounds.max);
+
+  ctx.save();
+  ctx.strokeStyle = '#fb7185';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([8, 6]);
+  ctx.beginPath();
+  ctx.moveTo(map.mapX(xMin), map.mapY(targetValue));
+  ctx.lineTo(map.mapX(xMax), map.mapY(targetValue));
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.save();
+  ctx.strokeStyle = '#6ae4ff';
+  ctx.lineWidth = 2.2;
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  for (let i = 0; i < series.length; i++) {
+    const px = map.mapX(i);
+    const py = map.mapY(series[i]);
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+  ctx.restore();
+
+  const mi = clamp(markerIndex, 0, series.length - 1);
+  ctx.save();
+  ctx.fillStyle = 'white';
+  ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+  ctx.lineWidth = 1;
+  const mx = map.mapX(mi);
+  const my = map.mapY(series[mi]);
+  ctx.beginPath();
+  ctx.arc(mx, my, 4.5, 0, Math.PI*2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+
+  if (titleText) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    ctx.font = '12px system-ui, sans-serif';
+    ctx.fillText(titleText, 10, 18);
+    ctx.restore();
+  }
+}
+
+
+let state = {
+  x: [],
+  y: [],
+  targetA: 0.457,
+  targetB: 0.0,
+  wHist: [],
+  bHist: [],
+  lossHist: [],
+  fitBias: true
+};
+
+function generateData() {
+  const a = parseFloat($('targetA').value);
+  const b = parseFloat($('targetB').value);
+  const N = Math.max(2, parseInt($('numSamples').value, 10));
+  const xMin = parseFloat($('xMin').value);
+  const xMax = parseFloat($('xMax').value);
+  const seed = parseInt($('dataSeed').value, 10) || 1;
+
+  const rng = mulberry32(seed);
+
+  const x = new Array(N);
+  const y = new Array(N);
+
+  for (let i = 0; i < N; i++) {
+    const xi = xMin + (xMax - xMin) * rng();
+    const yi = a * xi + b;
+    x[i] = xi;
+    y[i] = yi;
+  }
+
+  state.x = x;
+  state.y = y;
+  state.targetA = a;
+  state.targetB = b;
+
+  $('pillData').textContent = `N=${N}`;
+}
+
+function trainSGD() {
+  const fitBias = $('fitBias').checked;
+  state.fitBias = fitBias;
+
+  const eta = parseFloat($('eta').value);
+  const iters = Math.max(1, parseInt($('iters').value, 10));
+  const initW = parseFloat($('initW').value);
+  const initB = parseFloat($('initB').value);
+  const seed = parseInt($('sgdSeed').value, 10) || 2;
+
+  $('pillTrain').textContent = `iters=${iters}`;
+
+  const rng = mulberry32(seed);
+  const N = state.x.length;
+
+  let w = initW;
+  let b = fitBias ? initB : 0;
+
+  const wHist = new Array(iters + 1);
+  const bHist = new Array(iters + 1);
+  const lossHist = new Array(iters + 1);
+
+  wHist[0] = w;
+  bHist[0] = b;
+  lossHist[0] = mse(state.x, state.y, w, b);
+
+  for (let i = 1; i <= iters; i++) {
+    const idx = Math.floor(rng() * N);
+    const xi = state.x[idx];
+    const yi = state.y[idx];
+
+    const pred = w * xi + b;
+    const err = pred - yi;
+
+    w = w - eta * (err * xi);
+    if (fitBias) b = b - eta * err;
+
+    wHist[i] = w;
+    bHist[i] = b;
+    lossHist[i] = mse(state.x, state.y, w, b);
+  }
+
+  state.wHist = wHist;
+  state.bHist = bHist;
+  state.lossHist = lossHist;
+
+  const slider = $('iterSlider');
+  slider.max = String(iters);
+  slider.value = String(iters);
+  $('iterLabel').textContent = `i=${iters}`;
+}
+
+function syncBiasVisibility() {
+  const fitBias = $('fitBias').checked;
+  $('initBLabel').style.display = fitBias ? 'grid' : 'none';
+  $('biasPanel').classList.toggle('hide', !fitBias);
+}
+
+function updateSGDFormulaBox() {
+  const fitBias = state.fitBias;
+  let txt = '';
+  if (!fitBias) {
+    txt += `Model:\n`;
+    txt += `  y_hat = w * x\n\n`;
+    txt += `SGD update (one random sample i):\n`;
+    txt += `  pred = w*x_i\n`;
+    txt += `  err  = pred - y_i\n`;
+    txt += `  w <- w - η * err * x_i\n`;
+  } else {
+    txt += `Model:\n`;
+    txt += `  y_hat = w * x + b\n\n`;
+    txt += `SGD update (one random sample i):\n`;
+    txt += `  pred = w*x_i + b\n`;
+    txt += `  err  = pred - y_i\n`;
+    txt += `  w <- w - η * err * x_i\n`;
+    txt += `  b <- b - η * err\n`;
+  }
+  $('formulaBox').textContent = txt;
+}
+
+function updateStats(iter) {
+  const fitBias = state.fitBias;
+
+  const w = state.wHist[iter] ?? NaN;
+  const b = state.bHist[iter] ?? 0;
+  const L = state.lossHist[iter] ?? NaN;
+
+  let s = '';
+  s += `Selected iteration: <b>${iter}</b><br/>`;
+  s += `SGD: w=${fmt(w, 6)}${fitBias ? `, b=${fmt(b, 6)}` : ''}<br/>`;
+  s += `MSE (full dataset): <b>${fmt(L, 10)}</b><br/><br/>`;
+  s += `Target: w=${fmt(state.targetA, 6)}${fitBias ? `, b=${fmt(state.targetB, 6)}` : ''}<br/>`;
+
+  $('statsBox').innerHTML = s;
+}
+
+function redrawAll() {
+  const iter = parseInt($('iterSlider').value, 10) || 0;
+  $('iterLabel').textContent = `i=${iter}`;
+
+  const w = state.wHist[iter] ?? 0;
+  const b = state.fitBias ? (state.bHist[iter] ?? 0) : 0;
+
+  drawScatterWithLines(
+    $('canvasData'),
+    state.x,
+    state.y,
+    (x) => state.targetA * x + state.targetB,
+    (x) => w * x + b
+  );
+
+  drawSeries(
+    $('canvasW'),
+    state.wHist,
+    state.targetA,
+    iter,
+    `w(i)`
+  );
+
+  if (state.fitBias) {
+    drawSeries(
+      $('canvasB'),
+      state.bHist,
+      state.targetB,
+      iter,
+      `b(i)`
+    );
+  }
+
+  updateSGDFormulaBox();
+  updateStats(iter);
+}
+
+
+function fullResetAndTrain() {
+  generateData();
+  trainSGD();
+  syncBiasVisibility();
+  redrawAll();
+}
+
+$('btnGenerate').addEventListener('click', () => fullResetAndTrain());
+$('btnTrain').addEventListener('click', () => {
+  trainSGD();
+  syncBiasVisibility();
+  redrawAll();
+});
+
+$('iterSlider').addEventListener('input', () => redrawAll());
+
+$('fitBias').addEventListener('change', () => {
+  syncBiasVisibility();
+  trainSGD();
+  redrawAll();
+});
+
+window.addEventListener('resize', () => redrawAll());
+
+syncBiasVisibility();
+fullResetAndTrain();
+</script>
+</body>
+</html>
