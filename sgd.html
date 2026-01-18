@@ -503,9 +503,16 @@ function generateData() {
   const x = new Array(N);
   const y = new Array(N);
 
+  function randn(rng) {
+    let u = 0, v = 0;
+    while (u === 0) u = rng();
+    while (v === 0) v = rng();
+    return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+  }
+
   for (let i = 0; i < N; i++) {
     const xi = xMin + (xMax - xMin) * rng();
-    const yi = a * xi + b;
+    const yi = a * xi + b + 0.02 * randn(rng);
     x[i] = xi;
     y[i] = yi;
   }
