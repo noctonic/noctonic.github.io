@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Activation Functions</title>
+  <style>
+    :root { --bg:#0b1020; --card:#121a33; --text:#e8ecff; --muted:#a9b2d6; --accent:#7aa2ff; }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); color:var(--text); }
+    .wrap { max-width: 1000px; margin: 24px auto; padding: 0 16px; }
+    h1 { font-size: 22px; margin: 0 0 12px; }
+    .card { background:var(--card); border:1px solid rgba(255,255,255,0.06); border-radius:16px; padding:16px; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+    .row { display:grid; grid-template-columns: 1fr; gap:16px; }
+    @media (min-width: 900px){ .row { grid-template-columns: 1.2fr 0.8fr; } }
+    label { display:block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+    input[type="range"] { width:100%; }
+    .kpi { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+    .pill { background: rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.08); padding: 6px 10px; border-radius: 999px; font-size: 13px; color: var(--muted); }
+    .pill b { color: var(--text); font-weight: 600; }
+    table { width:100%; border-collapse: collapse; overflow:hidden; border-radius:12px; }
+    th, td { padding:10px 10px; border-bottom:1px solid rgba(255,255,255,0.06); font-size: 13px; }
+    th { text-align:left; color: var(--muted); font-weight: 600; }
+    td:last-child { text-align:right; font-variant-numeric: tabular-nums; }
+    tr:last-child td { border-bottom:none; }
+    .small { font-size: 12px; color: var(--muted); line-height: 1.45; }
+    canvas { width:100%; height:420px; background: rgba(0,0,0,0.12); border-radius: 14px; border:1px solid rgba(255,255,255,0.06); }
+    .controls { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+    .controls .full { grid-column: 1 / -1; }
+    input[type="number"]{
+      width:100%; padding:10px; border-radius:12px;
+      border:1px solid rgba(255,255,255,0.10);
+      background: rgba(0,0,0,0.18); color: var(--text);
+      font-size: 13px;
+    }
+    .hint { margin-top: 8px; }
+
+    .legend-item{
+      display:flex; align-items:center; gap:8px;
+      padding:8px 10px;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.04);
+      user-select:none;
+    }
+    .legend-swatch{
+      width:14px; height:14px; border-radius:4px;
+      border:1px solid rgba(0,0,0,0.25);
+      flex: 0 0 auto;
+    }
+    .legend-item input{ transform: translateY(0.5px); }
+    .legend-item span{ font-size: 13px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Activation Functions</h1>
+
+    <div class="row">
+      <div class="card">
+        <canvas id="plot" width="980" height="420"></canvas>
+        <div id="legend" style="margin-top:12px; display:flex; flex-wrap:wrap; gap:10px;"></div>
+      </div>
+
+      <div class="card">
+        <div class="controls">
+          <div class="full">
+            <label for="x">Input X</label>
+            <input id="x" type="range" min="-1.5" max="1.5" step="0.01" value="0">
+            <div class="kpi" style="margin-top:10px">
+              <div class="pill"><b>x</b>: <span id="xVal"></span></div>
+              <div class="pill"><b>Leaky slope</b> α: <span id="alphaVal"></span></div>
+            </div>
+          </div>
+
+          <div class="full">
+            <label for="alpha">Leaky ReLU negative slope</label>
+            <input id="alpha" type="range" min="0.001" max="0.5" step="0.001" value="0.01">
+          </div>
+        </div>
+
+        <div style="margin-top:14px">
+          <label>Outputs</label>
+          <table>
+            <thead>
+              <tr><th>Function</th><th>Output</th></tr>
+            </thead>
+            <tbody id="outRows"></tbody>
+          </table>
+          <div class="small" style="margin-top:10px">
+            Notes:
+            <ul>
+              <li><b>Heaviside</b>: returns 0 for x&lt;0, 1 for x&gt;0.</li>
+              <li><b>Sigmoid</b>: 1 / (1 + e<sup>−x</sup>)</li>
+              <li><b>tanh</b>: (e<sup>x</sup> − e<sup>−x</sup>) / (e<sup>x</sup> + e<sup>−x</sup>)</li>
+              <li><b>ReLU</b>: max(0, x)</li>
+              <li><b>Leaky ReLU</b>: x if x≥0 else slope*x</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  function heaviside(x) { return x > 0 ? 1 : (x < 0 ? 0 : 0); }
+  function sigmoid(x) { return 1 / (1 + Math.exp(-x)); }
+  function tanh(x) { return Math.tanh ? Math.tanh(x) : (Math.exp(x)-Math.exp(-x)) / (Math.exp(x)+Math.exp(-x)); }
+  function linear(x) { return x; }
+  function relu(x) { return Math.max(0, x); }
+  function leakyRelu(x, a) { return x >= 0 ? x : a * x; }
+
+  const funcs = [
+    { name: "Heaviside",  hue: 0,   visible: true, f: (x,a) => heaviside(x) },
+    { name: "Sigmoid",    hue: 55,  visible: true, f: (x,a) => sigmoid(x) },
+    { name: "tanh",       hue: 110, visible: true, f: (x,a) => tanh(x) },
+    { name: "Linear",     hue: 175, visible: true, f: (x,a) => linear(x) },
+    { name: "ReLU",       hue: 235, visible: true, f: (x,a) => relu(x) },
+    { name: "Leaky ReLU", hue: 300, visible: true, f: (x,a) => leakyRelu(x, a) },
+  ];
+  const colorOf = (hue, alpha=1) => `hsla(${hue}, 80%, 70%, ${alpha})`;
+
+  const xEl = document.getElementById("x");
+  const alphaEl = document.getElementById("alpha");
+  const outRows = document.getElementById("outRows");
+  const xVal = document.getElementById("xVal");
+  const alphaVal = document.getElementById("alphaVal");
+
+  const canvas = document.getElementById("plot");
+  const ctx = canvas.getContext("2d");
+  const legend = document.getElementById("legend");
+
+  function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
+  function fmt(n){
+    return (Math.abs(n) >= 1e6 || (Math.abs(n) > 0 && Math.abs(n) < 1e-4))
+      ? n.toExponential(4)
+      : n.toFixed(6);
+  }
+
+  function buildLegend(){
+    legend.innerHTML = "";
+    funcs.forEach((fn) => {
+      const item = document.createElement("label");
+      item.className = "legend-item";
+
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = fn.visible;
+      cb.addEventListener("input", () => {
+        fn.visible = cb.checked;
+        draw();
+      });
+
+      const sw = document.createElement("span");
+      sw.className = "legend-swatch";
+      sw.style.background = colorOf(fn.hue, 1);
+
+      const name = document.createElement("span");
+      name.textContent = fn.name;
+
+      item.appendChild(cb);
+      item.appendChild(sw);
+      item.appendChild(name);
+      legend.appendChild(item);
+    });
+  }
+
+  function draw() {
+    const minX = -2.5, maxX = 2.5;
+    const yMin = -1.5, yMax = 1.5;
+
+    xEl.min = String(minX);
+    xEl.max = String(maxX);
+    const x = clamp(Number(xEl.value), minX, maxX);
+    xEl.value = String(x);
+
+    const alpha = Number(alphaEl.value);
+
+    xVal.textContent = x.toFixed(3);
+    alphaVal.textContent = alpha.toFixed(3);
+
+    outRows.innerHTML = "";
+    for (const fn of funcs) {
+      const y = fn.f(x, alpha);
+      const tr = document.createElement("tr");
+
+      const td1 = document.createElement("td");
+      td1.textContent = fn.name;
+      td1.style.color = colorOf(fn.hue, 1);
+
+      const td2 = document.createElement("td");
+      td2.textContent = fmt(y);
+
+      tr.appendChild(td1);
+      tr.appendChild(td2);
+      outRows.appendChild(tr);
+    }
+
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+
+    const margin = { l: 60, r: 18, t: 18, b: 46 };
+    const plotW = W - margin.l - margin.r;
+    const plotH = H - margin.t - margin.b;
+
+    const xToPx = (vx) => margin.l + ((vx - minX) / (maxX - minX)) * plotW;
+    const yToPx = (vy) => margin.t + (1 - (vy - yMin) / (yMax - yMin)) * plotH;
+
+    ctx.strokeStyle = "rgba(255,255,255,0.10)";
+    ctx.lineWidth = 1;
+    const gridLines = 6;
+    for (let i = 0; i <= gridLines; i++) {
+      const gx = margin.l + plotW * (i / gridLines);
+      ctx.beginPath(); ctx.moveTo(gx, margin.t); ctx.lineTo(gx, margin.t + plotH); ctx.stroke();
+    }
+    for (let i = 0; i <= gridLines; i++) {
+      const gy = margin.t + plotH * (i / gridLines);
+      ctx.beginPath(); ctx.moveTo(margin.l, gy); ctx.lineTo(margin.l + plotW, gy); ctx.stroke();
+    }
+
+    ctx.fillStyle = "rgba(255,255,255,0.75)";
+    ctx.font = "12px system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    ctx.textAlign = "center";
+    ctx.fillText(`x from ${minX} to ${maxX}`, margin.l + plotW / 2, H - 16);
+    ctx.save();
+    ctx.translate(18, margin.t + plotH / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText(`y from ${yMin} to ${yMax}`, 0, 0);
+    ctx.restore();
+
+    function drawYTick(y, label) {
+      const py = yToPx(y);
+
+      ctx.strokeStyle = "rgba(255,255,255,0.22)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(margin.l, py);
+      ctx.lineTo(margin.l + plotW, py);
+      ctx.stroke();
+
+      ctx.strokeStyle = "rgba(255,255,255,0.55)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(margin.l - 6, py);
+      ctx.lineTo(margin.l, py);
+      ctx.stroke();
+
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      ctx.font = "12px system-ui, -apple-system, Segoe UI, Roboto, Arial";
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+      ctx.fillText(label, margin.l - 10, py);
+    }
+
+    drawYTick(1, "1");
+    drawYTick(0, "0");
+    drawYTick(-1, "-1");
+
+    const N = 700;
+    funcs.filter(fn => fn.visible).forEach((fn) => {
+      ctx.strokeStyle = colorOf(fn.hue, 0.95);
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i <= N; i++) {
+        const vx = minX + (maxX - minX) * (i / N);
+        const vy = fn.f(vx, alpha);
+        const px = xToPx(vx);
+        const py = yToPx(vy);
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+    });
+
+    const xPx = xToPx(x);
+    ctx.strokeStyle = "rgba(122,162,255,0.95)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(xPx, margin.t);
+    ctx.lineTo(xPx, margin.t + plotH);
+    ctx.stroke();
+
+    funcs.filter(fn => fn.visible).forEach((fn) => {
+      const y = fn.f(x, alpha);
+      ctx.fillStyle = colorOf(fn.hue, 1);
+      ctx.beginPath();
+      ctx.arc(xPx, yToPx(y), 4, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
+
+  xEl.addEventListener("input", draw);
+  alphaEl.addEventListener("input", draw);
+
+  buildLegend();
+  draw();
+})();
+</script>
+</body>
+</html>
