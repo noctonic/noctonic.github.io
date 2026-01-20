@@ -1,0 +1,924 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Vector Dot Product</title>
+  <style>
+    :root{
+      --bg:#0b0f19;
+      --text:#e8eefc;
+      --muted:#a9b7d6;
+
+      --grid:rgba(255,255,255,0.08);
+      --axis:rgba(255,255,255,0.22);
+      --circle:rgba(255,255,255,0.35);
+
+      --u:#00E168;
+      --v:#00E9FF;
+
+      --proj:rgba(255,255,255,0.55);
+      --shadow:rgba(0,0,0,0.35);
+    }
+
+    html,body{
+      height:100%;
+      margin:0;
+      background: var(--bg);
+      color:var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+    }
+
+    .wrap{
+      display:grid;
+      grid-template-columns:minmax(320px,520px) minmax(320px,640px);
+      gap:18px;
+      padding:18px;
+      box-sizing:border-box;
+      max-width:1260px;
+      margin:0 auto;
+    }
+    @media (max-width: 980px){
+      .wrap{ grid-template-columns:1fr; }
+    }
+
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
+      border:1px solid rgba(255,255,255,0.10);
+      border-radius:16px;
+      box-shadow:0 14px 40px var(--shadow);
+      overflow:hidden;
+    }
+
+    .card header{
+      padding:14px 16px 10px;
+      border-bottom:1px solid rgba(255,255,255,0.10);
+      display:flex;
+      align-items:baseline;
+      justify-content:space-between;
+      gap:12px;
+    }
+
+    .title{ font-weight:700; letter-spacing:0.2px; }
+
+    canvas{
+      width:100%;
+      height:auto;
+      display:block;
+      touch-action:none;
+      background: rgba(0,0,0,0.12);
+    }
+
+    .content{ padding:14px 16px 18px; }
+
+    .row{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:12px;
+    }
+    @media (max-width: 560px){
+      .row{ grid-template-columns:1fr; }
+    }
+
+    .dot{
+      width:10px;height:10px;border-radius:50%;
+      display:inline-block;
+      background:white;
+      box-shadow:0 0 0 2px rgba(0,0,0,0.2);
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+    .dot.u{ background:var(--u); }
+    .dot.v{ background:var(--v); }
+
+    .controls{
+      display:grid;
+      gap:12px;
+      margin-top:12px;
+    }
+
+    .control{
+      background: rgba(0,0,0,0.16);
+      border:1px solid rgba(255,255,255,0.09);
+      border-radius:12px;
+      padding:10px 10px 12px;
+    }
+
+    .control .head{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin-bottom:8px;
+      color:var(--muted);
+      font-size:0.92rem;
+    }
+
+    .control .inputs{
+      display:grid;
+      grid-template-columns: 1fr 110px;
+      gap:10px;
+      align-items:center;
+    }
+
+    input[type="range"]{ width:100%; }
+    input[type="number"]{
+      width:100%;
+      padding:6px 8px;
+      border-radius:10px;
+      border:1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.06);
+      color: var(--text);
+      font: inherit;
+      box-sizing: border-box;
+    }
+
+    .toggleRow{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-bottom:10px;
+    }
+    label.toggle{
+      display:inline-flex;
+      align-items:center;
+      gap:10px;
+      color:var(--muted);
+      user-select:none;
+      cursor:pointer;
+    }
+    input[type="checkbox"]{
+      width:18px; height:18px;
+      accent-color: rgba(255,255,255,0.9);
+    }
+
+    .math{
+      margin-top:12px;
+      padding:12px;
+      border-radius:12px;
+      background:rgba(0,0,0,0.18);
+      border:1px solid rgba(255,255,255,0.09);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size:0.93rem;
+      line-height:1.55;
+      overflow-x:auto;
+    }
+
+    .eq{
+      display:grid;
+      grid-template-columns: 230px 1fr;
+      gap:10px;
+      padding:6px 0;
+      border-bottom:1px dashed rgba(255,255,255,0.12);
+    }
+    .eq:last-child{ border-bottom:0; }
+
+    .label{ color:var(--muted); }
+    .value strong{ color:var(--text); }
+
+    .badge{
+      display:inline-block;
+      padding:2px 8px;
+      border-radius:999px;
+      font-size:0.82rem;
+      border:1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.06);
+      color: var(--muted);
+      vertical-align: middle;
+      white-space: nowrap;
+      margin-left: 8px;
+    }
+
+    .btnrow{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-top:12px;
+    }
+    button{
+      background:rgba(255,255,255,0.06);
+      color:var(--text);
+      border:1px solid rgba(255,255,255,0.12);
+      border-radius:10px;
+      padding:8px 10px;
+      font:inherit;
+      cursor:pointer;
+      user-select:none;
+    }
+    button:hover{ background:rgba(255,255,255,0.10); }
+
+    .note{
+      margin-top:10px;
+      color:var(--muted);
+      font-size:0.95rem;
+      line-height:1.45;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="card">
+      <header>
+        <div class="title">Vectors & Scalar Projection</div>
+      </header>
+      <canvas id="c" width="820" height="820" aria-label="vector canvas"></canvas>
+
+      <div class="content">
+        <div class="controls">
+          <div class="control">
+      <div class="head">
+        <span><span class="dot u"></span>|U|</span>
+      </div>
+      <div class="inputs">
+        <input id="su" type="range" min="0" max="3" step="0.01" />
+        <input id="suNum" type="number" min="0" max="3" step="0.01" />
+      </div>
+          </div>
+
+          <div class="control">
+      <div class="head">
+        <span><span class="dot v"></span>|V|</span>
+      </div>
+      <div class="inputs">
+        <input id="sv" type="range" min="0" max="3" step="0.01" />
+        <input id="svNum" type="number" min="0" max="3" step="0.01" />
+      </div>
+          </div>
+
+          <div class="control">
+      <div class="toggleRow">
+        <label class="toggle">
+          <input id="animOn" type="checkbox" checked />
+          Motion
+        </label>
+      </div>
+
+      <div class="row">
+        <div>
+          <div class="head" style="margin:0 0 6px;">
+      <span><span class="dot u"></span> û speed</span>
+      <span class="badge"><span id="wUText"></span> °/s</span>
+          </div>
+          <div class="inputs">
+      <input id="wU" type="range" min="-45" max="45" step="0.1" />
+      <input id="wUNum" type="number" min="-45" max="45" step="0.1" />
+          </div>
+        </div>
+
+        <div>
+          <div class="head" style="margin:0 0 6px;">
+      <span><span class="dot v"></span> v̂ speed</span>
+      <span class="badge"><span id="wVText"></span> °/s</span>
+          </div>
+          <div class="inputs">
+      <input id="wV" type="range" min="-45" max="45" step="0.1" />
+      <input id="wVNum" type="number" min="-45" max="45" step="0.1" />
+          </div>
+        </div>
+      </div>
+          </div>
+        </div>
+
+        <div class="btnrow">
+          <button id="reset">Reset</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <header>
+        <div class="title">Dot Product</div>
+      </header>
+
+      <div class="content">
+        <div class="math" role="region" aria-label="computed values">
+
+          <div class="eq">
+      <div class="label"><span class="dot u"></span>û</div>
+      <div class="value"><strong>(<span id="ux"></span>, <span id="uy"></span>)</strong></div>
+          </div>
+
+          <div class="eq">
+      <div class="label"><span class="dot v"></span>v̂</div>
+      <div class="value"><strong>(<span id="vx"></span>, <span id="vy"></span>)</strong></div>
+          </div>
+
+          <div class="eq">
+      <div class="label"><span class="dot u"></span>U</div>
+      <div class="value"><strong>(<span id="Ux"></span>, <span id="Uy"></span>)</strong></div>
+          </div>
+
+          <div class="eq">
+      <div class="label"><span class="dot v"></span>V</div>
+      <div class="value"><strong>(<span id="Vx"></span>, <span id="Vy"></span>)</strong></div>
+          </div>
+
+          <div class="eq">
+      <div class="label">|U|,|V|</div>
+      <div class="value"><strong id="mu"></strong>, <strong id="mv"></strong></div>
+          </div>
+
+          <div class="eq">
+      <div class="label">θ</div>
+      <div class="value"><strong id="theta"></strong> <span class="badge" id="thetaRad"></span></div>
+          </div>
+
+          <div class="eq">
+      <div class="label">cos(θ)</div>
+      <div class="value"><strong id="costheta"></strong></div>
+          </div>
+
+          <div class="eq">
+      <div class="label">U·V = |U||V|cos(θ)</div>
+      <div class="value"><strong id="dotIdentity"></strong></div>
+          </div>
+
+          <div class="eq">
+      <div class="label">P</div>
+      <div class="value"><strong id="projVOnU"></strong></div>
+          </div>
+
+          <div class="eq">
+      <div class="label">|P| = |V|cos(θ) = V⋅û</div>
+      <div class="value"><strong id="vDotUhat"></strong></div>
+          </div>
+
+          <div class="eq">
+      <div class="label">Q</div>
+      <div class="value"><strong id="projUOnV"></strong></div>
+          </div>
+
+          <div class="eq">
+      <div class="label">|Q| = |U|cos(θ) = U⋅v̂</div>
+      <div class="value"><strong id="uDotVhat"></strong></div>
+          </div>
+        </div>
+
+        <div class="note">You can move the vectors with your mouse.</div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+        const dot = (a,b) => a.x*b.x + a.y*b.y;
+    const cross = (a,b) => a.x*b.y - a.y*b.x;
+    const mul = (s,v) => ({x:s*v.x, y:s*v.y});
+    const norm = (v) => Math.hypot(v.x, v.y);
+
+    const unit = (v) => {
+      const n = norm(v);
+      return n < 1e-12 ? {x:1, y:0} : {x:v.x/n, y:v.y/n};
+    };
+
+    const rotate = (v, ang) => {
+      const c = Math.cos(ang), s = Math.sin(ang);
+      return { x: v.x*c - v.y*s, y: v.x*s + v.y*c };
+    };
+
+        const DIG = 2;
+
+    const clamp = (x,a,b) => Math.max(a, Math.min(b, x));
+    const fmt = (x, digits=DIG) => {
+      const v = Math.abs(x) < 1e-12 ? 0 : x;
+      return v.toFixed(digits);
+    };
+    const fmtDeg = (rad, digits=DIG) => (rad*180/Math.PI).toFixed(digits) + "°";
+    const fmtRad = (rad, digits=DIG) => rad.toFixed(digits) + " rad";
+    const fmtPt  = (p, digits=DIG) => `(${fmt(p.x,digits)}, ${fmt(p.y,digits)})`;
+
+        const canvas = document.getElementById("c");
+    const ctx = canvas.getContext("2d");
+
+    function fitCanvasToCSS() {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      const w = Math.round(rect.width * dpr);
+      const h = Math.round(rect.width * dpr);       if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+      }
+    }
+
+    function vecFromAngle(a){ return {x:Math.cos(a), y:Math.sin(a)}; }
+
+    let uHat = vecFromAngle(Math.PI/6);
+    let vHat = vecFromAngle(2*Math.PI/3);
+
+    let su = 1.00;     let sv = 1.00; 
+        let animOn = true;
+    let wU_deg = 10.0;      let wV_deg = -6.0;      let rafId = null;
+    let lastT = null;
+
+        let dragging = null; 
+        const el = {
+      ux: document.getElementById("ux"),
+      uy: document.getElementById("uy"),
+      vx: document.getElementById("vx"),
+      vy: document.getElementById("vy"),
+
+      Ux: document.getElementById("Ux"),
+      Uy: document.getElementById("Uy"),
+      Vx: document.getElementById("Vx"),
+      Vy: document.getElementById("Vy"),
+
+      mu: document.getElementById("mu"),
+      mv: document.getElementById("mv"),
+
+      theta: document.getElementById("theta"),
+      thetaRad: document.getElementById("thetaRad"),
+      costheta: document.getElementById("costheta"),
+
+      dotIdentity: document.getElementById("dotIdentity"),
+
+      vDotUhat: document.getElementById("vDotUhat"),
+      uDotVhat: document.getElementById("uDotVhat"),
+      projVOnU: document.getElementById("projVOnU"),
+      projUOnV: document.getElementById("projUOnV"),
+
+      su: document.getElementById("su"),
+      suNum: document.getElementById("suNum"),
+      sv: document.getElementById("sv"),
+      svNum: document.getElementById("svNum"),
+
+      animOn: document.getElementById("animOn"),
+      wU: document.getElementById("wU"),
+      wUNum: document.getElementById("wUNum"),
+      wV: document.getElementById("wV"),
+      wVNum: document.getElementById("wVNum"),
+      wUText: document.getElementById("wUText"),
+      wVText: document.getElementById("wVText"),
+
+      reset: document.getElementById("reset"),
+    };
+
+    function setScaleU(val){
+      su = clamp(Number(val), 0, 3);
+      el.su.value = String(su);
+      el.suNum.value = String(su.toFixed(2));
+      draw(); updateReadout();
+    }
+    function setScaleV(val){
+      sv = clamp(Number(val), 0, 3);
+      el.sv.value = String(sv);
+      el.svNum.value = String(sv.toFixed(2));
+      draw(); updateReadout();
+    }
+
+    function setWU(val){
+      wU_deg = clamp(Number(val), -45, 45);
+      el.wU.value = String(wU_deg);
+      el.wUNum.value = String(wU_deg.toFixed(1));
+      el.wUText.textContent = wU_deg.toFixed(1);
+    }
+    function setWV(val){
+      wV_deg = clamp(Number(val), -45, 45);
+      el.wV.value = String(wV_deg);
+      el.wVNum.value = String(wV_deg.toFixed(1));
+      el.wVText.textContent = wV_deg.toFixed(1);
+    }
+
+    el.su.addEventListener("input", e => setScaleU(e.target.value));
+    el.suNum.addEventListener("input", e => setScaleU(e.target.value));
+    el.sv.addEventListener("input", e => setScaleV(e.target.value));
+    el.svNum.addEventListener("input", e => setScaleV(e.target.value));
+
+    el.wU.addEventListener("input", e => setWU(e.target.value));
+    el.wUNum.addEventListener("input", e => setWU(e.target.value));
+    el.wV.addEventListener("input", e => setWV(e.target.value));
+    el.wVNum.addEventListener("input", e => setWV(e.target.value));
+
+    el.animOn.addEventListener("change", e => {
+      animOn = !!e.target.checked;
+      if (animOn) startAnim();
+      else stopAnim();
+    });
+
+    el.reset.addEventListener("click", () => {
+      uHat = vecFromAngle(Math.PI/6);
+      vHat = vecFromAngle(2*Math.PI/3);
+      setScaleU(1.00);
+      setScaleV(1.00);
+
+      setWU(10.0);
+      setWV(-6.0);
+
+      draw(); updateReadout();
+    });
+
+    function getViewParams(){
+      fitCanvasToCSS();
+      const W = canvas.width, H = canvas.height;
+      const cx = W/2, cy = H/2;
+
+      const worldMax = Math.max(1, su, sv);
+      const worldRadius = worldMax * 1.25 + 0.10;       const viewRadiusPx = Math.min(W, H) * 0.40;
+      const pxPerWorld = viewRadiusPx / worldRadius;
+
+      return {W,H,cx,cy,worldRadius,pxPerWorld};
+    }
+
+    function worldToCanvas(p, vp){
+      return { x: vp.cx + p.x * vp.pxPerWorld, y: vp.cy - p.y * vp.pxPerWorld };
+    }
+
+    function canvasToUnitDirection(px, py, vp){
+      const dx = px - vp.cx;
+      const dy = vp.cy - py;       const ang = Math.atan2(dy, dx);
+      return vecFromAngle(ang);
+    }
+
+    function pickDirPoint(px, py, vp){
+      const uPt = worldToCanvas(uHat, vp);
+      const vPt = worldToCanvas(vHat, vp);
+      const du = Math.hypot(px - uPt.x, py - uPt.y);
+      const dv = Math.hypot(px - vPt.x, py - vPt.y);
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      const threshold = 24 * dpr;
+      if (Math.min(du, dv) <= threshold) return du < dv ? "u" : "v";
+      return du < dv ? "u" : "v";
+    }
+
+    function worldDirToCanvasAngle(dirWorld){
+      const n = Math.hypot(dirWorld.x, dirWorld.y);
+      if (n < 1e-12) return 0;
+      return Math.atan2(-dirWorld.y, dirWorld.x);
+    }
+
+    function drawGridAndAxes(vp){
+      const {W,H,cx,cy,pxPerWorld,worldRadius} = vp;
+
+      let step = 0.5;
+      if (worldRadius > 4) step = 1;
+      if (worldRadius > 8) step = 2;
+
+      ctx.save();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--grid');
+      const start = -Math.ceil(worldRadius/step)*step;
+      const end   =  Math.ceil(worldRadius/step)*step;
+
+      for (let x = start; x <= end; x += step){
+        const X = cx + x * pxPerWorld;
+        ctx.beginPath(); ctx.moveTo(X, 0); ctx.lineTo(X, H); ctx.stroke();
+      }
+      for (let y = start; y <= end; y += step){
+        const Y = cy - y * pxPerWorld;
+        ctx.beginPath(); ctx.moveTo(0, Y); ctx.lineTo(W, Y); ctx.stroke();
+      }
+      ctx.restore();
+
+      ctx.save();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--axis');
+      ctx.beginPath(); ctx.moveTo(0, cy); ctx.lineTo(W, cy); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, H); ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawUnitCircle(vp){
+      const rPx = 1 * vp.pxPerWorld;
+      ctx.save();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--circle');
+      ctx.beginPath();
+      ctx.arc(vp.cx, vp.cy, rPx, 0, Math.PI*2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawRayToUnit(dir, colorVar, vp){
+      const color = getComputedStyle(document.documentElement).getPropertyValue(colorVar).trim();
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = 0.40;
+      ctx.lineWidth = 3;
+      ctx.setLineDash([10, 10]);
+      const end = worldToCanvas(dir, vp);
+      ctx.beginPath();
+      ctx.moveTo(vp.cx, vp.cy);
+      ctx.lineTo(end.x, end.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+
+    function drawVector(toWorld, colorVar, vp, label){
+      const color = getComputedStyle(document.documentElement).getPropertyValue(colorVar).trim();
+      const A = {x: vp.cx, y: vp.cy};
+      const B = worldToCanvas(toWorld, vp);
+
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.lineWidth = 6*dpr;
+
+      ctx.beginPath();
+      ctx.moveTo(A.x, A.y);
+      ctx.lineTo(B.x, B.y);
+      ctx.stroke();
+
+      const segLen = Math.hypot(B.x - A.x, B.y - A.y);
+      if (segLen > 18*dpr){
+        const ang = Math.atan2(B.y - A.y, B.x - A.x);
+        const headLen = 18*dpr;
+        const a1 = ang + Math.PI * 0.82;
+        const a2 = ang - Math.PI * 0.82;
+        ctx.beginPath();
+        ctx.moveTo(B.x, B.y);
+        ctx.lineTo(B.x + Math.cos(a1) * headLen, B.y + Math.sin(a1) * headLen);
+        ctx.lineTo(B.x + Math.cos(a2) * headLen, B.y + Math.sin(a2) * headLen);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      if (label){
+        ctx.font = `${14*dpr}px ui-sans-serif, system-ui`;
+        ctx.fillStyle = "rgba(255,255,255,0.92)";
+        ctx.fillText(label, B.x + 10*dpr, B.y - 10*dpr);
+      }
+
+      ctx.restore();
+    }
+
+    function drawExtensionIfNeeded(dirUnit, segLen, t, colorVar, vp){
+      if (segLen < 1e-12) return;
+
+      let from = null, to = null;
+      if (t > segLen){
+        from = mul(segLen, dirUnit);
+        to   = mul(t, dirUnit);
+      } else if (t < 0){
+        from = {x:0, y:0};
+        to   = mul(t, dirUnit);
+      } else {
+        return;
+      }
+
+      const color = getComputedStyle(document.documentElement).getPropertyValue(colorVar).trim();
+      const A = worldToCanvas(from, vp);
+      const B = worldToCanvas(to, vp);
+
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = 0.30;
+      ctx.lineWidth = 3*dpr;
+      ctx.setLineDash([10*dpr, 10*dpr]);
+      ctx.beginPath();
+      ctx.moveTo(A.x, A.y);
+      ctx.lineTo(B.x, B.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+
+    function drawDashedSegment(aWorld, bWorld, vp, alpha=0.85){
+      const A = worldToCanvas(aWorld, vp);
+      const B = worldToCanvas(bWorld, vp);
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+
+      ctx.save();
+      ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--proj').trim();
+      ctx.globalAlpha = alpha;
+      ctx.lineWidth = 3*dpr;
+      ctx.setLineDash([10*dpr, 10*dpr]);
+      ctx.beginPath();
+      ctx.moveTo(A.x, A.y);
+      ctx.lineTo(B.x, B.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+
+    function drawProjectionSquare(Pworld, vp, strokeColorVar, label, alignDirWorld){
+      const P = worldToCanvas(Pworld, vp);
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      const size = 8*dpr;
+      const stroke = getComputedStyle(document.documentElement).getPropertyValue(strokeColorVar).trim();
+
+      const ang = worldDirToCanvasAngle(alignDirWorld || {x:1,y:0});
+
+      ctx.save();
+      ctx.translate(P.x, P.y);
+      ctx.rotate(ang);
+      ctx.lineWidth = 3*dpr;
+      ctx.strokeStyle = stroke;
+      ctx.beginPath();
+      ctx.rect(-size, -size, 2*size, 2*size);
+      ctx.stroke();
+      ctx.restore();
+
+      if (label){
+        ctx.save();
+        ctx.font = `${12*dpr}px ui-sans-serif, system-ui`;
+        ctx.fillStyle = "rgba(255,255,255,0.88)";
+        ctx.fillText(label, P.x + (size+8), P.y - (size+6));
+        ctx.restore();
+      }
+    }
+
+    function drawHollowPoint(worldPt, colorVar, vp, rPx, label){
+      const color = getComputedStyle(document.documentElement).getPropertyValue(colorVar).trim();
+      const P = worldToCanvas(worldPt, vp);
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(P.x, P.y, rPx*dpr, 0, Math.PI*2);
+      ctx.lineWidth = 3*dpr;
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = 0.95;
+      ctx.stroke();
+
+      if (label){
+        ctx.font = `${13*dpr}px ui-sans-serif, system-ui`;
+        ctx.fillStyle = "rgba(255,255,255,0.86)";
+        ctx.fillText(label, P.x + (rPx+8)*dpr, P.y - (rPx+6)*dpr);
+      }
+      ctx.restore();
+    }
+
+    function draw(){
+      const vp = getViewParams();
+      ctx.clearRect(0, 0, vp.W, vp.H);
+
+      const U = mul(su, uHat);
+      const V = mul(sv, vHat);
+
+      const tV_on_u = dot(V, uHat);
+      const P = mul(tV_on_u, uHat);
+
+      const tU_on_v = dot(U, vHat);
+      const Q = mul(tU_on_v, vHat);
+
+      drawGridAndAxes(vp);
+      drawUnitCircle(vp);
+
+      drawRayToUnit(uHat, '--u', vp);
+      drawRayToUnit(vHat, '--v', vp);
+
+      drawVector(U, '--u', vp, 'U');
+      drawVector(V, '--v', vp, 'V');
+
+      drawExtensionIfNeeded(uHat, su, tV_on_u, '--u', vp);
+      drawExtensionIfNeeded(vHat, sv, tU_on_v, '--v', vp);
+
+      drawDashedSegment(V, P, vp, 0.85);
+      drawDashedSegment(U, Q, vp, 0.85);
+
+      drawProjectionSquare(P, vp, '--u', 'P', vHat);
+      drawProjectionSquare(Q, vp, '--v', 'Q', uHat);
+
+      drawHollowPoint(uHat, '--u', vp, 9, 'û');
+      drawHollowPoint(vHat, '--v', vp, 9, 'v̂');
+
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      ctx.save();
+      ctx.fillStyle = "rgba(255,255,255,0.9)";
+      ctx.beginPath();
+      ctx.arc(vp.cx, vp.cy, 6*dpr, 0, Math.PI*2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function updateReadout(){
+      const U = mul(su, uHat);
+      const V = mul(sv, vHat);
+
+      const mu = norm(U);
+      const mv = norm(V);
+
+      const dotDir = dot(uHat, vHat);
+      const cr = cross(uHat, vHat);
+      const theta = Math.atan2(Math.abs(cr), dotDir);
+      const costheta = Math.cos(theta);
+
+      const dotUV = dot(U, V);
+      el.dotIdentity.textContent = fmt(dotUV);
+
+      const vDotUhat = dot(V, uHat);
+      const projVOnU = mul(vDotUhat, uHat);
+
+      const uDotVhat = dot(U, vHat);
+      const projUOnV = mul(uDotVhat, vHat);
+
+      el.ux.textContent = fmt(uHat.x);
+      el.uy.textContent = fmt(uHat.y);
+      el.vx.textContent = fmt(vHat.x);
+      el.vy.textContent = fmt(vHat.y);
+
+      el.Ux.textContent = fmt(U.x);
+      el.Uy.textContent = fmt(U.y);
+      el.Vx.textContent = fmt(V.x);
+      el.Vy.textContent = fmt(V.y);
+
+      el.mu.textContent = fmt(mu);
+      el.mv.textContent = fmt(mv);
+
+      el.theta.textContent = fmtDeg(theta);
+      el.thetaRad.textContent = fmtRad(theta);
+
+      el.costheta.textContent = fmt(costheta);
+
+      el.vDotUhat.textContent = fmt(vDotUhat);
+      el.uDotVhat.textContent = fmt(uDotVhat);
+
+      el.projVOnU.textContent = fmtPt(projVOnU);
+      el.projUOnV.textContent = fmtPt(projUOnV);
+    }
+
+    function pointerPos(evt){
+      const rect = canvas.getBoundingClientRect();
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      return {
+        x: (evt.clientX - rect.left) * dpr,
+        y: (evt.clientY - rect.top) * dpr
+      };
+    }
+
+    canvas.addEventListener("pointerdown", (evt) => {
+      canvas.setPointerCapture(evt.pointerId);
+      const vp = getViewParams();
+      const p = pointerPos(evt);
+      dragging = pickDirPoint(p.x, p.y, vp);
+
+      const dir = canvasToUnitDirection(p.x, p.y, vp);
+      if (dragging === "u") uHat = dir;
+      if (dragging === "v") vHat = dir;
+
+      draw(); updateReadout();
+    });
+
+    canvas.addEventListener("pointermove", (evt) => {
+      if (!dragging) return;
+      const vp = getViewParams();
+      const p = pointerPos(evt);
+      const dir = canvasToUnitDirection(p.x, p.y, vp);
+
+      if (dragging === "u") uHat = dir;
+      if (dragging === "v") vHat = dir;
+
+      draw(); updateReadout();
+    });
+
+    function endDrag(){
+      dragging = null;
+      draw(); updateReadout();
+    }
+    canvas.addEventListener("pointerup", endDrag);
+    canvas.addEventListener("pointercancel", endDrag);
+    canvas.addEventListener("pointerleave", () => { if (dragging) endDrag(); });
+
+    window.addEventListener("resize", () => { draw(); updateReadout(); });
+
+    function startAnim(){
+      if (rafId != null) return;
+      lastT = null;
+      rafId = requestAnimationFrame(frame);
+    }
+
+    function stopAnim(){
+      if (rafId == null) return;
+      cancelAnimationFrame(rafId);
+      rafId = null;
+      lastT = null;
+      draw(); updateReadout();
+    }
+
+    function frame(t){
+      rafId = requestAnimationFrame(frame);
+      if (!animOn) return;
+
+      if (lastT == null) { lastT = t; return; }
+      const dt = (t - lastT) / 1000;
+      lastT = t;
+
+      const wU = (wU_deg * Math.PI) / 180;
+      const wV = (wV_deg * Math.PI) / 180;
+
+      if (dragging !== "u" && Math.abs(wU) > 1e-12) uHat = unit(rotate(uHat, wU * dt));
+      if (dragging !== "v" && Math.abs(wV) > 1e-12) vHat = unit(rotate(vHat, wV * dt));
+
+      draw(); updateReadout();
+    }
+
+    el.su.value = String(su);
+    el.suNum.value = String(su.toFixed(2));
+    el.sv.value = String(sv);
+    el.svNum.value = String(sv.toFixed(2));
+
+    setWU(wU_deg);
+    setWV(wV_deg);
+
+    el.animOn.checked = true;
+    animOn = true;
+
+    draw(); updateReadout();
+    startAnim();
+  </script>
+</body>
+</html>
