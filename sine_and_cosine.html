@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Sine and Cosine</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; padding: 16px; }
+
+    .wrap { display: grid; grid-template-columns: 380px 1fr; gap: 16px; align-items: start; }
+    @media (max-width: 900px) { .wrap { grid-template-columns: 1fr; } }
+
+    .panel {
+      border: 1px solid rgba(127,127,127,.35);
+      border-radius: 12px;
+      padding: 14px;
+    }
+
+    h2 { margin: 0 0 8px; }
+    .small { font-size: 12px; opacity: .82; line-height: 1.35; }
+    label { display: block; font-weight: 600; margin: 10px 0 6px; }
+    input[type="range"] { width: 100%; }
+    input[type="number"]{
+      width: 50%; padding: 8px 10px; border-radius: 10px;
+      border: 1px solid rgba(127,127,127,.35); background: transparent;
+      font-variant-numeric: tabular-nums;
+    }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+    .canvasBox{
+      width: 100%;
+      max-width: min(78vh, 760px);
+      aspect-ratio: 1 / 1;
+      margin: 0 auto;
+    }
+    canvas{
+      width: 100%;
+      height: 100%;
+      display: block;
+      border: 1px solid rgba(127,127,127,.35);
+      border-radius: 12px;
+      background: rgba(127,127,127,.06);
+    }
+
+    .stat { font-variant-numeric: tabular-nums; line-height: 1.5; }
+    .pill{
+      display: inline-block; padding: 2px 8px; border-radius: 999px;
+      border: 1px solid rgba(127,127,127,.35); background: rgba(127,127,127,.10);
+      margin-right: 6px; margin-top: 6px;
+    }
+    code { font-size: .95em; }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="panel">
+      <h2>Sine and Cosine</h2>
+
+      <div class="row">
+        <div>
+          <label for="pDeg">Angle P</label>
+          <input id="pDeg" type="range" min="0" max="360" step="1" value="45" />
+          <input id="pDegNum" type="number" min="0" max="360" step="1" value="45" />
+        </div>
+        <div>
+          <label for="qDeg">Angle Q</label>
+          <input id="qDeg" type="range" min="0" max="360" step="1" value="0" />
+          <input id="qDegNum" type="number" min="0" max="360" step="1" value="0" />
+        </div>
+      </div>
+
+      <hr style="border:none;border-top:1px solid rgba(127,127,127,.25);margin:14px 0;" />
+      <div id="stats" class="stat"></div>
+    </div>
+
+    <div class="panel">
+      <div class="canvasBox">
+        <canvas id="cv"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const cv = document.getElementById('cv');
+    const ctx = cv.getContext('2d');
+
+    const qDeg = document.getElementById('qDeg');
+    const qDegNum = document.getElementById('qDegNum');
+    const pDeg = document.getElementById('pDeg');
+    const pDegNum = document.getElementById('pDegNum');
+    const statsEl = document.getElementById('stats');
+
+    const TAU = Math.PI * 2;
+
+    let center = { x: 0, y: 0 };
+    let scale = 1;
+
+    function clamp(x,a,b){ return Math.max(a, Math.min(b, x)); }
+    function fixZero(x, eps=5e-13){ return Math.abs(x) < eps ? 0 : x; }
+    function fmt(x, d=6){
+      x = fixZero(x);
+      if (Object.is(x, -0)) x = 0;
+      return x.toFixed(d);
+    }
+
+    function resizeCanvasToContainerSquare(){
+      const rect = cv.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const cssSize = Math.max(1, Math.floor(Math.min(rect.width, rect.height)));
+      const pxSize = Math.floor(cssSize * dpr);
+
+      if (cv.width !== pxSize || cv.height !== pxSize) {
+        cv.width = pxSize;
+        cv.height = pxSize;
+      }
+      center = { x: cv.width/2, y: cv.height/2 };
+      scale = cv.width * 0.40;
+    }
+
+    function clear(){ ctx.clearRect(0,0,cv.width,cv.height); }
+    function W2C(p){ return { x: center.x + p.x*scale, y: center.y - p.y*scale }; }
+
+    function line(a,b, stroke='rgba(255,255,255,0.9)', w=3, dash=null){
+      const A = W2C(a), B = W2C(b);
+      ctx.save();
+      if (dash) ctx.setLineDash(dash);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(A.x, A.y);
+      ctx.lineTo(B.x, B.y);
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = w;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function point(p, r=6, fill='rgba(255,255,255,0.95)'){
+      const P = W2C(p);
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(P.x,P.y,r,0,TAU);
+      ctx.fillStyle = fill;
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function drawText(text, worldPos, fill='rgba(255,255,255,0.95)', align='center'){
+      const P = W2C(worldPos);
+      ctx.save();
+      ctx.font = '13.5px system-ui, -apple-system, Segoe UI, Roboto, Arial';
+      ctx.textAlign = align;
+      ctx.textBaseline = 'middle';
+      ctx.lineJoin = 'round';
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+      ctx.strokeText(text, P.x, P.y);
+      ctx.fillStyle = fill;
+      ctx.fillText(text, P.x, P.y);
+      ctx.restore();
+    }
+
+    function drawCircleAndAxes(){
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(center.x, center.y, scale, 0, TAU);
+      ctx.strokeStyle = 'rgba(200,200,200,0.90)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(center.x - 1.15*scale, center.y);
+      ctx.lineTo(center.x + 1.15*scale, center.y);
+      ctx.moveTo(center.x, center.y - 1.15*scale);
+      ctx.lineTo(center.x, center.y + 1.15*scale);
+      ctx.strokeStyle = 'rgba(200,200,200,0.35)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function angleArc(fromTheta, toTheta, color='rgba(255,220,120,0.95)'){
+      let d = ((toTheta - fromTheta + Math.PI) % TAU) - Math.PI;
+
+      const r = 0.22 * scale;
+      const start = fromTheta;
+      const end = fromTheta + d;
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(center.x, center.y, r, -start, -end, d < 0);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2.6;
+      ctx.stroke();
+      ctx.restore();
+
+      const mid = fromTheta + d/2;
+      drawText('θ', { x: 0.20*Math.cos(mid), y: 0.20*Math.sin(mid) }, color, 'center');
+
+      return d;
+    }
+
+    function drawRightAngleMarker(F, Q, P){
+      const vx = P.x - F.x, vy = P.y - F.y;
+      const vLen = Math.hypot(vx, vy) || 1;
+      const px = vx / vLen, py = vy / vLen;
+
+      const s = 0.08;
+      const u = { x: Q.x, y: Q.y };
+      const p = { x: px, y: py };
+
+      const p1 = { x: F.x + u.x*s, y: F.y + u.y*s };
+      const p2 = { x: p1.x + p.x*s, y: p1.y + p.y*s };
+      const p3 = { x: F.x + p.x*s, y: F.y + p.y*s };
+
+      line(p1, p2, 'rgba(255,255,255,0.60)', 2);
+      line(p2, p3, 'rgba(255,255,255,0.60)', 2);
+    }
+
+    function dot(a,b){ return a.x*b.x + a.y*b.y; }
+    function cross2(a,b){ return a.x*b.y - a.y*b.x; }
+
+    function updateStats(Qth, Pth, thetaSigned, Q, P, cosT, sinT){
+      const thetaDeg = thetaSigned * 180 / Math.PI;
+
+      statsEl.innerHTML = `
+        <div>
+          <span class="pill">Q angle = <code>${fmt(Qth,6)}</code> rad</span>
+          <span class="pill">P angle = <code>${fmt(Pth,6)}</code> rad</span>
+        </div>
+        <div style="margin-top:8px;">
+          <span class="pill">Q = (<code>${fmt(Q.x,4)}</code>, <code>${fmt(Q.y,4)}</code>)</span>
+          <span class="pill">P = (<code>${fmt(P.x,4)}</code>, <code>${fmt(P.y,4)}</code>)</span>
+        </div>
+        <div style="margin-top:8px;">
+          <span class="pill">θ (Q→P) = <code>${fmt(thetaSigned,6)}</code> rad</span>
+          <span class="pill">θ (Q→P) = <code>${fmt(thetaDeg,2)}</code>°</span>
+        </div>
+        <div style="margin-top:8px;">
+          <span class="pill">cos(θ) = <code>${fmt(cosT,6)}</code></span>
+          <span class="pill">sin(θ) = <code>${fmt(sinT,6)}</code></span>
+        </div>
+      `;
+    }
+
+    let rafPending = false;
+    function scheduleDraw(){
+      if (rafPending) return;
+      rafPending = true;
+      requestAnimationFrame(() => { rafPending = false; draw(); });
+    }
+
+    function draw(){
+      resizeCanvasToContainerSquare();
+
+      const qDegVal = clamp(+qDegNum.value, 0, 360);
+      const pDegVal = clamp(+pDegNum.value, 0, 360);
+      qDeg.value = qDegVal; qDegNum.value = qDegVal;
+      pDeg.value = pDegVal; pDegNum.value = pDegVal;
+
+      const Qth = qDegVal * Math.PI / 180;
+      const Pth = pDegVal * Math.PI / 180;
+
+      const O = { x: 0, y: 0 };
+      const Q = { x: Math.cos(Qth), y: Math.sin(Qth) };
+      const P = { x: Math.cos(Pth), y: Math.sin(Pth) };
+
+      const cosT = dot(P, Q);
+      const sinT = cross2(Q, P);
+      const F = { x: cosT*Q.x, y: cosT*Q.y };
+
+      clear();
+      drawCircleAndAxes();
+
+      line(O, Q, 'rgba(255,255,255,0.92)', 3.6);
+      line(O, P, 'rgba(255,220,120,0.95)', 3.6);
+
+      line(Q, P, 'rgba(255,255,255,0.55)', 2.6, [2, 10]);
+
+      const thetaSigned = angleArc(Qth, Pth, 'rgba(255,220,120,0.95)');
+
+      line(O, F, 'rgba(120,170,255,0.95)', 4.2);
+      line(F, P, 'rgba(120,255,160,0.95)', 4.2);
+
+      line(P, F, 'rgba(255,255,255,0.25)', 2, [6,6]);
+
+      drawRightAngleMarker(F, Q, P);
+
+      point(O, 5, 'rgba(255,255,255,0.95)');
+      point(Q, 8, 'rgba(255,255,255,0.92)');
+      point(P, 8, 'rgba(255,220,120,0.95)');
+      point(F, 6, 'rgba(220,220,220,0.95)');
+
+      drawText('O', {x:0.03,y:0.06}, 'rgba(255,255,255,0.9)', 'left');
+      drawText('Q', { x: Q.x + 0.05, y: Q.y + 0.06 }, 'rgba(255,255,255,0.92)', 'left');
+      drawText('P', { x: P.x + 0.05, y: P.y + 0.06 }, 'rgba(255,220,120,0.95)', 'left');
+      drawText('F', { x: F.x + 0.05, y: F.y - 0.06 }, 'rgba(220,220,220,0.95)', 'left');
+
+      const midOF = { x: F.x*0.5, y: F.y*0.5 };
+      const nQ = { x: -Q.y, y: Q.x };
+      drawText(`cos(θ) = ${fmt(cosT,4)}`, { x: midOF.x + nQ.x*0.10, y: midOF.y + nQ.y*0.10 }, 'rgba(120,170,255,0.95)', 'center');
+
+      const midFP = { x: (F.x + P.x)/2, y: (F.y + P.y)/2 };
+      const v = { x: P.x - F.x, y: P.y - F.y };
+      const vLen = Math.hypot(v.x, v.y) || 1;
+      const nV = { x: -v.y / vLen, y: v.x / vLen };
+      drawText(`sin(θ) = ${fmt(sinT,4)}`, { x: midFP.x + nV.x*0.10, y: midFP.y + nV.y*0.10 }, 'rgba(120,255,160,0.95)', 'center');
+
+      updateStats(Qth, Pth, thetaSigned, Q, P, cosT, sinT);
+    }
+
+    function syncQFromSlider(){ qDegNum.value = qDeg.value; scheduleDraw(); }
+    function syncQFromNumber(){
+      const v = clamp(+qDegNum.value, 0, 360);
+      qDeg.value = v; qDegNum.value = v;
+      scheduleDraw();
+    }
+    function syncPFromSlider(){ pDegNum.value = pDeg.value; scheduleDraw(); }
+    function syncPFromNumber(){
+      const v = clamp(+pDegNum.value, 0, 360);
+      pDeg.value = v; pDegNum.value = v;
+      scheduleDraw();
+    }
+
+    qDeg.addEventListener('input', syncQFromSlider);
+    qDegNum.addEventListener('input', syncQFromNumber);
+    pDeg.addEventListener('input', syncPFromSlider);
+    pDegNum.addEventListener('input', syncPFromNumber);
+
+    window.addEventListener('resize', scheduleDraw);
+    const ro = new ResizeObserver(() => scheduleDraw());
+    ro.observe(cv);
+
+    scheduleDraw();
+  </script>
+</body>
+</html>
