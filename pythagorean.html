@@ -1,0 +1,577 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Pythagorean Theorem</title>
+  <style>
+    :root {
+      --panel-w: 340px;
+      --bg: #0b1220;
+      --panel: #101a2e;
+      --text: #e7eefc;
+      --muted: #b6c2dd;
+      --border: rgba(255,255,255,0.12);
+      --shadow: 0 10px 30px rgba(0,0,0,0.35);
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background: radial-gradient(1200px 700px at 20% 10%, #172a52 0%, #0b1220 55%, #070b14 100%);
+      color: var(--text);
+    }
+
+    .app {
+      height: 100vh;
+      display: flex;
+      gap: 16px;
+      padding: 16px;
+    }
+
+    .panel {
+      width: var(--panel-w);
+      max-width: 90vw;
+      background: rgba(16, 26, 46, 0.85);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      padding: 14px 14px 16px;
+      overflow: auto;
+    }
+
+    .panel h1 {
+      margin: 6px 0 8px;
+      font-size: 18px;
+      letter-spacing: 0.2px;
+    }
+
+    .panel p {
+      margin: 8px 0;
+      color: var(--muted);
+      line-height: 1.35;
+      font-size: 13.5px;
+    }
+
+    .controls {
+      margin-top: 12px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      align-items: end;
+    }
+
+    label {
+      display: grid;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    input[type="number"] {
+      width: 100%;
+      padding: 10px 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.06);
+      color: var(--text);
+      outline: none;
+    }
+    input[type="number"]:focus {
+      border-color: rgba(255,255,255,0.28);
+    }
+
+    .row {
+      grid-column: 1 / -1;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-top: 6px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      appearance: none;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.06);
+      color: var(--text);
+      padding: 9px 10px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 12.5px;
+    }
+    .btn:hover { border-color: rgba(255,255,255,0.25); }
+
+    .check {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12.5px;
+      user-select: none;
+      white-space: nowrap;
+    }
+
+    .readout {
+      margin-top: 12px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(0,0,0,0.18);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .readout code {
+      background: rgba(255,255,255,0.06);
+      padding: 1px 6px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.12);
+    }
+
+    .hint {
+      margin-top: 10px;
+      font-size: 12px;
+      color: rgba(231,238,252,0.72);
+    }
+
+    .stage {
+      flex: 1;
+      min-width: 0;
+      background: rgba(10, 15, 28, 0.45);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      position: relative;
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      touch-action: none;
+      background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+    }
+
+    @media (max-width: 900px) {
+      .app { flex-direction: column; }
+      .panel { width: auto; }
+      .stage { height: 55vh; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="panel">
+      <h1>Pythagorean Theorem</h1>
+      a² + b² = c²
+      <p>
+        This only works on a right triangle.
+        A right triangle can fit a square inside one corner. 
+      </p>
+
+      <div class="controls">
+        <label>
+          x coordinate
+          <input id="xInput" type="number" step="0.1" value="3" />
+        </label>
+        <label>
+          y coordinate
+          <input id="yInput" type="number" step="0.1" value="4" />
+        </label>
+
+        <div class="row">
+          <label class="check">
+            <input id="gridToggle" type="checkbox" checked />
+            Show grid & axes
+          </label>
+          <button class="btn" id="resetBtn">Reset (3, 4)</button>
+        </div>
+      </div>
+
+      <div class="readout" id="readout"></div>
+    </aside>
+
+    <main class="stage">
+      <canvas id="canvas"></canvas>
+    </main>
+  </div>
+
+  <script>
+    (() => {
+      const canvas = document.getElementById("canvas");
+      const ctx = canvas.getContext("2d");
+
+      const xInput = document.getElementById("xInput");
+      const yInput = document.getElementById("yInput");
+      const gridToggle = document.getElementById("gridToggle");
+      const readout = document.getElementById("readout");
+      const resetBtn = document.getElementById("resetBtn");
+
+      const state = { x: 3, y: 4 };
+
+      const EPS = 1e-9;
+
+      const add = (p, v) => ({ x: p.x + v.x, y: p.y + v.y });
+      const sub = (a, b) => ({ x: a.x - b.x, y: a.y - b.y });
+      const mul = (v, k) => ({ x: v.x * k, y: v.y * k });
+
+      const dot = (a, b) => a.x * b.x + a.y * b.y;
+      const cross = (a, b) => a.x * b.y - a.y * b.x;
+
+      const len = (v) => Math.hypot(v.x, v.y);
+      const normalize = (v) => {
+        const L = len(v);
+        if (L < EPS) return { x: 0, y: 0 };
+        return { x: v.x / L, y: v.y / L };
+      };
+
+      const perpLeft = (v) => ({ x: -v.y, y: v.x });
+
+      function squareOnSide(P, Q, R) {
+        const v = sub(Q, P);
+        if (len(v) < EPS) return null;
+
+        let p = perpLeft(v);
+        const cr = cross(v, sub(R, P));
+
+        if (cr > 0) p = mul(p, -1);
+
+        return [P, Q, add(Q, p), add(P, p)];
+      }
+
+      function computeTransform(points, w, h) {
+        const margin = 52;
+
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        for (const p of points) {
+          minX = Math.min(minX, p.x);
+          maxX = Math.max(maxX, p.x);
+          minY = Math.min(minY, p.y);
+          maxY = Math.max(maxY, p.y);
+        }
+
+        if (!isFinite(minX) || !isFinite(minY)) {
+          minX = -1; maxX = 1; minY = -1; maxY = 1;
+        }
+
+        let dx = maxX - minX;
+        let dy = maxY - minY;
+
+        if (dx < EPS) { dx = 1; minX -= 0.5; maxX += 0.5; }
+        if (dy < EPS) { dy = 1; minY -= 0.5; maxY += 0.5; }
+
+        const aw = Math.max(10, w - 2 * margin);
+        const ah = Math.max(10, h - 2 * margin);
+        const scale = Math.min(aw / dx, ah / dy);
+
+        return { minX, maxX, minY, maxY, dx, dy, scale, margin, w, h };
+      }
+
+      function toCanvas(T, p) {
+        return {
+          x: (p.x - T.minX) * T.scale + T.margin,
+          y: T.h - ((p.y - T.minY) * T.scale + T.margin),
+        };
+      }
+
+      function toWorld(T, c) {
+        return {
+          x: (c.x - T.margin) / T.scale + T.minX,
+          y: ((T.h - c.y) - T.margin) / T.scale + T.minY,
+        };
+      }
+
+      function clear(w, h) {
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = "rgba(255,255,255,0.02)";
+        ctx.fillRect(0, 0, w, h);
+      }
+
+      function drawPolygon(T, pts, fillStyle, strokeStyle, lineWidth = 2) {
+        if (!pts || pts.length < 2) return;
+        ctx.beginPath();
+        const p0 = toCanvas(T, pts[0]);
+        ctx.moveTo(p0.x, p0.y);
+        for (let i = 1; i < pts.length; i++) {
+          const pi = toCanvas(T, pts[i]);
+          ctx.lineTo(pi.x, pi.y);
+        }
+        ctx.closePath();
+
+        if (fillStyle) {
+          ctx.fillStyle = fillStyle;
+          ctx.fill();
+        }
+        if (strokeStyle) {
+          ctx.strokeStyle = strokeStyle;
+          ctx.lineWidth = lineWidth;
+          ctx.stroke();
+        }
+      }
+
+      function drawSegment(T, a, b, strokeStyle, lineWidth = 2) {
+        const A = toCanvas(T, a);
+        const B = toCanvas(T, b);
+        ctx.beginPath();
+        ctx.moveTo(A.x, A.y);
+        ctx.lineTo(B.x, B.y);
+        ctx.strokeStyle = strokeStyle;
+        ctx.lineWidth = lineWidth;
+        ctx.stroke();
+      }
+
+      function drawPoint(T, p, rPx, fillStyle, strokeStyle) {
+        const c = toCanvas(T, p);
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, rPx, 0, Math.PI * 2);
+        if (fillStyle) { ctx.fillStyle = fillStyle; ctx.fill(); }
+        if (strokeStyle) { ctx.strokeStyle = strokeStyle; ctx.lineWidth = 2; ctx.stroke(); }
+      }
+
+      function drawLabel(T, text, p, dxPx, dyPx) {
+        const c = toCanvas(T, p);
+        ctx.fillText(text, c.x + dxPx, c.y + dyPx);
+      }
+
+      function centroid(pts) {
+        let x = 0, y = 0;
+        for (const p of pts) { x += p.x; y += p.y; }
+        return { x: x / pts.length, y: y / pts.length };
+      }
+
+      function niceStep(raw) {
+        if (!isFinite(raw) || raw <= 0) return 1;
+        const power = Math.pow(10, Math.floor(Math.log10(raw)));
+        const n = raw / power;
+        let nice;
+        if (n < 1.5) nice = 1;
+        else if (n < 3) nice = 2;
+        else if (n < 7) nice = 5;
+        else nice = 10;
+        return nice * power;
+      }
+
+      function drawGrid(T) {
+        if (!gridToggle.checked) return;
+
+        const targetPx = 60;
+        const step = niceStep(targetPx / T.scale);
+
+        const startX = Math.floor(T.minX / step) * step;
+        const endX = Math.ceil(T.maxX / step) * step;
+        const startY = Math.floor(T.minY / step) * step;
+        const endY = Math.ceil(T.maxY / step) * step;
+
+        ctx.save();
+        ctx.lineWidth = 1;
+
+        ctx.strokeStyle = "rgba(0,0,0,0.10)";
+        for (let x = startX; x <= endX + EPS; x += step) {
+          const a = toCanvas(T, { x, y: T.minY });
+          const b = toCanvas(T, { x, y: T.maxY });
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          ctx.stroke();
+        }
+        for (let y = startY; y <= endY + EPS; y += step) {
+          const a = toCanvas(T, { x: T.minX, y });
+          const b = toCanvas(T, { x: T.maxX, y });
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          ctx.stroke();
+        }
+
+        ctx.strokeStyle = "rgba(0,0,0,0.35)";
+        ctx.lineWidth = 2;
+
+        if (T.minX <= 0 && T.maxX >= 0) {
+          drawSegment(T, { x: 0, y: T.minY }, { x: 0, y: T.maxY }, "rgba(0,0,0,0.35)", 2);
+        }
+        if (T.minY <= 0 && T.maxY >= 0) {
+          drawSegment(T, { x: T.minX, y: 0 }, { x: T.maxX, y: 0 }, "rgba(0,0,0,0.35)", 2);
+        }
+
+        ctx.restore();
+      }
+
+      function drawRightAngleMarker(T, O, P, Q) {
+        const u = normalize(sub(O, P));
+        const v = normalize(sub(Q, P));
+        if (len(u) < EPS || len(v) < EPS) return;
+
+        const sWorld = 18 / T.scale;
+        const p1 = add(P, mul(u, sWorld));
+        const p2 = add(p1, mul(v, sWorld));
+        const p3 = add(P, mul(v, sWorld));
+
+        ctx.save();
+        ctx.strokeStyle = "rgba(255,255,255,0.85)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        const c1 = toCanvas(T, p1);
+        const c2 = toCanvas(T, p2);
+        const c3 = toCanvas(T, p3);
+        ctx.moveTo(c1.x, c1.y);
+        ctx.lineTo(c2.x, c2.y);
+        ctx.lineTo(c3.x, c3.y);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      function fmt(n) {
+        if (!isFinite(n)) return "—";
+        const abs = Math.abs(n);
+        const s = abs >= 1000 ? n.toFixed(1) : n.toFixed(4);
+        return s.replace(/\.?0+$/, "");
+      }
+
+      function draw() {
+        const w = canvas.clientWidth;
+        const h = canvas.clientHeight;
+
+        const O = { x: 0, y: 0 };
+        const P = { x: state.x, y: 0 };
+        const Q = { x: state.x, y: state.y };
+
+        const sqOP = squareOnSide(O, P, Q);
+        const sqPQ = squareOnSide(P, Q, O);
+        const sqOQ = squareOnSide(O, Q, P);
+
+        const allPts = [O, P, Q];
+        for (const sq of [sqOP, sqPQ, sqOQ]) {
+          if (sq) allPts.push(...sq);
+        }
+
+        const T = computeTransform(allPts, w, h);
+
+        clear(w, h);
+        drawGrid(T);
+
+        const colors = {
+          aFill: "rgba(59,130,246,0.25)",
+          aStroke: "rgba(59,130,246,0.85)",
+          bFill: "rgba(245,158,11,0.25)",
+          bStroke: "rgba(245,158,11,0.85)",
+          cFill: "rgba(16,185,129,0.25)",
+          cStroke: "rgba(16,185,129,0.85)",
+          tri: "rgba(255,255,255,0.85)",
+        };
+
+        drawPolygon(T, sqOP, colors.aFill, colors.aStroke, 2.5);
+        drawPolygon(T, sqPQ, colors.bFill, colors.bStroke, 2.5);
+        drawPolygon(T, sqOQ, colors.cFill, colors.cStroke, 2.5);
+
+        drawSegment(T, O, P, colors.tri, 2.5);
+        drawSegment(T, P, Q, colors.tri, 2.5);
+        drawSegment(T, O, Q, colors.tri, 2.5);
+
+        drawRightAngleMarker(T, O, P, Q);
+
+        ctx.save();
+        ctx.font = "600 13px system-ui, -apple-system, Segoe UI, Roboto, Arial";
+        ctx.fillStyle = "rgba(0,0,0,0.85)";
+        ctx.textBaseline = "middle";
+
+        drawPoint(T, O, 5, "rgba(0,0,0,0.85)", "rgba(255,255,255,0.9)");
+        drawPoint(T, P, 5, "rgba(0,0,0,0.85)", "rgba(255,255,255,0.9)");
+        drawPoint(T, Q, 7, "rgba(0,0,0,0.85)", "rgba(255,255,255,0.95)");
+
+        ctx.fillStyle = "rgba(255,255,255,0.85)";
+
+        drawLabel(T, "O (0,0)", O, 12, 14);
+        drawLabel(T, `P (${fmt(state.x)}, 0)`, P, 12, -14);
+        drawLabel(T, `Q (${fmt(state.x)}, ${fmt(state.y)})`, Q, 12, -16);
+
+        ctx.restore();
+
+        const a = Math.abs(state.x);
+        const b = Math.abs(state.y);
+        const c = Math.hypot(state.x, state.y);
+
+        ctx.save();
+        ctx.font = "600 12px system-ui, -apple-system, Segoe UI, Roboto, Arial";
+        ctx.fillStyle = "rgba(255,255,255,0.78)";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+
+        const showA = a * T.scale > 60;
+        const showB = b * T.scale > 60;
+        const showC = c * T.scale > 60;
+
+        if (sqOP && showA) {
+          const cc = toCanvas(T, centroid(sqOP));
+          ctx.fillText(`a² = ${fmt(a * a)}`, cc.x, cc.y);
+        }
+        if (sqPQ && showB) {
+          const cc = toCanvas(T, centroid(sqPQ));
+          ctx.fillText(`b² = ${fmt(b * b)}`, cc.x, cc.y);
+        }
+        if (sqOQ && showC) {
+          const cc = toCanvas(T, centroid(sqOQ));
+          ctx.fillText(`c² = ${fmt(c * c)}`, cc.x, cc.y);
+        }
+
+        ctx.restore();
+
+        const a2 = a * a;
+        const b2 = b * b;
+        const c2 = c * c;
+
+        readout.innerHTML = `
+          <div><b>Side lengths</b></div>
+          <div>a = <code>${fmt(a)}</code></div>
+          <div>b = <code>${fmt(b)}</code></div>
+          <div>c = √(a² + b²) = <code>${fmt(c)}</code></div>
+          <hr style="border:0;border-top:1px solid rgba(255,255,255,0.12); margin:10px 0;">
+          <div><b>Areas of the squares</b></div>
+          <div>a² = <code>${fmt(a2)}</code></div>
+          <div>b² = <code>${fmt(b2)}</code></div>
+          <div>c² = <code>${fmt(c2)}</code></div>
+          <hr style="border:0;border-top:1px solid rgba(255,255,255,0.12); margin:10px 0;">
+          <div><b>Pythagorean check</b></div>
+          <div>a² + b² = <code>${fmt(a2 + b2)}</code></div>
+          <div>c² = <code>${fmt(c2)}</code></div>
+        `;
+      }
+
+      function resizeCanvas() {
+        const rect = canvas.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+
+        canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+        canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        draw();
+      }
+
+      window.addEventListener("resize", resizeCanvas);
+
+      function syncFromInputs() {
+        state.x = parseFloat(xInput.value) || 0;
+        state.y = parseFloat(yInput.value) || 0;
+        draw();
+      }
+
+      xInput.addEventListener("input", syncFromInputs);
+      yInput.addEventListener("input", syncFromInputs);
+      gridToggle.addEventListener("change", draw);
+
+      resetBtn.addEventListener("click", () => {
+        state.x = 3;
+        state.y = 4;
+        xInput.value = "3";
+        yInput.value = "4";
+        draw();
+      });
+
+      resizeCanvas();
+    })();
+  </script>
+</body>
+</html>
