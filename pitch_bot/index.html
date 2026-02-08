@@ -1,0 +1,598 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Pitch-Class Recognizer (12 classes)</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      margin: 24px;
+      max-width: 900px;
+      line-height: 1.35;
+    }
+    .card {
+      border: 1px solid #ddd;
+      border-radius: 12px;
+      padding: 16px;
+      margin: 16px 0;
+    }
+    .row { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+    .small { color: #555; font-size: 0.95em; }
+    .status { white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .barrow {
+      display: grid;
+      grid-template-columns: 50px 1fr 70px;
+      gap: 10px;
+      align-items: center;
+      margin: 6px 0;
+    }
+    .bar {
+      height: 12px;
+      background: #eee;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .bar > div {
+      height: 100%;
+      background: #3b82f6;
+      width: 0%;
+    }
+    .pill {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: #f3f4f6;
+      margin: 4px 6px 0 0;
+      font-size: 0.95em;
+    }
+    button {
+      padding: 10px 14px;
+      border-radius: 10px;
+      border: 1px solid #ccc;
+      background: #fff;
+      cursor: pointer;
+    }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    input[type="range"] { width: 260px; }
+    select, input[type="number"] {
+      padding: 6px 8px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+    }
+  </style>
+
+  <!-- ONNX Runtime Web (WASM) -->
+  <script src="ort.min.js"></script>
+</head>
+<body>
+  <h2>Pitch-Class Recognizer (12 pitch classes)</h2>
+  <div class="small">
+    Upload a WAV (or any audio your browser can decode) <b>or</b> use your microphone.
+    The app resamples to 16kHz, runs the model on 1-second windows, and updates the predictions.
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <input id="file" type="file" accept="audio/wav,audio/*"/>
+      <button id="analyze" disabled>Analyze file</button>
+
+      <!-- MIC CONTROLS -->
+      <button id="startMic" disabled>Start mic</button>
+      <button id="stopMic" disabled>Stop mic</button>
+    </div>
+
+    <div style="height: 10px;"></div>
+
+    <div class="row">
+      <label>Threshold:
+        <input id="th" type="range" min="0" max="1" step="0.01" value="0.50"/>
+        <span id="thv">0.50</span>
+      </label>
+
+      <!-- FILE MODE -->
+      <label>Hop (sec):
+        <input id="hop" type="number" min="0.05" max="1.0" step="0.05" value="0.50"/>
+      </label>
+
+      <label>Aggregate:
+        <select id="agg">
+          <option value="max" selected>max</option>
+          <option value="mean">mean</option>
+        </select>
+      </label>
+
+      <label>Analyze first (sec, 0=all):
+        <input id="maxsec" type="number" min="0" step="1" value="30"/>
+      </label>
+
+      <!-- LIVE MODE -->
+      <label>Live update (ms):
+        <input id="liveHopMs" type="number" min="50" max="2000" step="50" value="200"/>
+      </label>
+
+      <label>Smoothing:
+        <input id="smooth" type="range" min="0" max="0.95" step="0.05" value="0.50"/>
+        <span id="smoothv">0.50</span>
+      </label>
+    </div>
+
+    <div style="height: 10px;"></div>
+    <audio id="player" controls style="width: 100%;"></audio>
+    <div style="height: 10px;"></div>
+    <div id="status" class="status small"></div>
+  </div>
+
+  <div class="card">
+    <h3>Predicted pitch classes</h3>
+    <div id="predPills"></div>
+    <div style="height: 8px;"></div>
+    <div id="bars"></div>
+  </div>
+
+<script>
+  let session = null;
+  let meta = null;
+
+  const elFile = document.getElementById('file');
+  const elAnalyze = document.getElementById('analyze');
+  const elStatus = document.getElementById('status');
+  const elPlayer = document.getElementById('player');
+  const elTh = document.getElementById('th');
+  const elThv = document.getElementById('thv');
+  const elHop = document.getElementById('hop');
+  const elAgg = document.getElementById('agg');
+  const elMaxSec = document.getElementById('maxsec');
+  const elPills = document.getElementById('predPills');
+  const elBars = document.getElementById('bars');
+
+  // mic UI
+  const elStartMic = document.getElementById('startMic');
+  const elStopMic  = document.getElementById('stopMic');
+  const elLiveHopMs = document.getElementById('liveHopMs');
+  const elSmooth = document.getElementById('smooth');
+  const elSmoothv = document.getElementById('smoothv');
+
+  function setStatus(msg) {
+    elStatus.textContent = msg;
+  }
+
+  function clamp(x, lo, hi) {
+    return Math.max(lo, Math.min(hi, x));
+  }
+
+  function fmt(x) {
+    return (x * 100).toFixed(1) + '%';
+  }
+
+  function renderBars(probs, names, threshold) {
+    const idx = [...probs.keys()].sort((a,b) => probs[b] - probs[a]);
+
+    elPills.innerHTML = '';
+    const predicted = idx.filter(i => probs[i] >= threshold);
+    if (predicted.length === 0) {
+      const p = document.createElement('div');
+      p.className = 'small';
+      p.textContent = 'No pitch classes above threshold.';
+      elPills.appendChild(p);
+    } else {
+      predicted.forEach(i => {
+        const pill = document.createElement('span');
+        pill.className = 'pill';
+        pill.textContent = names[i] + '  ' + fmt(probs[i]);
+        elPills.appendChild(pill);
+      });
+    }
+
+    elBars.innerHTML = '';
+    names.forEach((nm, i) => {
+      const row = document.createElement('div');
+      row.className = 'barrow';
+
+      const left = document.createElement('div');
+      left.textContent = nm;
+
+      const bar = document.createElement('div');
+      bar.className = 'bar';
+      const fill = document.createElement('div');
+      fill.style.width = (100 * probs[i]).toFixed(1) + '%';
+      bar.appendChild(fill);
+
+      const right = document.createElement('div');
+      right.style.textAlign = 'right';
+      right.textContent = fmt(probs[i]);
+
+      row.appendChild(left);
+      row.appendChild(bar);
+      row.appendChild(right);
+      elBars.appendChild(row);
+    });
+  }
+
+  async function init() {
+    setStatus('Loading meta + model...');
+    meta = await fetch('meta.json').then(r => r.json());
+
+    elTh.value = meta.default_threshold.toFixed(2);
+    elThv.textContent = Number(elTh.value).toFixed(2);
+    elHop.value = meta.default_hop_sec.toFixed(2);
+
+    ort.env.wasm.wasmPaths = "./";
+    ort.env.wasm.numThreads = 1;
+
+    session = await ort.InferenceSession.create('pitchclass.onnx', {
+      executionProviders: ['wasm'],
+      graphOptimizationLevel: 'all'
+    });
+
+    setStatus('✅ Model loaded. Choose a file or start the mic.');
+    elAnalyze.disabled = false;
+    elStartMic.disabled = false;
+    elStopMic.disabled = true;
+  }
+
+  async function decodeAndResampleTo16k(arrayBuffer, targetSR) {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const decoded = await audioCtx.decodeAudioData(arrayBuffer);
+
+    const duration = decoded.duration;
+    const length = Math.max(1, Math.ceil(duration * targetSR));
+    const offline = new OfflineAudioContext(1, length, targetSR);
+
+    const src = offline.createBufferSource();
+    src.buffer = decoded;
+    src.connect(offline.destination);
+    src.start(0);
+
+    const rendered = await offline.startRendering();
+    return rendered.getChannelData(0);
+  }
+
+  function peakNormalize(x) {
+    let peak = 1e-9;
+    for (let i = 0; i < x.length; i++) {
+      const a = Math.abs(x[i]);
+      if (a > peak) peak = a;
+    }
+    const g = 0.95 / peak;
+    const y = new Float32Array(x.length);
+    for (let i = 0; i < x.length; i++) y[i] = x[i] * g;
+    return y;
+  }
+
+  async function analyzeFile(file) {
+    const threshold = Number(elTh.value);
+    const hopSec = clamp(Number(elHop.value), 0.05, 5.0);
+    const aggMode = elAgg.value;
+    const maxSec = Math.max(0, Number(elMaxSec.value));
+
+    const sr = meta.sr;
+    const win = meta.samples_per_clip;
+    const hop = Math.max(1, Math.floor(hopSec * sr));
+
+    setStatus('Reading file...');
+    const arrayBuffer = await file.arrayBuffer();
+
+    setStatus('Decoding + resampling to ' + sr + ' Hz (mono)...');
+    let mono = await decodeAndResampleTo16k(arrayBuffer, sr);
+
+    if (maxSec > 0) {
+      const maxLen = Math.min(mono.length, Math.floor(maxSec * sr));
+      mono = mono.subarray(0, maxLen);
+    }
+
+    mono = peakNormalize(mono);
+
+    const nWins = (mono.length <= win) ? 1 : (Math.floor((mono.length - win) / hop) + 1);
+    const names = meta.pitch_classes;
+
+    setStatus(
+      'Running inference...\n' +
+      'duration=' + (mono.length / sr).toFixed(2) + 's, ' +
+      'window=' + (win / sr).toFixed(2) + 's, ' +
+      'hop=' + (hop / sr).toFixed(2) + 's, ' +
+      'windows=' + nWins + ', agg=' + aggMode
+    );
+
+    let agg = new Float32Array(names.length);
+    let sum = new Float32Array(names.length);
+
+    for (let w = 0; w < nWins; w++) {
+      const start = w * hop;
+      const end = start + win;
+
+      const input = new Float32Array(win);
+      if (start < mono.length) {
+        input.set(mono.subarray(start, Math.min(end, mono.length)), 0);
+      }
+
+      const tensor = new ort.Tensor('float32', input, [1, 1, win]);
+      const feeds = {};
+      feeds[session.inputNames[0]] = tensor;
+
+      const out = await session.run(feeds);
+      const probs = out[session.outputNames[0]].data;
+
+      if (aggMode === 'max') {
+        for (let i = 0; i < probs.length; i++) {
+          if (probs[i] > agg[i]) agg[i] = probs[i];
+        }
+      } else {
+        for (let i = 0; i < probs.length; i++) sum[i] += probs[i];
+      }
+
+      if ((w + 1) % 10 === 0 || w === nWins - 1) {
+        setStatus(
+          'Running inference... ' + (w + 1) + '/' + nWins + '\n' +
+          'duration=' + (mono.length / sr).toFixed(2) + 's, ' +
+          'window=' + (win / sr).toFixed(2) + 's, ' +
+          'hop=' + (hop / sr).toFixed(2) + 's, agg=' + aggMode
+        );
+      }
+    }
+
+    if (aggMode === 'mean') {
+      for (let i = 0; i < sum.length; i++) agg[i] = sum[i] / nWins;
+    }
+
+    renderBars(Array.from(agg), names, threshold);
+    setStatus('✅ Done.');
+  }
+
+  // ==========================
+  // LIVE MIC INFERENCE
+  // ==========================
+  let micStream = null;
+  let micCtx = null;
+  let micSource = null;
+  let micProcessor = null;
+  let micMute = null;
+
+  let ring = null;
+  let ringWrite = 0;
+  let ringFilled = 0;
+
+  let liveTimer = null;
+  let liveBusy = false;
+  let emaProbs = null;
+
+  function initRing() {
+    const win = meta.samples_per_clip; // 16000
+    const ringLen = win * 4;           // 4 seconds buffer
+    ring = new Float32Array(ringLen);
+    ringWrite = 0;
+    ringFilled = 0;
+    emaProbs = null;
+  }
+
+  function pushToRing(samples) {
+    for (let i = 0; i < samples.length; i++) {
+      ring[ringWrite] = samples[i];
+      ringWrite = (ringWrite + 1) % ring.length;
+    }
+    ringFilled = Math.min(ringFilled + samples.length, ring.length);
+  }
+
+  function getLatestWindow(win) {
+    const out = new Float32Array(win);
+    const have = Math.min(ringFilled, win);
+    if (have === 0) return out;
+
+    const start = (ringWrite - have + ring.length) % ring.length;
+    const dstOffset = win - have;
+
+    if (start + have <= ring.length) {
+      out.set(ring.subarray(start, start + have), dstOffset);
+    } else {
+      const first = ring.length - start;
+      out.set(ring.subarray(start), dstOffset);
+      out.set(ring.subarray(0, have - first), dstOffset + first);
+    }
+    return out;
+  }
+
+  function resampleLinear(input, inRate, outRate) {
+    if (inRate === outRate) return input;
+    const ratio = inRate / outRate;
+    const outLen = Math.max(1, Math.floor(input.length / ratio));
+    const out = new Float32Array(outLen);
+    for (let i = 0; i < outLen; i++) {
+      const t = i * ratio;
+      const i0 = Math.floor(t);
+      const i1 = Math.min(i0 + 1, input.length - 1);
+      const frac = t - i0;
+      out[i] = input[i0] * (1 - frac) + input[i1] * frac;
+    }
+    return out;
+  }
+
+  function peakNormalizeFloat32(x) {
+    let peak = 1e-9;
+    for (let i = 0; i < x.length; i++) {
+      const a = Math.abs(x[i]);
+      if (a > peak) peak = a;
+    }
+    const g = 0.95 / peak;
+    const y = new Float32Array(x.length);
+    for (let i = 0; i < x.length; i++) y[i] = x[i] * g;
+    return y;
+  }
+
+  async function startMic() {
+    if (!session || !meta) {
+      alert("Model not loaded yet.");
+      return;
+    }
+    if (micStream) return;
+
+    try {
+      setStatus("Requesting microphone permission...");
+
+      micStream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+      });
+
+      micCtx = new (window.AudioContext || window.webkitAudioContext)();
+      await micCtx.resume();
+
+      initRing();
+
+      micSource = micCtx.createMediaStreamSource(micStream);
+
+      micProcessor = micCtx.createScriptProcessor(4096, 1, 1);
+      micProcessor.onaudioprocess = (e) => {
+        const input = e.inputBuffer.getChannelData(0);
+        const copy = new Float32Array(input.length);
+        copy.set(input);
+
+        const resampled = resampleLinear(copy, micCtx.sampleRate, meta.sr);
+        pushToRing(resampled);
+
+        const out = e.outputBuffer.getChannelData(0);
+        out.fill(0);
+      };
+
+      micMute = micCtx.createGain();
+      micMute.gain.value = 0.0;
+
+      micSource.connect(micProcessor);
+      micProcessor.connect(micMute);
+      micMute.connect(micCtx.destination);
+
+      const periodMs = Math.max(50, Number(elLiveHopMs.value || 200));
+      liveTimer = setInterval(liveTick, periodMs);
+
+      elStartMic.disabled = true;
+      elStopMic.disabled = false;
+
+      setStatus(
+        "✅ Mic running.\n" +
+        "Input SR=" + micCtx.sampleRate + " → resample to " + meta.sr + "\n" +
+        "Updating every " + periodMs + " ms"
+      );
+    } catch (err) {
+      console.error(err);
+      setStatus("❌ Mic error: " + (err && err.message ? err.message : String(err)));
+      stopMic();
+    }
+  }
+
+  function stopMic() {
+    if (liveTimer) {
+      clearInterval(liveTimer);
+      liveTimer = null;
+    }
+
+    if (micProcessor) {
+      try { micProcessor.disconnect(); } catch {}
+      micProcessor.onaudioprocess = null;
+      micProcessor = null;
+    }
+    if (micSource) {
+      try { micSource.disconnect(); } catch {}
+      micSource = null;
+    }
+    if (micMute) {
+      try { micMute.disconnect(); } catch {}
+      micMute = null;
+    }
+
+    if (micStream) {
+      micStream.getTracks().forEach(t => t.stop());
+      micStream = null;
+    }
+
+    if (micCtx) {
+      try { micCtx.close(); } catch {}
+      micCtx = null;
+    }
+
+    elStartMic.disabled = false;
+    elStopMic.disabled = true;
+
+    setStatus("Mic stopped.");
+  }
+
+  async function liveTick() {
+    if (!session || !meta) return;
+    if (!ring || ringFilled < meta.samples_per_clip) return;
+    if (liveBusy) return;
+    liveBusy = true;
+
+    try {
+      const th = Number(elTh.value);
+      const alpha = Number(elSmooth.value);
+
+      const win = getLatestWindow(meta.samples_per_clip);
+      const x = peakNormalizeFloat32(win);
+
+      const tensor = new ort.Tensor("float32", x, [1, 1, meta.samples_per_clip]);
+      const feeds = {};
+      feeds[session.inputNames[0]] = tensor;
+
+      const out = await session.run(feeds);
+      const probs = out[session.outputNames[0]].data;
+
+      if (!emaProbs) {
+        emaProbs = new Float32Array(probs.length);
+        emaProbs.set(probs);
+      } else {
+        const oneMinus = 1.0 - alpha;
+        for (let i = 0; i < probs.length; i++) {
+          emaProbs[i] = alpha * emaProbs[i] + oneMinus * probs[i];
+        }
+      }
+
+      renderBars(Array.from(emaProbs), meta.pitch_classes, th);
+    } catch (e) {
+      console.error(e);
+      setStatus("❌ Live inference error: " + (e && e.message ? e.message : String(e)));
+    } finally {
+      liveBusy = false;
+    }
+  }
+
+  // UI wiring
+  elTh.addEventListener('input', () => {
+    elThv.textContent = Number(elTh.value).toFixed(2);
+  });
+
+  elSmooth.addEventListener("input", () => {
+    elSmoothv.textContent = Number(elSmooth.value).toFixed(2);
+  });
+
+  elFile.addEventListener('change', () => {
+    const f = elFile.files && elFile.files[0];
+    if (!f) return;
+    elPlayer.src = URL.createObjectURL(f);
+    setStatus('File selected: ' + f.name + ' (' + (f.size / 1024 / 1024).toFixed(2) + ' MB)');
+  });
+
+  elAnalyze.addEventListener('click', async () => {
+    const f = elFile.files && elFile.files[0];
+    if (!f) {
+      alert('Pick a WAV/audio file first.');
+      return;
+    }
+    elAnalyze.disabled = true;
+    try {
+      await analyzeFile(f);
+    } catch (e) {
+      console.error(e);
+      setStatus('❌ Error: ' + (e && e.message ? e.message : String(e)));
+    } finally {
+      elAnalyze.disabled = false;
+    }
+  });
+
+  elStartMic.addEventListener("click", startMic);
+  elStopMic.addEventListener("click", stopMic);
+  window.addEventListener("beforeunload", stopMic);
+
+  init().catch(e => {
+    console.error(e);
+    setStatus('❌ Failed to load model: ' + (e && e.message ? e.message : String(e)));
+  });
+</script>
+</body>
+</html>
