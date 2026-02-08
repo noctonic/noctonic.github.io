@@ -1,0 +1,144 @@
+:root {
+  --bg: #efe7da;
+  --ink: #1e1e1b;
+  --panel: #fbf8f3;
+  --line: #d6cbb8;
+  --accent: #a24a2a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 0% 0%, #fff8e8 0%, transparent 55%),
+    radial-gradient(circle at 100% 100%, #ead9c0 0%, transparent 40%),
+    var(--bg);
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 14px;
+  padding: 14px;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px 14px 8px;
+}
+
+.panel h1 {
+  margin: 0 0 8px;
+  font-family: "Space Grotesk", "IBM Plex Sans", sans-serif;
+  font-size: 1.2rem;
+}
+
+.sub {
+  margin: 0 0 10px;
+  color: #4c463f;
+  font-size: 0.9rem;
+}
+
+.group {
+  margin-top: 12px;
+}
+
+.group h2 {
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #6c6254;
+}
+
+.preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.preset-btn {
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.preset-btn:hover {
+  border-color: var(--accent);
+}
+
+.sliders {
+  display: grid;
+  gap: 7px;
+}
+
+.slider-row {
+  display: grid;
+  grid-template-columns: 90px 1fr 40px;
+  align-items: center;
+  gap: 8px;
+}
+
+.slider-label {
+  font-size: 0.82rem;
+  text-transform: capitalize;
+}
+
+.slider-value {
+  text-align: right;
+  font-size: 0.78rem;
+  color: #574f45;
+}
+
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.status {
+  margin: 14px 0 2px;
+  font-size: 0.82rem;
+  color: #574f45;
+}
+
+.viewer {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+  min-height: 70vh;
+  background:
+    linear-gradient(145deg, #fff5e7 0%, #f0e2cc 100%);
+}
+
+#face-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+@media (max-width: 980px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .panel {
+    order: 2;
+  }
+
+  .viewer {
+    min-height: 52vh;
+  }
+}
+

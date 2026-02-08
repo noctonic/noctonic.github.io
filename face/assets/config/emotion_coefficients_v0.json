@@ -1,0 +1,117 @@
+{
+  "version": "v0",
+  "standard": "ARKit",
+  "description": "Default runtime coefficients derived from docs/mappings/emotion_to_au_arkit_v0.csv",
+  "emotions": {
+    "happiness": {
+      "coefficients": {
+        "MouthSmileLeft": 1.0,
+        "MouthSmileRight": 1.0,
+        "CheekSquintLeft": 0.55,
+        "CheekSquintRight": 0.55,
+        "EyeSquintLeft": 0.2,
+        "EyeSquintRight": 0.2,
+        "JawOpen": 0.12
+      }
+    },
+    "sadness": {
+      "coefficients": {
+        "BrowInnerUp": 0.45,
+        "BrowDownLeft": 0.3,
+        "BrowDownRight": 0.3,
+        "MouthFrownLeft": 0.8,
+        "MouthFrownRight": 0.8,
+        "MouthShrugLower": 0.25,
+        "MouthUpperUpLeft": 0.12,
+        "MouthUpperUpRight": 0.12
+      }
+    },
+    "fear": {
+      "coefficients": {
+        "BrowInnerUp": 0.6,
+        "BrowOuterUpLeft": 0.45,
+        "BrowOuterUpRight": 0.45,
+        "BrowDownLeft": 0.25,
+        "BrowDownRight": 0.25,
+        "EyeWideLeft": 0.85,
+        "EyeWideRight": 0.85,
+        "MouthStretchLeft": 0.5,
+        "MouthStretchRight": 0.5,
+        "JawOpen": 0.45,
+        "MouthFunnel": 0.2
+      }
+    },
+    "anger": {
+      "coefficients": {
+        "BrowDownLeft": 0.95,
+        "BrowDownRight": 0.95,
+        "EyeSquintLeft": 0.55,
+        "EyeSquintRight": 0.55,
+        "MouthPressLeft": 0.7,
+        "MouthPressRight": 0.7,
+        "MouthClose": 0.35,
+        "MouthUpperUpLeft": 0.18,
+        "MouthUpperUpRight": 0.18
+      }
+    },
+    "disgust": {
+      "coefficients": {
+        "NoseSneerLeft": 0.95,
+        "NoseSneerRight": 0.95,
+        "MouthUpperUpLeft": 0.7,
+        "MouthUpperUpRight": 0.7,
+        "MouthShrugLower": 0.28,
+        "MouthLowerDownLeft": 0.15,
+        "MouthLowerDownRight": 0.15
+      }
+    },
+    "surprise": {
+      "coefficients": {
+        "BrowInnerUp": 0.65,
+        "BrowOuterUpLeft": 0.8,
+        "BrowOuterUpRight": 0.8,
+        "EyeWideLeft": 0.95,
+        "EyeWideRight": 0.95,
+        "JawOpen": 0.75,
+        "MouthStretchLeft": 0.15,
+        "MouthStretchRight": 0.15
+      }
+    }
+  },
+  "conflicts": [
+    {
+      "name": "smile_vs_frown",
+      "groupA": ["MouthSmileLeft", "MouthSmileRight"],
+      "groupB": ["MouthFrownLeft", "MouthFrownRight"],
+      "strength": 0.75
+    },
+    {
+      "name": "eye_wide_vs_eye_squint",
+      "groupA": ["EyeWideLeft", "EyeWideRight"],
+      "groupB": ["EyeSquintLeft", "EyeSquintRight"],
+      "strength": 0.7
+    },
+    {
+      "name": "mouth_press_vs_jaw_open",
+      "groupA": ["MouthPressLeft", "MouthPressRight", "MouthClose"],
+      "groupB": ["JawOpen"],
+      "strength": 0.55
+    }
+  ],
+  "smoothing": {
+    "defaultTauSeconds": 0.12,
+    "overrides": {
+      "EyeWideLeft": 0.08,
+      "EyeWideRight": 0.08,
+      "EyeSquintLeft": 0.08,
+      "EyeSquintRight": 0.08,
+      "BrowDownLeft": 0.1,
+      "BrowDownRight": 0.1,
+      "JawOpen": 0.14,
+      "MouthSmileLeft": 0.16,
+      "MouthSmileRight": 0.16,
+      "MouthFrownLeft": 0.16,
+      "MouthFrownRight": 0.16
+    }
+  }
+}

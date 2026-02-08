@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Face Emotion Runtime</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "./assets/vendor/three/build/three.module.js",
+          "three/addons/": "./assets/vendor/three/examples/jsm/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="panel">
+        <h1>Emotion Control</h1>
+        <p class="sub">
+          Runtime mapping: <code>assets/config/emotion_coefficients_v0.json</code>
+        </p>
+
+        <div class="group">
+          <h2>Presets</h2>
+          <div id="presets" class="preset-row"></div>
+        </div>
+
+        <div class="group">
+          <h2>Emotions</h2>
+          <div id="emotion-sliders" class="sliders"></div>
+        </div>
+
+        <div class="group">
+          <h2>Global</h2>
+          <div id="intensity-slider" class="sliders"></div>
+        </div>
+
+        <p id="status-text" class="status">Initializing...</p>
+      </aside>
+
+      <main id="viewer" class="viewer">
+        <canvas id="face-canvas"></canvas>
+      </main>
+    </div>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
