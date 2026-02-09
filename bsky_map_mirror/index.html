@@ -1,0 +1,1118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Bluesky Map</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <meta name="description" content="Interactive map of 3.4 million Bluesky users, visualised by their follower pattern. Search and explore the social graph.">
+    <meta name="theme-color" content="#0d0d1a">
+
+
+    <script src="dist.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0d0d1a; color: #eee; overflow: hidden; }
+        #deck-canvas { width: 100vw; height: 100vh; }
+
+        /* Search */
+        #search-box {
+            position: absolute; top: 20px; left: 20px;
+            background: rgba(22, 33, 62, 0.95); border-radius: 8px;
+            padding: 12px; width: 300px; z-index: 10;
+        }
+        #search-input {
+            width: 100%; padding: 8px 12px; border: 1px solid #334; border-radius: 4px;
+            background: #1a1a2e; color: #eee; font-size: 14px; outline: none;
+        }
+        #search-input:focus { border-color: #0f9; }
+        #search-input::placeholder { color: #667; }
+        #autocomplete { max-height: 240px; overflow-y: auto; margin-top: 4px; }
+        .ac-item { padding: 4px 8px; cursor: pointer; font-size: 13px; border-radius: 4px; color: #ccc; display: flex; align-items: center; gap: 8px; }
+        .ac-item:hover, .ac-item.selected { background: #2a3a5e; }
+        .ac-item:hover .ac-text, .ac-item.selected .ac-text { color: #0f9; }
+        .ac-handle { color: #0f9; }
+        .ac-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .ac-check {
+            width: 16px; height: 16px; border: 2px solid #556; border-radius: 3px;
+            flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+            font-size: 11px; color: transparent; transition: all 0.15s;
+        }
+        .ac-check:hover { border-color: #aaa; }
+        .ac-check.checked { color: #fff; }
+        #selections { margin-top: 4px; }
+        #selections:empty { margin-top: 0; }
+        .sel-divider { height: 1px; background: #334; margin: 6px 0; }
+
+        /* Status */
+        #bottom-bar {
+            position: absolute; bottom: 20px; left: 20px;
+            display: flex; align-items: center; gap: 8px; z-index: 10;
+        }
+        #status {
+            background: rgba(22, 33, 62, 0.9); padding: 8px 14px; border-radius: 4px;
+            font-size: 13px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Settings */
+        #settings-btn {
+            background: rgba(22, 33, 62, 0.9); border: none; color: #aaa;
+            width: 36px; height: 36px; border-radius: 4px; cursor: pointer;
+            font-size: 18px; display: flex; align-items: center; justify-content: center;
+        }
+        #settings-btn:hover { color: #fff; }
+        #info-btn {
+            background: rgba(22, 33, 62, 0.9); color: #aaa; text-decoration: none;
+            width: 36px; height: 36px; border-radius: 4px;
+            font-size: 15px; display: flex; align-items: center; justify-content: center;
+        }
+        #info-btn:hover { color: #fff; }
+        #settings-modal {
+            display: none; position: absolute; bottom: 44px; left: 0;
+            background: rgba(22, 33, 62, 0.98); border: 1px solid #334;
+            border-radius: 8px; padding: 16px; z-index: 30; min-width: 200px;
+        }
+        #settings-modal label {
+            display: flex; align-items: center; gap: 8px; cursor: pointer;
+            font-size: 13px; color: #ccc;
+        }
+        #settings-modal label:hover { color: #fff; }
+        #settings-modal input[type="checkbox"] { accent-color: #0f9; }
+
+        /* Tooltip */
+        #tooltip {
+            position: absolute; background: rgba(22, 33, 62, 0.98);
+            padding: 10px 14px; border-radius: 8px; pointer-events: none;
+            display: none; font-size: 13px; border: 1px solid #0f9;
+            max-width: 320px; z-index: 20;
+        }
+        #tooltip .tt-handle { color: #0f9; font-weight: bold; }
+        #tooltip .tt-name { color: #fff; font-weight: bold; margin-bottom: 2px; }
+        #tooltip .tt-bio { color: #aaa; font-size: 12px; margin: 4px 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        #tooltip .tt-stats { color: #888; font-size: 12px; }
+        #tooltip .tt-stats span { color: #ddd; }
+        #tooltip .tt-avatar { width: 40px; height: 40px; border-radius: 50%; float: left; margin-right: 10px; background: #2a2a4e; }
+
+        /* Sidebar */
+        #sidebar {
+            position: absolute; bottom: 20px; right: 20px;
+            background: rgba(22, 33, 62, 0.95); border-radius: 8px;
+            padding: 14px; width: 300px; z-index: 10; display: none;
+        }
+        #sidebar h3 { color: #0f9; margin-bottom: 8px; word-break: break-all; font-size: 15px; }
+        #sidebar .profile-link { color: #89f; text-decoration: none; font-size: 13px; }
+        #sidebar .profile-link:hover { text-decoration: underline; }
+        #sidebar .close-btn { float: right; cursor: pointer; color: #888; font-size: 24px; line-height: 1; padding: 0 4px; }
+        #sidebar .close-btn:hover { color: #fff; }
+        #sidebar .sidebar-stats { color: #888; font-size: 13px; margin-top: 6px; }
+        #sidebar .sidebar-stats span { color: #ddd; }
+        #sidebar .sidebar-bio { color: #bbb; font-size: 13px; margin-top: 8px; }
+        #sidebar .sidebar-avatar { width: 48px; height: 48px; border-radius: 50%; margin-right: 12px; float: left; background: #2a2a4e; }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #334; border-radius: 3px; }
+
+        /* Avatar overlay */
+        #avatar-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 5; overflow: hidden;
+        }
+        .avatar-pip {
+            position: absolute; width: 28px; height: 28px; border-radius: 50%;
+            background: #2a2a4e; border: 2px solid rgba(255,255,255,0.6);
+            transform: translate(-50%, -50%);
+            transition: opacity 0.3s;
+        }
+
+        @media (max-width: 640px) {
+            #search-box { width: calc(100vw - 40px); max-width: 300px; }
+            #search-input { font-size: 16px; } /* prevent iOS auto-zoom */
+            #sidebar { width: calc(100vw - 20px); left: 10px; right: 10px; bottom: 10px; }
+            #status { font-size: 12px; }
+            .ac-check { width: 22px; height: 22px; font-size: 13px; } /* bigger touch target */
+        }
+    </style>
+</head>
+<body>
+    <div id="deck-canvas"></div>
+    <div id="avatar-overlay"></div>
+
+    <div id="search-box">
+        <input type="text" id="search-input" placeholder="Search by handle..." autocomplete="off">
+        <div id="autocomplete"></div>
+        <div id="selections"></div>
+    </div>
+
+
+    <div id="bottom-bar">
+        <div id="status">Loading...</div>
+        <div style="position:relative;">
+            <button id="settings-btn" title="Settings">&#9881;</button>
+            <div id="settings-modal">
+                <label><input type="checkbox" id="setting-cluster-labels" checked> Show cluster labels</label>
+                <label style="margin-top:8px;"><input type="checkbox" id="setting-high-readability"> High readability text</label>
+            </div>
+        </div>
+        <a id="info-btn" href="https://bsky.app/profile/theo.io/post/3meezxlnecc2k" target="_blank" title="Info">&#9432;</a>
+    </div>
+    <div id="tooltip"></div>
+
+    <div id="sidebar">
+        <span class="close-btn" onclick="closeSidebar()">&times;</span>
+        <div id="sidebar-content"></div>
+    </div>
+
+    <script>
+    // ── State ──────────────────────────────────────────────────
+    const statusEl = document.getElementById('status');
+    const tooltipEl = document.getElementById('tooltip');
+
+    let meta = null;
+    let positions = null;       // Float32Array [x0,y0,x1,y1,...]
+    let densityCanvas = null;   // HTMLCanvasElement with colored heatmap
+    let densityGridRaw = null;  // Uint8Array of raw grid (for point color lookup)
+    let pointColors = null;     // Uint8Array RGB per point (density-based)
+    let handleStrings = null;   // string[] (null until loaded)
+    let followerCounts = null;  // Uint32Array (null until loaded)
+    let profileCache = {};
+    const avatarOverlay = document.getElementById('avatar-overlay');
+    const avatarElements = new Map(); // handle → img element
+    const AVATAR_FETCH_BATCH = 5;
+
+    let highlightIndex = -1;
+    let deckgl = null;
+    let clusterLabels = null;  // [{label, x, y, size}, ...]
+    let showClusterLabels = true;
+    let highReadability = false;
+
+    // Settings
+    document.getElementById('settings-btn').addEventListener('click', () => {
+        const modal = document.getElementById('settings-modal');
+        modal.style.display = modal.style.display === 'none' || !modal.style.display ? 'block' : 'none';
+    });
+    document.getElementById('setting-cluster-labels').addEventListener('change', e => {
+        showClusterLabels = e.target.checked;
+        updateLayers();
+    });
+    document.getElementById('setting-high-readability').addEventListener('change', e => {
+        highReadability = e.target.checked;
+        updateLayers();
+    });
+    document.addEventListener('click', e => {
+        const modal = document.getElementById('settings-modal');
+        if (!e.target.closest('#settings-modal') && !e.target.closest('#settings-btn')) {
+            modal.style.display = 'none';
+        }
+    });
+
+    // Persistent selections
+    const SEL_COLOR = [255, 100, 180]; // pink
+    const selections = new Map(); // handle → {x, y}
+    let currentZoom = 0;
+    let initialZoom = 0;
+    let currentLod = 0;
+    let cachedLabelData = [];    // current viewport labels
+    let viewportPointCount = 0;  // total points in viewport
+    let labelTimeout = null;     // debounce timer
+
+    // LOD thresholds: at each zoom step above initial, show more points
+    // Points are sorted by follower count desc, so first N = most important
+    const LOD_BASE = 30000;
+    const POINT_SIZE_MAX = 100;
+
+    function getPointSize() {
+        const zoomDelta = currentZoom - initialZoom;
+        if (zoomDelta < 4) return 0.05;
+        const zoomT = Math.min(1, Math.max(0, (zoomDelta - 4) / 40));
+        return 0.05 + (POINT_SIZE_MAX - 0.05) * zoomT;
+    }
+
+    function getLodCount(zoom) {
+        const zoomDelta = Math.max(0, zoom - initialZoom);
+        // 4x more points per zoom level (2x magnification = 4x area reduction)
+        const count = Math.round(LOD_BASE * Math.pow(4, zoomDelta));
+        return Math.min(meta.numPoints, count);
+    }
+
+    // ── Binary Data Loading ───────────────────────────────────
+    async function loadMeta() {
+        const resp = await fetch('meta.json');
+        meta = await resp.json();
+    }
+
+    function getPos(idx) {
+        return { x: positions[idx * 2], y: positions[idx * 2 + 1] };
+    }
+
+    const optedOutUsers = new Set([
+        'flo.by',
+        'rimaanabtawi.bsky.social',
+        'queenkane.bsky.social',
+        'rine-nell.bsky.social',
+        'enbyandbi.bsky.social',
+        'sruizvelascob.bsky.social',
+        'beesandrikishis.bsky.social',
+        'joyeuxscribe.bsky.social',
+        'luisnct.bsky.social',
+        'calliz.bsky.social',
+        'liddell-cl.bsky.social',
+    ]);
+
+    function isOptedOut(handle) {
+        return handle && optedOutUsers.has(handle);
+    }
+
+    function searchHandles(query) {
+        if (!handleStrings) return [];
+        const q = query.replace(/^@/, '').toLowerCase();
+        const results = [];
+        for (let i = 0; i < handleStrings.length && results.length < 20; i++) {
+            if (handleStrings[i] && !isOptedOut(handleStrings[i]) && handleStrings[i].toLowerCase().includes(q)) {
+                results.push([handleStrings[i], i]);
+            }
+        }
+        return results;
+    }
+
+    async function loadPoints() {
+        const resp = await fetch('points.bin');
+        if (!resp.body) {
+            positions = new Float32Array(await resp.arrayBuffer());
+            return;
+        }
+        const reader = resp.body.getReader();
+        const chunks = [];
+        let received = 0, lastUpdate = 0;
+        while (true) {
+            const {done, value} = await reader.read();
+            if (done) break;
+            chunks.push(value);
+            received += value.length;
+            const now = performance.now();
+            if (now - lastUpdate > 100) {
+                lastUpdate = now;
+                const pointsSoFar = Math.floor(received / 8);
+                statusEl.textContent = `Loading points: ${pointsSoFar.toLocaleString()} / ${meta.numPoints.toLocaleString()}`;
+            }
+        }
+        const buffer = new Uint8Array(received);
+        let offset = 0;
+        for (const chunk of chunks) { buffer.set(chunk, offset); offset += chunk.length; }
+        positions = new Float32Array(buffer.buffer);
+    }
+
+    async function loadDensityGrid() {
+        const resp = await fetch('density_grid.bin');
+        const gridData = new Uint8Array(await resp.arrayBuffer());
+        const size = meta.densityGrid.size;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        const imageData = ctx.createImageData(size, size);
+        const px = imageData.data;
+
+        for (let i = 0; i < size * size; i++) {
+            const val = gridData[i];
+            const t = val / 255;
+            const [r, g, b] = viridis(t);
+            px[i * 4]     = r;
+            px[i * 4 + 1] = g;
+            px[i * 4 + 2] = b;
+            // Alpha: 0 where empty, scales up with density
+            px[i * 4 + 3] = val === 0 ? 0 : Math.min(255, 30 + val * 0.88);
+        }
+
+        ctx.putImageData(imageData, 0, 0);
+        densityCanvas = canvas;
+        densityGridRaw = gridData;
+    }
+
+    // Build per-point colors by looking up density grid
+    function buildPointColors() {
+        if (!positions || !densityGridRaw || !meta) return;
+        const n = meta.numPoints;
+        const gb = meta.densityGrid.bounds;
+        const size = meta.densityGrid.size;
+        const grid = densityGridRaw;
+
+        pointColors = new Uint8Array(n * 3);
+        for (let i = 0; i < n; i++) {
+            const px = positions[i * 2];
+            const py = positions[i * 2 + 1];
+            // Grid is image-oriented: row 0 = yMax, col 0 = xMin
+            const col = Math.min(size - 1, Math.max(0, Math.round((px - gb.xMin) / (gb.xMax - gb.xMin) * (size - 1))));
+            const row = Math.min(size - 1, Math.max(0, Math.round((gb.yMax - py) / (gb.yMax - gb.yMin) * (size - 1))));
+            const val = grid[row * size + col];
+            const [r, g, b] = viridis(val / 255);
+            pointColors[i * 3]     = r;
+            pointColors[i * 3 + 1] = g;
+            pointColors[i * 3 + 2] = b;
+        }
+    }
+
+    async function loadHandles() {
+        const resp = await fetch('handles.bin');
+        let buf;
+        if (resp.body) {
+            const reader = resp.body.getReader();
+            const chunks = [];
+            let received = 0, lastUpdate = 0;
+            while (true) {
+                const {done, value} = await reader.read();
+                if (done) break;
+                chunks.push(value);
+                received += value.length;
+                const now = performance.now();
+                if (now - lastUpdate > 100) {
+                    lastUpdate = now;
+                    statusEl.textContent = `Loading handles: ${(received / 1024 / 1024).toFixed(0)} MB`;
+                }
+            }
+            const buffer = new Uint8Array(received);
+            let offset = 0;
+            for (const chunk of chunks) { buffer.set(chunk, offset); offset += chunk.length; }
+            buf = buffer.buffer;
+        } else {
+            buf = await resp.arrayBuffer();
+        }
+        const view = new DataView(buf);
+        const n = view.getUint32(0, true);
+        const offsets = new Uint32Array(buf, 4, n + 1);
+        const strStart = 4 + (n + 1) * 4;
+        const decoder = new TextDecoder();
+        handleStrings = new Array(n);
+        for (let i = 0; i < n; i++) {
+            const start = offsets[i];
+            const end = offsets[i + 1];
+            handleStrings[i] = end > start
+                ? decoder.decode(new Uint8Array(buf, strStart + start, end - start))
+                : '';
+        }
+    }
+
+    async function loadFollowers() {
+        const resp = await fetch('followers.bin');
+        followerCounts = new Uint32Array(await resp.arrayBuffer());
+    }
+
+    // ── Colormap ──────────────────────────────────────────────
+    function viridis(t) {
+        if (t < 0.2) {
+            const s = t / 0.2;
+            return [68 - 37*s, 1 + 45*s, 84 + 34*s];
+        } else if (t < 0.4) {
+            const s = (t - 0.2) / 0.2;
+            return [31 + 28*s, 46 + 36*s, 118 + 22*s];
+        } else if (t < 0.6) {
+            const s = (t - 0.4) / 0.2;
+            return [59 - 26*s, 82 + 63*s, 140];
+        } else if (t < 0.8) {
+            const s = (t - 0.6) / 0.2;
+            return [33 + 61*s, 145 + 56*s, 140 - 42*s];
+        } else {
+            const s = (t - 0.8) / 0.2;
+            return [94 + 159*s, 201 + 30*s, 98 - 61*s];
+        }
+    }
+
+    // ── DeckGL Layers ─────────────────────────────────────────
+    function buildLayers() {
+        if (!meta) return [];
+
+        const pointOpacity = 0.6;
+        const heatmapOpacity = 0.9;
+        const numVisible = currentLod || LOD_BASE;
+        const pointSize = getPointSize();
+
+        const layers = [];
+
+        // Density heatmap background — fades out as you zoom in
+        if (densityCanvas) {
+            const gb = meta.densityGrid.bounds;
+            const zoomFade = Math.max(0, 1 - (currentZoom - initialZoom) / 3);
+            layers.push(new deck.BitmapLayer({
+                id: 'density-heatmap',
+                image: densityCanvas,
+                bounds: [gb.xMin, gb.yMin, gb.xMax, gb.yMax],
+                opacity: heatmapOpacity * zoomFade,
+            }));
+        }
+
+        // Interactive points (LOD: fewer when zoomed out, colored by density)
+        if (positions) {
+            const pointLayerProps = {
+                id: 'points',
+                data: {
+                    length: numVisible,
+                    attributes: {
+                        getPosition: {value: positions, size: 2},
+                        ...(pointColors ? {getFillColor: {value: pointColors, size: 3}} : {}),
+                    },
+                },
+                getRadius: Math.min(pointSize, 2),
+                radiusUnits: 'pixels',
+                radiusMinPixels: 0.5,
+                ...(pointColors ? {} : {getFillColor: [0, 255, 153]}),
+                opacity: pointOpacity,
+                pickable: handleStrings !== null,
+                autoHighlight: true,
+                highlightColor: [255, 255, 255, 200],
+                updateTriggers: {
+                    getFillColor: [!!pointColors],
+                    getRadius: [pointSize],
+                },
+            };
+            layers.push(new deck.ScatterplotLayer(pointLayerProps));
+        }
+
+        // Cluster labels — visible when zoomed out, fade as you zoom in
+        if (showClusterLabels && clusterLabels && clusterLabels.length > 0) {
+            {
+                function clusterAlpha(d) {
+                    const mobileOffset = window.innerWidth < 768 ? 2 : 0;
+                    const appearZoom = initialZoom + mobileOffset + Math.max(0, 4 - Math.sqrt(d.size / 500));
+                    const fadeOutStart = appearZoom + 2;
+                    if (currentZoom < appearZoom) return 0;
+                    if (currentZoom < fadeOutStart) return Math.min(1, (currentZoom - appearZoom) / 1);
+                    return Math.max(0, 1 - (currentZoom - fadeOutStart) / 3);
+                }
+                const visibleClusters = clusterLabels.filter(d => d.size >= 100 && clusterAlpha(d) >= 0.1);
+                layers.push(new deck.TextLayer({
+                    id: 'cluster-labels',
+                    data: visibleClusters,
+                    getPosition: d => [d.x, d.y],
+                    getText: d => d.label.replace(/ & /g, ' &\n').replace(/(.{12,}?) /g, '$1\n').trim(),
+                    getSize: d => {
+                        const base = Math.min(14, 8 + Math.log2(d.size / 100));
+                        const zoomScale = 1 + Math.max(0, currentZoom - initialZoom) * 0.08;
+                        return base * zoomScale;
+                    },
+                    getColor: d => [255, 255, 255, Math.round(Math.min(highReadability ? 1 : 0.6, clusterAlpha(d)) * 255)],
+                    getTextAnchor: 'middle',
+                    getAlignmentBaseline: 'center',
+                    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                    fontWeight: highReadability ? 700 : 400,
+                    outlineWidth: highReadability ? 6 : 3,
+                    outlineColor: [0, 0, 0, highReadability ? 255 : 120],
+                    fontSettings: { sdf: true },
+                    lineHeight: 0.8,
+                    pickable: false,
+                    billboard: false,
+                    updateTriggers: {
+                        getColor: [currentZoom],
+                        getSize: [currentZoom],
+                    },
+                }));
+            }
+        }
+
+        // Handle labels — appear when zoomed in enough, only if few points visible
+        const labelZoom = initialZoom + 5.5;
+        if (handleStrings && currentZoom >= labelZoom && cachedLabelData.length > 0 && viewportPointCount <= 300) {
+            const labelAlpha = Math.min(1, currentZoom - labelZoom);
+            layers.push(new deck.TextLayer({
+                id: 'labels',
+                data: cachedLabelData,
+                getPosition: d => d.position,
+                getText: d => d.text,
+                getSize: 11,
+                getColor: [255, 255, 255, Math.round(labelAlpha * (highReadability ? 230 : 128))],
+                getTextAnchor: 'start',
+                getAlignmentBaseline: 'center',
+                getPixelOffset: [pointSize + 3, 0],
+                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                fontWeight: 400,
+                outlineWidth: highReadability ? 4 : 2,
+                outlineColor: [13, 13, 26, Math.round(labelAlpha * (highReadability ? 200 : 80))],
+                pickable: true,
+                billboard: false,
+            }));
+        }
+
+        // Selection highlights
+        if (selections.size > 0) {
+            const selData = [...selections.entries()].map(([handle, s]) => ({
+                position: [s.x, s.y],
+                text: '@' + handle.replace(/\.bsky\.social$/, ''),
+            }));
+            layers.push(new deck.ScatterplotLayer({
+                id: 'selections-outline',
+                data: selData,
+                getPosition: d => d.position,
+                getRadius: 12,
+                radiusUnits: 'pixels',
+                getFillColor: [0, 0, 0, 0],
+                getLineColor: [0, 0, 0, 255],
+                getLineWidth: 4,
+                lineWidthUnits: 'pixels',
+                stroked: true,
+                filled: false,
+                pickable: false,
+            }));
+            layers.push(new deck.ScatterplotLayer({
+                id: 'selections',
+                data: selData,
+                getPosition: d => d.position,
+                getRadius: 12,
+                radiusUnits: 'pixels',
+                getFillColor: [...SEL_COLOR, 60],
+                getLineColor: [...SEL_COLOR, 255],
+                getLineWidth: 2.5,
+                lineWidthUnits: 'pixels',
+                stroked: true,
+                filled: true,
+                pickable: false,
+            }));
+            layers.push(new deck.TextLayer({
+                id: 'selection-labels',
+                data: selData,
+                getPosition: d => d.position,
+                getText: d => d.text,
+                getSize: 12,
+                getColor: [...SEL_COLOR, 255],
+                getTextAnchor: 'start',
+                getAlignmentBaseline: 'center',
+                getPixelOffset: [16, 0],
+                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                fontWeight: 600,
+                outlineWidth: 8,
+                outlineColor: [0, 0, 0, 255],
+                fontSettings: { sdf: true },
+                pickable: false,
+                billboard: false,
+            }));
+        }
+
+        // Highlight ring for clicked/flyTo node (white, distinct from selections)
+        // Skip if this node already has a selection ring
+        const highlightHandle = highlightIndex >= 0 && handleStrings ? handleStrings[highlightIndex] : null;
+        if (highlightIndex >= 0 && !selections.has(highlightHandle)) {
+            const hx = positions[highlightIndex * 2];
+            const hy = positions[highlightIndex * 2 + 1];
+            layers.push(new deck.ScatterplotLayer({
+                id: 'highlight',
+                data: [{position: [hx, hy]}],
+                getPosition: d => d.position,
+                getRadius: 14,
+                radiusUnits: 'pixels',
+                getFillColor: [0, 0, 0, 0],
+                getLineColor: [255, 255, 255, 255],
+                getLineWidth: 2,
+                lineWidthUnits: 'pixels',
+                stroked: true,
+                filled: false,
+                pickable: false,
+            }));
+        }
+
+        return layers;
+    }
+
+    function updateLayers() {
+        if (deckgl) deckgl.setProps({ layers: buildLayers() });
+    }
+
+    function updateLod() {
+        const newLod = getLodCount(currentZoom);
+        if (newLod !== currentLod) {
+            currentLod = newLod;
+            // LOD changed, but don't surface it in status
+        }
+        updateLayers(); // always update — heatmap opacity depends on zoom
+        scheduleLabels();
+        updateAvatarOverlay();
+    }
+
+    function scheduleLabels() {
+        if (labelTimeout) clearTimeout(labelTimeout);
+        labelTimeout = setTimeout(recomputeLabels, 300);
+    }
+
+    function recomputeLabels() {
+        if (!handleStrings || !positions || !deckgl || currentZoom < initialZoom + 2) {
+            if (cachedLabelData.length > 0) {
+                cachedLabelData = []; updateLayers();
+            }
+            return;
+        }
+
+        // Get viewport bounds in world coordinates from deck.gl
+        const viewport = deckgl.getViewports()[0];
+        if (!viewport) return;
+
+        const topLeft = viewport.unproject([0, 0]);
+        const bottomRight = viewport.unproject([viewport.width, viewport.height]);
+        const xMin = Math.min(topLeft[0], bottomRight[0]);
+        const xMax = Math.max(topLeft[0], bottomRight[0]);
+        const yMin = Math.min(topLeft[1], bottomRight[1]);
+        const yMax = Math.max(topLeft[1], bottomRight[1]);
+
+        // Scan points in LOD order (sorted by followers desc), keep those in viewport
+        const maxLabels = 300;
+        const n = currentLod;
+        const labels = [];
+        let vpCount = 0;
+
+        for (let i = 0; i < n; i++) {
+            const px = positions[i * 2];
+            const py = positions[i * 2 + 1];
+            if (px >= xMin && px <= xMax && py >= yMin && py <= yMax) {
+                vpCount++;
+                if (handleStrings[i] && !isOptedOut(handleStrings[i]) && labels.length < maxLabels) {
+                    labels.push({
+                        position: [px, py],
+                        text: '@' + handleStrings[i].replace(/\.bsky\.social$/, ''),
+                    });
+                }
+            }
+        }
+
+        viewportPointCount = vpCount;
+        cachedLabelData = labels;
+        updateLayers();
+        updateAvatarOverlay();
+    }
+
+    function updateAvatarOverlay() {
+        const viewport = deckgl?.getViewports()[0];
+        const avatarZoom = initialZoom + 8;
+
+        // Hide all if not zoomed in enough
+        if (!viewport || !handleStrings || !positions || currentZoom < avatarZoom) {
+            avatarOverlay.style.display = 'none';
+            return;
+        }
+        avatarOverlay.style.display = '';
+
+        const topLeft = viewport.unproject([0, 0]);
+        const bottomRight = viewport.unproject([viewport.width, viewport.height]);
+        const xMin = Math.min(topLeft[0], bottomRight[0]);
+        const xMax = Math.max(topLeft[0], bottomRight[0]);
+        const yMin = Math.min(topLeft[1], bottomRight[1]);
+        const yMax = Math.max(topLeft[1], bottomRight[1]);
+
+        // Collect top points in viewport that have avatars or need fetching
+        const maxAvatars = 5000;
+        const visible = [];
+        const toFetch = [];
+        const n = currentLod;
+
+        for (let i = 0; i < n && visible.length < maxAvatars; i++) {
+            const px = positions[i * 2];
+            const py = positions[i * 2 + 1];
+            if (px >= xMin && px <= xMax && py >= yMin && py <= yMax && handleStrings[i]) {
+                const handle = handleStrings[i];
+                if (isOptedOut(handle)) continue;
+                const cached = profileCache[handle];
+                if (cached && !cached.avatar) continue; // skip known no-avatar or pending
+                const screen = viewport.project([px, py]);
+                if (cached?.avatar) {
+                    visible.push({ handle, sx: screen[0], sy: screen[1], url: cached.avatar });
+                } else if (!cached && toFetch.length < AVATAR_FETCH_BATCH) {
+                    toFetch.push(handle);
+                }
+            }
+        }
+
+        // Remove avatars no longer visible
+        const visibleHandles = new Set(visible.map(v => v.handle));
+        for (const [handle, el] of avatarElements) {
+            if (!visibleHandles.has(handle)) {
+                el.remove();
+                avatarElements.delete(handle);
+            }
+        }
+
+        // Position visible avatars, sized to match current point size
+        const avatarSize = Math.max(16, Math.round(getPointSize() * 2));
+        for (const {handle, sx, sy, url} of visible) {
+            let el = avatarElements.get(handle);
+            if (!el) {
+                el = document.createElement('img');
+                el.className = 'avatar-pip';
+                el.src = url;
+                el.onerror = () => { el.style.display = 'none'; };
+                avatarOverlay.appendChild(el);
+                avatarElements.set(handle, el);
+            }
+            el.style.left = sx + 'px';
+            el.style.top = sy + 'px';
+            el.style.width = avatarSize + 'px';
+            el.style.height = avatarSize + 'px';
+        }
+
+        // Fetch missing profiles
+        if (toFetch.length > 0) {
+            for (const handle of toFetch) {
+                profileCache[handle] = {}; // mark as attempted
+                fetchProfile(handle).then(p => {
+                    if (p) profileCache[handle] = p;
+                }).catch(() => {});
+            }
+        }
+    }
+
+    // ── Tooltip ───────────────────────────────────────────────
+    function showTooltip(x, y, handle) {
+        tooltipEl.innerHTML = `<div class="tt-handle">@${escHtml(handle)}</div>`;
+        tooltipEl.style.display = 'block';
+
+        let left = x + 15, top = y + 15;
+        if (left + tooltipEl.offsetWidth > window.innerWidth) left = x - tooltipEl.offsetWidth - 15;
+        if (top + tooltipEl.offsetHeight > window.innerHeight) top = y - tooltipEl.offsetHeight - 15;
+        tooltipEl.style.left = left + 'px';
+        tooltipEl.style.top = top + 'px';
+
+        if (profileCache[handle]) {
+            renderTooltipProfile(handle, profileCache[handle]);
+        } else {
+            fetchProfile(handle).then(profile => {
+                if (profile) {
+                    profileCache[handle] = profile;
+                    if (tooltipEl.style.display === 'block' && tooltipEl.querySelector('.tt-handle')?.textContent === '@' + handle) {
+                        renderTooltipProfile(handle, profile);
+                    }
+                }
+            });
+        }
+    }
+
+    function renderTooltipProfile(handle, p) {
+        const avatar = p.avatar ? `<img class="tt-avatar" src="${escHtml(p.avatar)}" onerror="this.style.display='none'">` : '';
+        tooltipEl.innerHTML = `
+            ${avatar}
+            <div class="tt-name">${escHtml(p.displayName || handle)}</div>
+            <div class="tt-handle">@${escHtml(handle)}</div>
+            ${p.description ? `<div class="tt-bio">${escHtml(p.description)}</div>` : ''}
+            <div class="tt-stats"><span>${(p.followersCount || 0).toLocaleString()}</span> followers &middot; <span>${(p.followsCount || 0).toLocaleString()}</span> following</div>
+        `;
+    }
+
+    async function fetchProfile(handle) {
+        try {
+            const resp = await fetch(`https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile?actor=${encodeURIComponent(handle)}`);
+            if (!resp.ok) return null;
+            return await resp.json();
+        } catch { return null; }
+    }
+
+    // ── Sidebar ───────────────────────────────────────────────
+    function showSidebar(handle, pointIdx) {
+        highlightIndex = pointIdx;
+
+        updateLayers();
+
+        const sidebar = document.getElementById('sidebar');
+        const content = document.getElementById('sidebar-content');
+        content.innerHTML = `
+            <h3>@${escHtml(handle)}</h3>
+            <a class="profile-link" href="https://bsky.app/profile/${encodeURIComponent(handle)}" target="_blank">View on Bluesky &rarr;</a>
+            <div class="sidebar-stats">Loading profile...</div>
+        `;
+        sidebar.style.display = 'block';
+
+        fetchProfile(handle).then(p => {
+            if (!p) { content.querySelector('.sidebar-stats').textContent = ''; return; }
+            const avatar = p.avatar ? `<img class="sidebar-avatar" src="${escHtml(p.avatar)}" onerror="this.style.display='none'">` : '';
+            content.innerHTML = `
+                ${avatar}
+                <h3>${escHtml(p.displayName || handle)}</h3>
+                <div style="color:#0f9;font-size:13px;margin-bottom:4px;">@${escHtml(handle)}</div>
+                <a class="profile-link" href="https://bsky.app/profile/${encodeURIComponent(handle)}" target="_blank">View on Bluesky &rarr;</a>
+                ${p.description ? `<div class="sidebar-bio">${escHtml(p.description)}</div>` : ''}
+                <div class="sidebar-stats"><span>${(p.followersCount || 0).toLocaleString()}</span> followers &middot; <span>${(p.followsCount || 0).toLocaleString()}</span> following</div>
+            `;
+        });
+    }
+
+    function closeSidebar() {
+        document.getElementById('sidebar').style.display = 'none';
+        highlightIndex = -1;
+
+        updateLayers();
+    }
+
+    // ── Search ────────────────────────────────────────────────
+    const searchInput = document.getElementById('search-input');
+    const autocompleteEl = document.getElementById('autocomplete');
+    let acItems = [];
+    let acSelected = -1;
+
+    const selectionsEl = document.getElementById('selections');
+
+    searchInput.addEventListener('input', () => {
+        const q = searchInput.value.trim().toLowerCase();
+        if (q.length < 2) { autocompleteEl.innerHTML = ''; acItems = []; renderSelections(); return; }
+        if (!handleStrings) {
+            autocompleteEl.innerHTML = '<div class="ac-item" style="color:#888;">Still loading handles, please wait and then search once they are complete — you can see progress in the bottom left of the screen</div>';
+            acItems = [];
+            return;
+        }
+        const matches = searchHandles(q);
+        acItems = matches;
+        acSelected = -1;
+        renderAutocomplete(matches, q);
+        renderSelections(matches);
+    });
+
+    searchInput.addEventListener('keydown', e => {
+        if (acItems.length === 0) return;
+        if (e.key === 'ArrowDown') { e.preventDefault(); acSelected = Math.min(acSelected + 1, acItems.length - 1); highlightAcItem(); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); acSelected = Math.max(acSelected - 1, 0); highlightAcItem(); }
+        else if (e.key === 'Enter') { e.preventDefault(); selectAcItem(acItems[Math.max(acSelected, 0)]); }
+        else if (e.key === 'Escape') { autocompleteEl.innerHTML = ''; acItems = []; renderSelections(); }
+    });
+
+    function makeCheckbox(handle) {
+        const checked = selections.has(handle);
+        const borderColor = checked ? `rgb(${SEL_COLOR[0]},${SEL_COLOR[1]},${SEL_COLOR[2]})` : '#556';
+        const bgColor = checked ? `rgba(${SEL_COLOR[0]},${SEL_COLOR[1]},${SEL_COLOR[2]},0.25)` : 'transparent';
+        return `<span class="ac-check${checked ? ' checked' : ''}" style="border-color:${borderColor};background:${bgColor}" onmousedown="event.stopPropagation();toggleSelection('${escHtml(handle)}')">${checked ? '\u2713' : ''}</span>`;
+    }
+
+    function renderAutocomplete(matches, query) {
+        if (matches.length === 0) { autocompleteEl.innerHTML = '<div class="ac-item" style="color:#888;">No results</div>'; return; }
+        autocompleteEl.innerHTML = matches.map((m, i) => {
+            const handle = m[0];
+            const idx = handle.toLowerCase().indexOf(query);
+            const display = idx >= 0
+                ? escHtml(handle.slice(0, idx)) + '<span class="ac-handle">' + escHtml(handle.slice(idx, idx + query.length)) + '</span>' + escHtml(handle.slice(idx + query.length))
+                : escHtml(handle);
+            return `<div class="ac-item" data-idx="${i}">${makeCheckbox(handle)}<span class="ac-text" onmousedown="selectAcItem(acItems[${i}])">${display}</span></div>`;
+        }).join('');
+    }
+
+    function renderSelections(currentMatches) {
+        if (selections.size === 0) { selectionsEl.innerHTML = ''; return; }
+        // Show selections not already visible in current search results
+        const shownHandles = new Set((currentMatches || []).map(m => m[0]));
+        const unshown = [...selections.entries()].filter(([h]) => !shownHandles.has(h));
+        if (unshown.length === 0 && shownHandles.size > 0) { selectionsEl.innerHTML = ''; return; }
+        const items = (selections.size > 0 && (currentMatches || []).length > 0 && unshown.length > 0 ? '<div class="sel-divider"></div>' : '') +
+            (unshown.length > 0 ? unshown : [...selections.entries()]).map(([handle, s]) => {
+                return `<div class="ac-item">${makeCheckbox(handle)}<span class="ac-text" onmousedown="flyToHandle('${escHtml(handle)}')" style="color:rgb(${SEL_COLOR[0]},${SEL_COLOR[1]},${SEL_COLOR[2]})">${escHtml(handle.replace(/\.bsky\.social$/, ''))}</span></div>`;
+            }).join('');
+        selectionsEl.innerHTML = items;
+    }
+
+    function toggleSelection(handle) {
+        const wasAdded = !selections.has(handle);
+        if (wasAdded) {
+            const idx = handleStrings.indexOf(handle);
+            if (idx < 0) return;
+            selections.set(handle, getPos(idx));
+        } else {
+            selections.delete(handle);
+        }
+        // Re-render search UI to update checkboxes
+        const q = searchInput.value.trim().toLowerCase();
+        if (q.length >= 2 && acItems.length > 0) {
+            renderAutocomplete(acItems, q);
+            renderSelections(acItems);
+        } else {
+            renderSelections();
+        }
+        updateLayers();
+        if (wasAdded && selections.size > 0) fitSelections();
+    }
+
+    function fitSelections() {
+        if (!deckgl || selections.size === 0) return;
+        const pts = [...selections.values()];
+        if (pts.length === 1) {
+            flyTo(pts[0].x, pts[0].y);
+            return;
+        }
+        let xMin = Infinity, xMax = -Infinity, yMin = Infinity, yMax = -Infinity;
+        for (const p of pts) {
+            if (p.x < xMin) xMin = p.x;
+            if (p.x > xMax) xMax = p.x;
+            if (p.y < yMin) yMin = p.y;
+            if (p.y > yMax) yMax = p.y;
+        }
+        const cx = (xMin + xMax) / 2, cy = (yMin + yMax) / 2;
+        const padding = 100;
+        const scaleX = (window.innerWidth - padding * 2) / Math.max(xMax - xMin, 0.01);
+        const scaleY = (window.innerHeight - padding * 2) / Math.max(yMax - yMin, 0.01);
+        const zoom = Math.log2(Math.min(scaleX, scaleY));
+        deckgl.setProps({
+            initialViewState: {
+                target: [cx, cy, 0],
+                zoom: zoom,
+                transitionDuration: 600,
+                transitionInterpolator: new deck.LinearInterpolator(['target', 'zoom']),
+            },
+        });
+    }
+
+    function highlightAcItem() {
+        autocompleteEl.querySelectorAll('.ac-item').forEach((el, i) => el.classList.toggle('selected', i === acSelected));
+        if (acSelected >= 0) autocompleteEl.querySelectorAll('.ac-item')[acSelected]?.scrollIntoView({ block: 'nearest' });
+    }
+
+    function selectAcItem(entry) {
+        if (!entry) return;
+        const [handle, pointIdx] = entry;
+        const pos = getPos(pointIdx);
+        searchInput.value = handle;
+        autocompleteEl.innerHTML = '';
+        acItems = [];
+
+        if (!selections.has(handle)) {
+            selections.set(handle, pos);
+        }
+        renderSelections();
+        showSidebar(handle, pointIdx);
+        flyTo(pos.x, pos.y);
+        updateLayers();
+    }
+
+    function flyToHandle(handle) {
+        const pointIdx = handleStrings ? handleStrings.indexOf(handle) : -1;
+        showSidebar(handle, pointIdx);
+        if (pointIdx >= 0) {
+            const pos = getPos(pointIdx);
+            flyTo(pos.x, pos.y);
+        }
+    }
+
+
+    // ── View Animation ────────────────────────────────────────
+    function flyTo(worldX, worldY) {
+        if (!deckgl) return;
+        deckgl.setProps({
+            initialViewState: {
+                target: [worldX, worldY, 0],
+                zoom: Math.max(currentZoom + 2, 4),
+                transitionDuration: 600,
+                transitionInterpolator: new deck.LinearInterpolator(['target', 'zoom']),
+            },
+        });
+    }
+
+    // ── Helpers ───────────────────────────────────────────────
+    function findHandle(stripped) {
+        if (!handleStrings) return null;
+        // Try exact match first, then with .bsky.social suffix
+        const idx = handleStrings.indexOf(stripped);
+        if (idx >= 0) return stripped;
+        const full = stripped + '.bsky.social';
+        const idx2 = handleStrings.indexOf(full);
+        return idx2 >= 0 ? full : null;
+    }
+
+    function escHtml(s) {
+        if (!s) return '';
+        return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // ── Init ──────────────────────────────────────────────────
+    async function init() {
+        statusEl.textContent = 'Loading metadata...';
+        await loadMeta();
+
+        // Load cluster labels (non-blocking)
+        fetch('cluster_labels.json').then(r => r.json()).then(data => {
+            clusterLabels = data.filter(c => c.label && !c.adult);
+            console.log(`Loaded ${clusterLabels.length} cluster labels`);
+            updateLayers();
+        }).catch(() => {});
+
+        const { xMin, xMax, yMin, yMax } = meta.bounds;
+        const cx = (xMin + xMax) / 2, cy = (yMin + yMax) / 2;
+
+        const padding = 60;
+        const scaleX = (window.innerWidth - padding * 2) / (xMax - xMin);
+        const scaleY = (window.innerHeight - padding * 2) / (yMax - yMin);
+        initialZoom = Math.log2(Math.min(scaleX, scaleY));
+        currentZoom = initialZoom;
+
+        // Phase 2a: density grid is tiny (~1MB), show heatmap immediately
+        statusEl.textContent = 'Loading density map...';
+        await loadDensityGrid();
+
+        // Create deck.gl immediately with just the heatmap
+        deckgl = new deck.Deck({
+            parent: document.getElementById('deck-canvas'),
+            views: new deck.OrthographicView({ flipY: false }),
+            initialViewState: { target: [cx, cy, 0], zoom: initialZoom },
+            controller: true,
+            layers: buildLayers(),
+            onViewStateChange: ({viewState}) => {
+                currentZoom = viewState.zoom;
+                updateLod();
+                const isMobile = 'ontouchstart' in window;
+                const baseRadius = isMobile ? 12 : 4;
+                const avatarRadius = currentZoom >= initialZoom + 8 ? Math.max(16, Math.round(getPointSize() * 2)) / 2 : 0;
+                deckgl.setProps({ pickingRadius: Math.max(baseRadius, avatarRadius) });
+            },
+            onHover: !('ontouchstart' in window) ? (() => {
+                let lastHover = 0;
+                return (info) => {
+                    const now = performance.now();
+                    if (now - lastHover < 50) return;
+                    lastHover = now;
+                    if (info.layer?.id === 'labels' && info.object) {
+                        const handle = info.object.text.replace(/^@/, '').replace(/$/,'') ;
+                        const fullHandle = findHandle(handle);
+                        if (fullHandle) { showTooltip(info.x, info.y, fullHandle); return; }
+                    }
+                    if (!handleStrings || info.index < 0 || info.index >= handleStrings.length) {
+                        tooltipEl.style.display = 'none';
+                        return;
+                    }
+                    const handle = handleStrings[info.index];
+                    if (handle) showTooltip(info.x, info.y, handle);
+                    else tooltipEl.style.display = 'none';
+                };
+            })() : undefined,
+            pickingRadius: 'ontouchstart' in window ? 12 : 4,
+            onClick: (info) => {
+                if (info.layer?.id === 'labels' && info.object) {
+                    const handle = info.object.text.replace(/^@/, '');
+                    const fullHandle = findHandle(handle);
+                    if (fullHandle) {
+                        const idx = handleStrings.indexOf(fullHandle);
+                        showSidebar(fullHandle, idx);
+                        return;
+                    }
+                }
+                if (!handleStrings || info.index < 0 || info.index >= handleStrings.length) {
+                    closeSidebar();
+                    return;
+                }
+                const handle = handleStrings[info.index];
+                if (handle) showSidebar(handle, info.index);
+                else closeSidebar();
+            },
+            getCursor: ({isDragging}) => isDragging ? 'grabbing' : 'grab',
+        });
+
+        // Phase 2b: load points (~26MB), then add to scene
+        statusEl.textContent = `Loading ${meta.numPoints.toLocaleString()} points...`;
+        await loadPoints();
+        buildPointColors();
+        currentLod = getLodCount(currentZoom);
+        updateLayers();
+
+        // Phase 3: handles + followers in background (enables hover/click)
+        statusEl.textContent = `${meta.numPoints.toLocaleString()} points | Loading handles...`;
+        await Promise.all([loadHandles(), loadFollowers()]);
+        updateLayers();
+
+        statusEl.textContent = `${meta.numPoints.toLocaleString()} points | Ready`;
+
+        // Poll for avatar fetching at appropriate zoom levels
+        setInterval(() => {
+            if (currentZoom >= initialZoom + 8) updateAvatarOverlay();
+        }, 1000);
+
+    }
+
+    init();
+    </script>
+</body>
+</html>
