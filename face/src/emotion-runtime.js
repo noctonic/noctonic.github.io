@@ -17,28 +17,72 @@ function makeCaseInsensitiveMap(object) {
 }
 
 export class EmotionRuntime {
-  constructor(faceMesh, mappingConfig) {
-    this.faceMesh = faceMesh;
+  constructor(faceMeshes, mappingConfig) {
+    const meshList = Array.isArray(faceMeshes) ? faceMeshes : [faceMeshes];
+    this.faceMeshes = meshList.filter(
+      (mesh) => mesh && mesh.morphTargetDictionary && mesh.morphTargetInfluences
+    );
+    if (this.faceMeshes.length === 0) {
+      throw new Error("EmotionRuntime requires at least one morph-target mesh.");
+    }
+
     this.mappingConfig = mappingConfig;
     this.current = {};
     this.target = {};
+    this.warnedMissingCoefficients = new Set();
+    this.meshStates = this.faceMeshes.map((mesh) => {
+      const dict = mesh.morphTargetDictionary || {};
+      return {
+        morphNameToIndex: makeCaseInsensitiveMap(dict),
+        morphInfluences: mesh.morphTargetInfluences || []
+      };
+    });
 
-    const dict = this.faceMesh.morphTargetDictionary || {};
-    this.morphNameToIndex = makeCaseInsensitiveMap(dict);
-    this.morphInfluences = this.faceMesh.morphTargetInfluences || [];
+    this.availableMorphNames = new Set();
+    for (const state of this.meshStates) {
+      for (const key of Object.keys(state.morphNameToIndex)) {
+        this.availableMorphNames.add(key);
+      }
+    }
   }
 
   reset() {
-    for (let i = 0; i < this.morphInfluences.length; i += 1) {
-      this.morphInfluences[i] = 0;
+    for (const state of this.meshStates) {
+      for (let i = 0; i < state.morphInfluences.length; i += 1) {
+        state.morphInfluences[i] = 0;
+      }
     }
     this.current = {};
     this.target = {};
   }
 
+  getMissingCoefficients(coefficientNames) {
+    const missing = [];
+    for (const name of coefficientNames || []) {
+      if (!this.availableMorphNames.has(String(name).toLowerCase())) {
+        missing.push(name);
+      }
+    }
+    return missing;
+  }
+
   update(emotionLevels, intensity, dtSeconds) {
     this.target = this.composeTargets(emotionLevels, intensity);
-    this.applyConflicts(this.target);
+    this.updateFromCoefficientMap(this.target, 1, dtSeconds, true);
+  }
+
+  updateFromCoefficientMap(coefficientMap, intensity, dtSeconds, applyConflicts = true) {
+    const scaledTargets = {};
+    const clampedIntensity = clamp01(intensity);
+
+    for (const [name, value] of Object.entries(coefficientMap || {})) {
+      scaledTargets[name] = clamp01((value || 0) * clampedIntensity);
+    }
+
+    this.target = scaledTargets;
+    if (applyConflicts) {
+      this.applyConflicts(this.target);
+    }
     this.smoothAndWrite(this.target, dtSeconds);
   }
 
@@ -132,11 +176,25 @@ export class EmotionRuntime {
   }
 
   writeCoefficient(coefficientName, value) {
-    const index = this.morphNameToIndex[coefficientName.toLowerCase()];
-    if (index === undefined) {
+    const key = coefficientName.toLowerCase();
+    let wroteAny = false;
+
+    for (const state of this.meshStates) {
+      const index = state.morphNameToIndex[key];
+      if (index === undefined) {
+        continue;
+      }
+      state.morphInfluences[index] = value;
+      wroteAny = true;
+    }
+
+    if (!wroteAny && !this.warnedMissingCoefficients.has(key)) {
+      this.warnedMissingCoefficients.add(key);
+      console.warn(`Coefficient "${coefficientName}" not found in model morph targets.`);
+    }
+
+    if (!wroteAny) {
       return;
     }
-    this.morphInfluences[index] = value;
   }
 }
-

@@ -6,7 +6,11 @@ Expected file locations:
 
 - `/Users/user/projects/face/assets/vendor/three/build/three.module.js`
 - `/Users/user/projects/face/assets/vendor/three/examples/jsm/loaders/GLTFLoader.js`
+- `/Users/user/projects/face/assets/vendor/three/examples/jsm/loaders/FBXLoader.js`
 - `/Users/user/projects/face/assets/vendor/three/examples/jsm/controls/OrbitControls.js`
 - `/Users/user/projects/face/assets/vendor/three/examples/jsm/utils/BufferGeometryUtils.js`
+- `/Users/user/projects/face/assets/vendor/three/examples/jsm/libs/fflate.module.js`
+- `/Users/user/projects/face/assets/vendor/three/examples/jsm/curves/NURBSCurve.js`
+- `/Users/user/projects/face/assets/vendor/three/examples/jsm/curves/NURBSUtils.js`
 
 If these files are missing, `src/main.js` will show an error in the UI status line.
