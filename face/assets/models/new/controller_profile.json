@@ -156,5 +156,39 @@
     "view_count": 3,
     "lighting_jitter": true,
     "onehot_top_k": 3
+  },
+  "input_names": [
+    "angry",
+    "disgust",
+    "fear",
+    "happy",
+    "sad",
+    "surprise",
+    "neutral",
+    "intensity"
+  ],
+  "intensity_input_enabled": true,
+  "intensity_levels": [
+    0.2,
+    0.4,
+    0.6,
+    0.8,
+    1.0
+  ],
+  "discovery_mode": "balanced",
+  "discovery_weights": {
+    "prior_weight": 0.3,
+    "sym_weight": 0.08,
+    "supp_weight": 0.08,
+    "gaze_weight_multiview": 0.02,
+    "gaze_weight_singleview": 0.3,
+    "conflict_weight": 0.12,
+    "l2_weight": 0.02,
+    "emo_weight": 0.6,
+    "emo_mv_weight": 0.4,
+    "view_var_weight": 0.1,
+    "diversity_weight": 0.35,
+    "deadzone": 0.01,
+    "intensity_anchor_weight": 0.1
   }
 }

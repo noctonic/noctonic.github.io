@@ -17,7 +17,7 @@ function makeCaseInsensitiveMap(object) {
 }
 
 export class EmotionRuntime {
-  constructor(faceMeshes, mappingConfig) {
+  constructor(faceMeshes, mappingConfig, options = {}) {
     const meshList = Array.isArray(faceMeshes) ? faceMeshes : [faceMeshes];
     this.faceMeshes = meshList.filter(
       (mesh) => mesh && mesh.morphTargetDictionary && mesh.morphTargetInfluences
@@ -27,6 +27,9 @@ export class EmotionRuntime {
     }
 
     this.mappingConfig = mappingConfig;
+    this.ignoredMissingCoefficients = new Set(
+      (options.ignoredMissingCoefficients || []).map((name) => String(name).toLowerCase())
+    );
     this.current = {};
     this.target = {};
     this.warnedMissingCoefficients = new Set();
@@ -188,12 +191,14 @@ export class EmotionRuntime {
       wroteAny = true;
     }
 
-    if (!wroteAny && !this.warnedMissingCoefficients.has(key)) {
-      this.warnedMissingCoefficients.add(key);
-      console.warn(`Coefficient "${coefficientName}" not found in model morph targets.`);
-    }
-
     if (!wroteAny) {
+      if (this.ignoredMissingCoefficients.has(key)) {
+        return;
+      }
+      if (!this.warnedMissingCoefficients.has(key)) {
+        this.warnedMissingCoefficients.add(key);
+        console.warn(`Coefficient "${coefficientName}" not found in model morph targets.`);
+      }
       return;
     }
   }

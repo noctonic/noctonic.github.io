@@ -22,6 +22,7 @@ const state = {
   gltfLoader: null,
   onnxController: null,
   onnxProfile: null,
+  onnxIntensityInputName: null,
   useOnnx: false,
   lastEmotionSignature: ""
 };
@@ -551,7 +552,8 @@ function buildEmotionUI(emotionNames) {
   state.sliders = {};
 
   for (const emotion of emotionNames) {
-    const { row, input } = createSliderRow(emotion, 0);
+    const initialValue = String(emotion).toLowerCase() === "neutral" ? 0.5 : 0;
+    const { row, input } = createSliderRow(emotion, initialValue);
     container.appendChild(row);
     state.sliders[emotion] = input;
   }
@@ -571,32 +573,63 @@ function collectEmotionLevels() {
   return result;
 }
 
+function computeEmotionMagnitude(levels) {
+  let sum = 0;
+  for (const value of Object.values(levels || {})) {
+    sum += Math.max(0, Number(value || 0));
+  }
+  // Keep neutral baseline behavior when all sliders are zero.
+  if (sum <= 0) {
+    return 1;
+  }
+  return Math.min(1, sum);
+}
+
 function installPresets(emotions) {
   const presetContainer = document.getElementById("presets");
   presetContainer.innerHTML = "";
+
+  const setIntensity = (value) => {
+    if (!state.intensitySlider) {
+      return;
+    }
+    state.intensitySlider.value = String(value);
+    state.intensitySlider.dispatchEvent(new Event("input"));
+  };
 
   const clearButton = document.createElement("button");
   clearButton.type = "button";
   clearButton.className = "preset-btn";
   clearButton.textContent = "Neutral";
   clearButton.addEventListener("click", () => {
-    for (const slider of Object.values(state.sliders)) {
-      slider.value = "0";
+    for (const [name, slider] of Object.entries(state.sliders)) {
+      slider.value = String(name === "neutral" ? 0.5 : 0);
       slider.dispatchEvent(new Event("input"));
     }
+    setIntensity(0.5);
   });
   presetContainer.appendChild(clearButton);
 
   for (const emotion of emotions) {
+    if (String(emotion).toLowerCase() === "neutral") {
+      continue;
+    }
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "preset-btn";
     btn.textContent = emotion;
     btn.addEventListener("click", () => {
       for (const [name, slider] of Object.entries(state.sliders)) {
-        slider.value = name === emotion ? "1" : "0";
+        if (name === "neutral") {
+          slider.value = "0.5";
+        } else if (name === emotion) {
+          slider.value = "0.5";
+        } else {
+          slider.value = "0";
+        }
         slider.dispatchEvent(new Event("input"));
       }
+      setIntensity(0.5);
     });
     presetContainer.appendChild(btn);
   }
@@ -638,7 +671,12 @@ async function bootstrap() {
       state.onnxProfile = await loadJsonIfExists(ONNX_PROFILE_PATH);
       state.useOnnx = true;
       emotionNames = state.onnxController.getEmotionNames();
+      state.onnxIntensityInputName =
+        emotionNames.find((name) => String(name || "").trim().toLowerCase() === "intensity") || null;
       console.info("ONNX input emotion order:", emotionNames);
+      if (state.onnxIntensityInputName) {
+        console.info("ONNX intensity input detected:", state.onnxIntensityInputName);
+      }
       if (state.onnxProfile?.mesh_object_name) {
         console.info("ONNX profile mesh:", state.onnxProfile.mesh_object_name);
       }
@@ -652,6 +690,7 @@ async function bootstrap() {
       state.useOnnx = false;
       state.onnxController = null;
       state.onnxProfile = null;
+      state.onnxIntensityInputName = null;
       if (shouldRequireOnnx()) {
         throw new Error(`ONNX required but failed: ${formatErrorMessage(error)}`);
       }
@@ -659,8 +698,11 @@ async function bootstrap() {
     }
   }
 
-  buildEmotionUI(emotionNames);
-  installPresets(emotionNames);
+  const uiEmotionNames = emotionNames.filter(
+    (name) => String(name || "").trim().toLowerCase() !== "intensity"
+  );
+  buildEmotionUI(uiEmotionNames);
+  installPresets(uiEmotionNames);
 
   setStatus("Loading local Three.js modules...");
   const { THREE, GLTFLoader, FBXLoader, OrbitControls } = await loadThreeModules();
@@ -693,7 +735,12 @@ async function bootstrap() {
     `Driving morph meshes (${runtimeMeshes.length}):`,
     runtimeMeshNames
   );
-  state.runtime = new EmotionRuntime(runtimeMeshes, mapping);
+  const profileMissing = Array.isArray(state.onnxProfile?.missing_coefficients)
+    ? state.onnxProfile.missing_coefficients
+    : [];
+  state.runtime = new EmotionRuntime(runtimeMeshes, mapping, {
+    ignoredMissingCoefficients: profileMissing
+  });
   console.info("Controller source:", state.useOnnx ? "ONNX" : "JSON fallback");
 
   const expectedCoefficients =
@@ -701,9 +748,18 @@ async function bootstrap() {
       ? state.onnxController.getCoefficientNames()
       : getMappingCoefficientNames(mapping);
   const missingCoefficients = state.runtime.getMissingCoefficients(expectedCoefficients);
-  if (missingCoefficients.length > 0) {
+  const ignoredMissingLower = new Set(profileMissing.map((name) => String(name).toLowerCase()));
+  const actionableMissing = missingCoefficients.filter(
+    (name) => !ignoredMissingLower.has(String(name).toLowerCase())
+  );
+  if (actionableMissing.length > 0) {
     console.warn(
-      `Model is missing ${missingCoefficients.length} expected coefficient(s).`,
+      `Model is missing ${actionableMissing.length} expected coefficient(s).`,
+      actionableMissing
+    );
+  } else if (missingCoefficients.length > 0) {
+    console.info(
+      `Model has ${missingCoefficients.length} known unsupported coefficient(s) from profile.`,
       missingCoefficients
     );
   }
@@ -718,17 +774,25 @@ async function bootstrap() {
       const intensity = Number(state.intensitySlider.value);
 
       if (state.useOnnx && state.onnxController) {
-        const signature = Object.values(levels)
-          .map((v) => Number(v).toFixed(3))
+        const onnxLevels = { ...levels };
+        if (state.onnxIntensityInputName) {
+          const emotionMagnitude = computeEmotionMagnitude(levels);
+          onnxLevels[state.onnxIntensityInputName] = intensity * emotionMagnitude;
+        }
+
+        const signature = Object.values(onnxLevels)
+          .map((v) => Number(v || 0).toFixed(3))
           .join("|");
         if (signature !== state.lastEmotionSignature) {
           state.lastEmotionSignature = signature;
-          state.onnxController.updateInput(levels);
+          state.onnxController.updateInput(onnxLevels);
         }
+
+        const runtimeIntensity = state.onnxIntensityInputName ? 1 : intensity;
 
         state.runtime.updateFromCoefficientMap(
           state.onnxController.getLatestCoefficients(),
-          intensity,
+          runtimeIntensity,
           dt,
           false
         );

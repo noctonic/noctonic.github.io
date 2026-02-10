@@ -7,6 +7,7 @@ export const DEFAULT_ONNX_EMOTIONS = [
   "surprise",
   "neutral"
 ];
+const CANONICAL_EMOTION_SET = new Set(DEFAULT_ONNX_EMOTIONS);
 
 const DEFAULT_SUPPRESSED_EMOTION_CHANNELS = [
   "eyeLookDownLeft",
@@ -258,27 +259,55 @@ function stabilizeCoefficientMap(rawMap, postprocessConfig) {
 
 function normalizeEmotionVector(levelsByName, emotionNames) {
   const vector = new Float32Array(emotionNames.length);
-  let sum = 0;
+  const normalizedNames = emotionNames.map((name) => String(name || "").trim().toLowerCase());
+  const emotionIndices = [];
+  const passthroughIndices = [];
+  let intensityIndex = -1;
 
-  for (let i = 0; i < emotionNames.length; i += 1) {
+  for (let i = 0; i < normalizedNames.length; i += 1) {
+    const name = normalizedNames[i];
+    if (name === "intensity") {
+      intensityIndex = i;
+      continue;
+    }
+    if (CANONICAL_EMOTION_SET.has(name)) {
+      emotionIndices.push(i);
+      continue;
+    }
+    passthroughIndices.push(i);
+  }
+
+  // Normalize only canonical emotion channels as a simplex.
+  let sum = 0;
+  for (const i of emotionIndices) {
     const name = emotionNames[i];
     const value = Math.max(0, Number(levelsByName[name] || 0));
     vector[i] = value;
     sum += value;
   }
-
-  // If all sliders are zero, treat the face as neutral.
-  if (sum <= 0) {
-    const neutralIndex = emotionNames.indexOf("neutral");
-    if (neutralIndex >= 0) {
-      vector[neutralIndex] = 1;
-      return vector;
+  if (emotionIndices.length > 0) {
+    if (sum <= 0) {
+      const neutralIndex = normalizedNames.indexOf("neutral");
+      if (neutralIndex >= 0) {
+        vector[neutralIndex] = 1;
+      }
+    } else {
+      for (const i of emotionIndices) {
+        vector[i] /= sum;
+      }
     }
-    return vector;
   }
 
-  for (let i = 0; i < vector.length; i += 1) {
-    vector[i] /= sum;
+  // Unknown additional channels are passthrough [0,1].
+  for (const i of passthroughIndices) {
+    const name = emotionNames[i];
+    vector[i] = clamp01(Number(levelsByName[name] || 0));
+  }
+
+  // Intensity is independent and not part of simplex normalization.
+  if (intensityIndex >= 0) {
+    const key = emotionNames[intensityIndex];
+    vector[intensityIndex] = clamp01(Number(levelsByName[key] ?? 1));
   }
 
   return vector;
@@ -289,8 +318,8 @@ function normalizeEmotionNames(emotionNames) {
 }
 
 function validateEmotionNames(emotionNames) {
-  if (!Array.isArray(emotionNames) || emotionNames.length !== 7) {
-    throw new Error("ONNX input emotion names must be a JSON array of length 7.");
+  if (!Array.isArray(emotionNames) || emotionNames.length < 7 || emotionNames.length > 16) {
+    throw new Error("ONNX input names must be a JSON array of length 7-16.");
   }
 
   const normalized = normalizeEmotionNames(emotionNames);
