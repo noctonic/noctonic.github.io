@@ -1,4 +1,5 @@
 {
+  "export_timestamp_utc": "2026-02-11T16:36:50.001775Z",
   "mesh_object_name": "head_lod0_ORIGINAL",
   "supported_coefficients": [
     "browDownLeft",
@@ -82,6 +83,55 @@
     "eyeLookUpLeft",
     "eyeLookUpRight"
   ],
+  "mouth_jaw_channels": [
+    "jawForward",
+    "jawLeft",
+    "jawOpen",
+    "jawRight",
+    "mouthClose",
+    "mouthDimpleLeft",
+    "mouthDimpleRight",
+    "mouthFrownLeft",
+    "mouthFrownRight",
+    "mouthFunnel",
+    "mouthLeft",
+    "mouthLowerDownLeft",
+    "mouthLowerDownRight",
+    "mouthPressLeft",
+    "mouthPressRight",
+    "mouthPucker",
+    "mouthRight",
+    "mouthRollLower",
+    "mouthRollUpper",
+    "mouthShrugLower",
+    "mouthShrugUpper",
+    "mouthSmileLeft",
+    "mouthSmileRight",
+    "mouthStretchLeft",
+    "mouthStretchRight",
+    "mouthUpperUpLeft",
+    "mouthUpperUpRight"
+  ],
+  "upper_face_channels": [
+    "browDownLeft",
+    "browDownRight",
+    "browInnerUp",
+    "browOuterUpLeft",
+    "browOuterUpRight",
+    "cheekSquintLeft",
+    "cheekSquintRight",
+    "eyeBlinkLeft",
+    "eyeBlinkRight",
+    "eyeSquintLeft",
+    "eyeSquintRight",
+    "eyeWideLeft",
+    "eyeWideRight"
+  ],
+  "mid_face_channels": [
+    "cheekPuff",
+    "noseSneerLeft",
+    "noseSneerRight"
+  ],
   "symmetry_pairs": [
     [
       "browDownLeft",
@@ -141,12 +191,16 @@
     ]
   ],
   "max_caps": {
-    "jawOpen": 0.75,
+    "jawOpen": 0.05,
+    "mouthUpperUpLeft": 0.35,
+    "mouthUpperUpRight": 0.35,
+    "cheekPuff": 0.25,
     "mouthClose": 0.8,
     "mouthFunnel": 0.85,
     "mouthPucker": 0.85
   },
   "controller_architecture": "basis_plus_nonlinear_correction",
+  "controller_policy": "grounded_spectrum",
   "training_scoring": {
     "critic_models": [
       "trpakov/vit-face-expression",
@@ -155,7 +209,14 @@
     "multi_view": true,
     "view_count": 3,
     "lighting_jitter": true,
-    "onehot_top_k": 3
+    "onehot_top_k": 3,
+    "onehot_restarts": 3,
+    "n_random_mixes": 20,
+    "cma_generations": 6,
+    "cma_popsize": 8,
+    "cma_sigma0": 0.22,
+    "fast_render_samples": 6,
+    "full_render_samples": 16
   },
   "input_names": [
     "angry",
@@ -167,6 +228,16 @@
     "neutral",
     "intensity"
   ],
+  "input_semantics": "neutral_baseline_spectrum",
+  "neutral_emotion_name": "neutral",
+  "non_neutral_emotions": [
+    "angry",
+    "disgust",
+    "fear",
+    "happy",
+    "sad",
+    "surprise"
+  ],
   "intensity_input_enabled": true,
   "intensity_levels": [
     0.2,
@@ -175,20 +246,52 @@
     0.8,
     1.0
   ],
-  "discovery_mode": "balanced",
+  "neutral_anchor_intensities": [
+    0.0,
+    0.25,
+    0.5,
+    1.0
+  ],
+  "discovery_mode": "grounded_spectrum",
   "discovery_weights": {
-    "prior_weight": 0.3,
-    "sym_weight": 0.08,
-    "supp_weight": 0.08,
-    "gaze_weight_multiview": 0.02,
-    "gaze_weight_singleview": 0.3,
-    "conflict_weight": 0.12,
-    "l2_weight": 0.02,
+    "prior_weight": 0.34,
+    "sym_weight": 0.1,
+    "supp_weight": 0.1,
+    "gaze_weight_multiview": 0.03,
+    "gaze_weight_singleview": 0.28,
+    "conflict_weight": 0.18,
+    "l2_weight": 0.03,
     "emo_weight": 0.6,
     "emo_mv_weight": 0.4,
-    "view_var_weight": 0.1,
-    "diversity_weight": 0.35,
-    "deadzone": 0.01,
-    "intensity_anchor_weight": 0.1
-  }
+    "view_var_weight": 0.12,
+    "diversity_weight": 0.28,
+    "deadzone": 0.0,
+    "intensity_anchor_weight": 0.22,
+    "mouth_ratio_weight": 0.66,
+    "mouth_ratio_max": 0.48,
+    "mouth_weighted_l2_weight": 0.16,
+    "mouth_weight_multiplier": 4.2,
+    "region_target_weight": 0.22,
+    "upper_face_floor_weight": 0.38,
+    "upper_face_floor_min": 0.26,
+    "mid_face_floor_weight": 0.14,
+    "mid_face_floor_min": 0.06,
+    "train_reg_mouth_ratio_weight": 0.11,
+    "train_reg_upper_floor_weight": 0.08,
+    "train_reg_mid_floor_weight": 0.04,
+    "activation_bonus_weight": 0.0,
+    "coverage_bonus_weight": 0.0,
+    "coverage_threshold": 0.6,
+    "extreme_bonus_weight": 0.0,
+    "train_activation_bonus_weight": 0.0,
+    "train_coverage_bonus_weight": 0.0,
+    "train_extreme_bonus_weight": 0.0,
+    "disable_prior": false,
+    "disable_symmetry": false,
+    "disable_suppression": false,
+    "disable_gaze_penalty": false,
+    "disable_conflicts": false,
+    "disable_caps": false
+  },
+  "profile_fingerprint": "86252910fc43a491"
 }

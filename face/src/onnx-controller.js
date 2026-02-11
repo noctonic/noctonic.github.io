@@ -43,6 +43,16 @@ const DEFAULT_SYMMETRY_PAIRS = [
   ["noseSneerLeft", "noseSneerRight"]
 ];
 
+const DEFAULT_MAX_CAPS = {
+  jawOpen: 0.05,
+  mouthUpperUpLeft: 0.35,
+  mouthUpperUpRight: 0.35,
+  cheekPuff: 0.25,
+  mouthClose: 0.8,
+  mouthFunnel: 0.85,
+  mouthPucker: 0.85
+};
+
 function ensureTrailingSlash(path) {
   if (!path) {
     return "";
@@ -167,6 +177,23 @@ function normalizeSuppressedChannels(channels) {
   return out.length > 0 ? out : DEFAULT_SUPPRESSED_EMOTION_CHANNELS.slice();
 }
 
+function normalizeMaxCaps(caps) {
+  const merged = { ...DEFAULT_MAX_CAPS };
+  if (!caps || typeof caps !== "object") {
+    return merged;
+  }
+
+  for (const [name, value] of Object.entries(caps)) {
+    const key = normalizeChannelName(name);
+    const numeric = Number(value);
+    if (!key || !Number.isFinite(numeric)) {
+      continue;
+    }
+    merged[key] = clamp01(numeric);
+  }
+  return merged;
+}
+
 function resolvePostprocessMode(modeFromArgs = null) {
   const fromQuery = (getQueryParam("onnxPostprocess") || "").trim().toLowerCase();
   if (fromQuery === "legacy" || fromQuery === "soft" || fromQuery === "raw") {
@@ -185,6 +212,7 @@ function resolvePostprocessMode(modeFromArgs = null) {
 function buildPostprocessConfig(profile, mode) {
   const suppressed = normalizeSuppressedChannels(profile?.suppressed_channels);
   const symmetryPairs = normalizeSymmetryPairs(profile?.symmetry_pairs);
+  const maxCaps = normalizeMaxCaps(profile?.max_caps);
 
   if (mode === "legacy") {
     return {
@@ -193,7 +221,8 @@ function buildPostprocessConfig(profile, mode) {
       suppressedScale: 0.0,
       symmetryBlend: 1.0,
       suppressedSet: new Set(suppressed),
-      symmetryPairs
+      symmetryPairs,
+      maxCaps
     };
   }
 
@@ -204,7 +233,8 @@ function buildPostprocessConfig(profile, mode) {
       suppressedScale: 0.85,
       symmetryBlend: 0.2,
       suppressedSet: new Set(suppressed),
-      symmetryPairs
+      symmetryPairs,
+      maxCaps
     };
   }
 
@@ -214,7 +244,8 @@ function buildPostprocessConfig(profile, mode) {
     suppressedScale: 1.0,
     symmetryBlend: 0.0,
     suppressedSet: new Set(),
-    symmetryPairs: []
+    symmetryPairs: [],
+    maxCaps
   };
 }
 
@@ -224,7 +255,8 @@ function stabilizeCoefficientMap(rawMap, postprocessConfig) {
     suppressedScale: 1.0,
     symmetryBlend: 0.0,
     suppressedSet: new Set(),
-    symmetryPairs: []
+    symmetryPairs: [],
+    maxCaps: { ...DEFAULT_MAX_CAPS }
   };
 
   const result = {};
@@ -235,6 +267,10 @@ function stabilizeCoefficientMap(rawMap, postprocessConfig) {
     }
     if (v < cfg.deadzone) {
       v = 0;
+    }
+    const cap = cfg.maxCaps?.[name];
+    if (Number.isFinite(cap)) {
+      v = Math.min(v, clamp01(cap));
     }
     result[name] = v;
   }
@@ -252,6 +288,13 @@ function stabilizeCoefficientMap(rawMap, postprocessConfig) {
     const avg = clamp01((leftValue + rightValue) * 0.5);
     result[left] = clamp01(leftValue * (1 - blend) + avg * blend);
     result[right] = clamp01(rightValue * (1 - blend) + avg * blend);
+  }
+
+  for (const [name, cap] of Object.entries(cfg.maxCaps || {})) {
+    if (!(name in result)) {
+      continue;
+    }
+    result[name] = Math.min(clamp01(result[name]), clamp01(cap));
   }
 
   return result;

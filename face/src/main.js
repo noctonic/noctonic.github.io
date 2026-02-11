@@ -8,6 +8,12 @@ const ONNX_COEFF_NAMES_PATH = "./assets/models/new/arkit52_coeff_names.json";
 const ONNX_INPUT_NAMES_PATH = "./assets/models/new/emotion_7_input_names.json";
 const ONNX_PROFILE_PATH = "./assets/models/new/controller_profile.json";
 const ONNX_WASM_DIST_PATH = "./assets/vendor/onnxruntime-web/dist/";
+const DEFAULT_TEXTURE_PATH = "./assets/textures/face.png";
+const RANDOM_CYCLE_FREQ_MIN_HZ = 0.03;
+const RANDOM_CYCLE_FREQ_MAX_HZ = 0.26;
+const RANDOM_CYCLE_INTENSITY_FREQ_MIN_HZ = 0.05;
+const RANDOM_CYCLE_INTENSITY_FREQ_MAX_HZ = 0.32;
+const INITIAL_ZOOM_CLOSENESS = 0.98;
 
 const state = {
   scene: null,
@@ -23,8 +29,17 @@ const state = {
   onnxController: null,
   onnxProfile: null,
   onnxIntensityInputName: null,
+  onnxInputEmotionNames: [],
   useOnnx: false,
-  lastEmotionSignature: ""
+  lastEmotionSignature: "",
+  randomCycleEnabled: false,
+  randomCycleButton: null,
+  randomCycleOscillators: {},
+  randomCycleStartedAtSeconds: 0,
+  textureTargetMeshes: [],
+  textureBackups: new Map(),
+  appliedTexture: null,
+  textureObjectUrl: null
 };
 
 function setStatus(message) {
@@ -111,6 +126,20 @@ function shouldRequireOnnx() {
   return parseBooleanQuery(params.get("requireOnnx"), true);
 }
 
+function getRequestedTexturePath() {
+  const params = new URLSearchParams(window.location.search);
+  const queryTexture = params.get("texture");
+  if (queryTexture && queryTexture.trim()) {
+    return queryTexture.trim();
+  }
+  return DEFAULT_TEXTURE_PATH;
+}
+
+function shouldApplyTextureToAllMeshes() {
+  const params = new URLSearchParams(window.location.search);
+  return parseBooleanQuery(params.get("textureAllMeshes"), false);
+}
+
 function formatErrorMessage(error) {
   if (error instanceof Error) {
     return error.message || "Unknown error";
@@ -123,6 +152,16 @@ function formatErrorMessage(error) {
   } catch {
     return String(error);
   }
+}
+
+function computeInitialOrbitDistance(minDistance, maxDistance, closeness = INITIAL_ZOOM_CLOSENESS) {
+  const minD = Math.max(0, Number(minDistance || 0));
+  const maxD = Math.max(minD, Number(maxDistance || minD));
+  const t = Math.max(0, Math.min(1, Number(closeness || 0)));
+  // t=1 means "as close as allowed"; keep a tiny epsilon to avoid edge jitter.
+  const epsilon = 1e-4;
+  const k = Math.max(0, Math.min(1, 1 - t));
+  return minD + (maxD - minD) * k + epsilon;
 }
 
 function getMappingCoefficientNames(mapping) {
@@ -349,13 +388,16 @@ function applyFallbackCamera(THREE, fallbackMesh) {
   target.y += 0.01;
 
   state.orbitControls.target.copy(target);
-  state.camera.position.set(target.x, target.y, target.z + distance);
   state.camera.lookAt(target);
   state.camera.near = 0.01;
   state.camera.far = Math.max(50, distance * 60);
   state.camera.updateProjectionMatrix();
-  state.orbitControls.minDistance = 0.25;
-  state.orbitControls.maxDistance = Math.max(6, distance * 6);
+  const minDistance = 0.25;
+  const maxDistance = Math.max(6, distance * 6);
+  state.orbitControls.minDistance = minDistance;
+  state.orbitControls.maxDistance = maxDistance;
+  const startDistance = computeInitialOrbitDistance(minDistance, maxDistance);
+  state.camera.position.set(target.x, target.y, target.z + startDistance);
   state.orbitControls.update();
 }
 
@@ -442,13 +484,16 @@ function frameCameraToFace(THREE, visibleMeshes, fallbackMesh) {
   target.y -= size.y * 0.02;
 
   state.orbitControls.target.copy(target);
-  state.camera.position.set(target.x, target.y + size.y * 0.02, target.z + distance);
   state.camera.lookAt(target);
   state.camera.near = Math.max(0.01, distance / 100);
   state.camera.far = Math.max(20, distance * 30);
   state.camera.updateProjectionMatrix();
-  state.orbitControls.minDistance = distance * 0.45;
-  state.orbitControls.maxDistance = distance * 4.5;
+  const minDistance = distance * 0.45;
+  const maxDistance = distance * 4.5;
+  state.orbitControls.minDistance = minDistance;
+  state.orbitControls.maxDistance = maxDistance;
+  const startDistance = computeInitialOrbitDistance(minDistance, maxDistance);
+  state.camera.position.set(target.x, target.y + size.y * 0.02, target.z + startDistance);
   state.orbitControls.update();
 
   // If the computed target is still outside the viewport, force fallback.
@@ -519,6 +564,134 @@ async function loadFaceModel(
   });
 }
 
+function getMeshMaterialList(mesh) {
+  if (!mesh || !mesh.material) {
+    return [];
+  }
+  return Array.isArray(mesh.material) ? mesh.material.filter(Boolean) : [mesh.material];
+}
+
+function clearAppliedTexture(options = {}) {
+  const keepStatus = Boolean(options.keepStatus);
+  const keepObjectUrl = Boolean(options.keepObjectUrl);
+
+  for (const backup of state.textureBackups.values()) {
+    const material = backup.material;
+    if (!material) {
+      continue;
+    }
+    if ("map" in material) {
+      material.map = backup.map;
+    }
+    if ("metalness" in material && backup.metalness !== undefined) {
+      material.metalness = backup.metalness;
+    }
+    if ("roughness" in material && backup.roughness !== undefined) {
+      material.roughness = backup.roughness;
+    }
+    if ("color" in material && material.color && backup.color) {
+      material.color.copy(backup.color);
+    }
+    material.needsUpdate = true;
+  }
+  state.textureBackups.clear();
+
+  if (state.appliedTexture) {
+    state.appliedTexture.dispose();
+    state.appliedTexture = null;
+  }
+
+  if (!keepObjectUrl && state.textureObjectUrl) {
+    URL.revokeObjectURL(state.textureObjectUrl);
+    state.textureObjectUrl = null;
+  }
+
+  if (!keepStatus) {
+    setStatus("Texture cleared");
+  }
+}
+
+function loadTextureFromUrl(THREE, textureUrl) {
+  return new Promise((resolve, reject) => {
+    const loader = new THREE.TextureLoader();
+    loader.load(
+      textureUrl,
+      (texture) => {
+        if ("colorSpace" in texture && THREE.SRGBColorSpace) {
+          texture.colorSpace = THREE.SRGBColorSpace;
+        } else if ("encoding" in texture && THREE.sRGBEncoding) {
+          texture.encoding = THREE.sRGBEncoding;
+        }
+        texture.flipY = false;
+        texture.needsUpdate = true;
+        resolve(texture);
+      },
+      undefined,
+      () => {
+        reject(new Error(`Failed to load texture: ${textureUrl}`));
+      }
+    );
+  });
+}
+
+function applyTextureToMeshes(texture, targetMeshes) {
+  clearAppliedTexture({ keepStatus: true, keepObjectUrl: true });
+
+  const meshList = Array.isArray(targetMeshes) ? targetMeshes : [];
+  const touched = new Set();
+  for (const mesh of meshList) {
+    for (const material of getMeshMaterialList(mesh)) {
+      if (!material || touched.has(material.uuid)) {
+        continue;
+      }
+      touched.add(material.uuid);
+      state.textureBackups.set(material.uuid, {
+        material,
+        map: "map" in material ? material.map : null,
+        metalness: "metalness" in material ? material.metalness : undefined,
+        roughness: "roughness" in material ? material.roughness : undefined,
+        color: "color" in material && material.color ? material.color.clone() : null
+      });
+
+      if ("map" in material) {
+        material.map = texture;
+      }
+      if ("color" in material && material.color) {
+        material.color.set(0xffffff);
+      }
+      if ("metalness" in material) {
+        material.metalness = Math.min(Number(material.metalness ?? 0), 0.15);
+      }
+      if ("roughness" in material) {
+        material.roughness = Math.max(Number(material.roughness ?? 0.5), 0.7);
+      }
+      material.needsUpdate = true;
+    }
+  }
+
+  state.appliedTexture = texture;
+}
+
+async function applyTextureFromUrl(THREE, textureUrl, options = {}) {
+  if (!textureUrl || !String(textureUrl).trim()) {
+    return;
+  }
+
+  const texture = await loadTextureFromUrl(THREE, textureUrl);
+  applyTextureToMeshes(texture, state.textureTargetMeshes);
+
+  if (!options.keepPreviousObjectUrl && state.textureObjectUrl) {
+    URL.revokeObjectURL(state.textureObjectUrl);
+    state.textureObjectUrl = null;
+  }
+  if (options.objectUrl) {
+    state.textureObjectUrl = options.objectUrl;
+  }
+
+  const label = options.label || textureUrl;
+  setStatus(`Texture applied: ${label}`);
+}
+
 function createSliderRow(label, initial = 0) {
   const row = document.createElement("label");
   row.className = "slider-row";
@@ -552,8 +725,7 @@ function buildEmotionUI(emotionNames) {
   state.sliders = {};
 
   for (const emotion of emotionNames) {
-    const initialValue = String(emotion).toLowerCase() === "neutral" ? 0.5 : 0;
-    const { row, input } = createSliderRow(emotion, initialValue);
+    const { row, input } = createSliderRow(emotion, 0);
     container.appendChild(row);
     state.sliders[emotion] = input;
   }
@@ -573,66 +745,286 @@ function collectEmotionLevels() {
   return result;
 }
 
-function computeEmotionMagnitude(levels) {
+function normalizeName(name) {
+  return String(name || "").trim().toLowerCase();
+}
+
+function getLevelByName(levels, desiredName) {
+  const desired = normalizeName(desiredName);
+  if (!desired) {
+    return 0;
+  }
+
+  for (const [name, value] of Object.entries(levels || {})) {
+    if (normalizeName(name) === desired) {
+      return clamp01(value);
+    }
+  }
+  return 0;
+}
+
+function buildNeutralSpectrumInputs(
+  uiLevels,
+  intensity,
+  controllerEmotionNames,
+  onnxIntensityInputName = null
+) {
+  const names = Array.isArray(controllerEmotionNames) ? controllerEmotionNames : [];
+  const intensityNameLower = normalizeName(onnxIntensityInputName);
+  const emotionNames = names.filter((name) => normalizeName(name) !== intensityNameLower);
+
+  const neutralName = emotionNames.find((name) => normalizeName(name) === "neutral") || null;
+  const nonNeutralNames = emotionNames.filter((name) => normalizeName(name) !== "neutral");
+
   let sum = 0;
-  for (const value of Object.values(levels || {})) {
-    sum += Math.max(0, Number(value || 0));
+  for (const name of nonNeutralNames) {
+    sum += getLevelByName(uiLevels, name);
   }
-  // Keep neutral baseline behavior when all sliders are zero.
-  if (sum <= 0) {
-    return 1;
+
+  const activation = clamp01(sum);
+  const blend = clamp01(intensity) * activation;
+  const result = {};
+
+  for (const name of emotionNames) {
+    result[name] = 0;
   }
-  return Math.min(1, sum);
+
+  if (sum > 1e-6) {
+    for (const name of nonNeutralNames) {
+      const normalizedWeight = getLevelByName(uiLevels, name) / sum;
+      result[name] = clamp01(normalizedWeight * blend);
+    }
+  }
+
+  if (neutralName) {
+    result[neutralName] = clamp01(1 - blend);
+  }
+
+  if (onnxIntensityInputName) {
+    result[onnxIntensityInputName] = clamp01(blend);
+  }
+
+  return result;
+}
+
+function buildRuntimeSpectrumInputs(uiLevels, intensity) {
+  const runtimeLevels = {};
+  let sum = 0;
+  for (const [name, value] of Object.entries(uiLevels || {})) {
+    const clamped = clamp01(value);
+    runtimeLevels[name] = clamped;
+    sum += clamped;
+  }
+
+  if (sum > 1e-6) {
+    for (const name of Object.keys(runtimeLevels)) {
+      runtimeLevels[name] = runtimeLevels[name] / sum;
+    }
+  } else {
+    for (const name of Object.keys(runtimeLevels)) {
+      runtimeLevels[name] = 0;
+    }
+  }
+
+  const activation = clamp01(sum);
+  const runtimeIntensity = clamp01(intensity) * activation;
+  return { runtimeLevels, runtimeIntensity };
+}
+
+function buildInputSignature(levelsByName, orderedNames = null) {
+  const order = Array.isArray(orderedNames) && orderedNames.length > 0
+    ? orderedNames
+    : Object.keys(levelsByName || {});
+  return order.map((name) => Number(levelsByName?.[name] || 0).toFixed(3)).join("|");
+}
+
+function sampleRange(minValue, maxValue) {
+  return minValue + Math.random() * (maxValue - minValue);
+}
+
+function setSliderValue(slider, value) {
+  if (!slider) {
+    return;
+  }
+  const clamped = Math.max(0, Math.min(1, Number(value || 0)));
+  if (Math.abs(clamped - Number(slider.value || 0)) < 1e-4) {
+    return;
+  }
+  slider.value = String(clamped);
+  slider.dispatchEvent(new Event("input"));
+}
+
+function applyEmotionPreset(emotionName, options = {}) {
+  const target = String(emotionName || "").trim().toLowerCase();
+  const emotionLevel = Math.max(0, Math.min(1, Number(options.emotionLevel ?? 0.5)));
+  const intensity = Math.max(0, Math.min(1, Number(options.intensity ?? 0.5)));
+
+  for (const [name, slider] of Object.entries(state.sliders)) {
+    const lower = String(name || "").trim().toLowerCase();
+    const value = lower === target ? emotionLevel : 0;
+    setSliderValue(slider, value);
+  }
+
+  setSliderValue(state.intensitySlider, intensity);
+}
+
+function clamp01(value) {
+  return Math.max(0, Math.min(1, Number(value || 0)));
+}
+
+function createRandomOscillator(currentValue, minValue, maxValue, freqMinHz, freqMaxHz) {
+  const min = clamp01(Math.min(minValue, maxValue));
+  const max = clamp01(Math.max(minValue, maxValue));
+  const center = (min + max) * 0.5;
+  const amplitude = Math.max(0.001, (max - min) * 0.5);
+  const current = clamp01(currentValue);
+  const normalized = Math.max(-1, Math.min(1, (current - center) / amplitude));
+  let phase = Math.asin(normalized);
+  if (Math.random() < 0.5) {
+    phase = Math.PI - phase;
+  }
+
+  return {
+    min,
+    max,
+    center,
+    amplitude,
+    frequencyHz: sampleRange(freqMinHz, freqMaxHz),
+    phase
+  };
+}
+
+function initializeRandomCycleOscillators(emotions) {
+  const pool = (emotions || []).filter((name) => Boolean(String(name || "").trim()));
+  const oscillators = {};
+  for (const [name, slider] of Object.entries(state.sliders)) {
+    const current = Number(slider.value || 0);
+    let min = sampleRange(0.0, 0.22);
+    let max = sampleRange(0.35, 1.0);
+    if (max - min < 0.12) {
+      max = Math.min(1, min + 0.12);
+    }
+    oscillators[name] = createRandomOscillator(
+      current,
+      min,
+      max,
+      RANDOM_CYCLE_FREQ_MIN_HZ,
+      RANDOM_CYCLE_FREQ_MAX_HZ
+    );
+  }
+
+  if (state.intensitySlider && pool.length > 0) {
+    const currentIntensity = Number(state.intensitySlider.value || 0);
+    oscillators.intensity = createRandomOscillator(
+      currentIntensity,
+      sampleRange(0.12, 0.40),
+      sampleRange(0.60, 1.0),
+      RANDOM_CYCLE_INTENSITY_FREQ_MIN_HZ,
+      RANDOM_CYCLE_INTENSITY_FREQ_MAX_HZ
+    );
+  }
+
+  state.randomCycleOscillators = oscillators;
+  state.randomCycleStartedAtSeconds = performance.now() * 0.001;
+  setStatus("Random cycle: sine mode");
+}
+
+function evaluateOscillator(oscillator, elapsedSeconds) {
+  if (!oscillator) {
+    return 0;
+  }
+  const angle = (Math.PI * 2 * oscillator.frequencyHz * elapsedSeconds) + oscillator.phase;
+  const value = oscillator.center + oscillator.amplitude * Math.sin(angle);
+  return clamp01(value);
+}
+
+function updateRandomCycle() {
+  if (!state.randomCycleEnabled) {
+    return;
+  }
+
+  const elapsedSeconds = Math.max(0, performance.now() * 0.001 - state.randomCycleStartedAtSeconds);
+  for (const [name, slider] of Object.entries(state.sliders)) {
+    const oscillator = state.randomCycleOscillators[name];
+    const next = evaluateOscillator(oscillator, elapsedSeconds);
+    setSliderValue(slider, next);
+  }
+  if (state.intensitySlider) {
+    const intensityOsc = state.randomCycleOscillators.intensity;
+    const nextIntensity = evaluateOscillator(intensityOsc, elapsedSeconds);
+    setSliderValue(state.intensitySlider, nextIntensity);
+  }
+}
+
+function stopRandomCycle(options = {}) {
+  const resetStatus = Boolean(options.resetStatus);
+  state.randomCycleEnabled = false;
+  state.randomCycleOscillators = {};
+  state.randomCycleStartedAtSeconds = 0;
+  if (state.randomCycleButton) {
+    state.randomCycleButton.textContent = "Start Random Cycle";
+    state.randomCycleButton.classList.remove("preset-btn-active");
+  }
+  if (resetStatus) {
+    setStatus("Ready");
+  }
+}
+
+function startRandomCycle(emotions, buttonElement) {
+  stopRandomCycle();
+  if (!emotions || emotions.length === 0) {
+    return;
+  }
+
+  state.randomCycleEnabled = true;
+  state.randomCycleButton = buttonElement || state.randomCycleButton;
+  if (state.randomCycleButton) {
+    state.randomCycleButton.textContent = "Stop Random Cycle";
+    state.randomCycleButton.classList.add("preset-btn-active");
+  }
+  initializeRandomCycleOscillators(emotions);
 }
 
 function installPresets(emotions) {
   const presetContainer = document.getElementById("presets");
   presetContainer.innerHTML = "";
-
-  const setIntensity = (value) => {
-    if (!state.intensitySlider) {
-      return;
-    }
-    state.intensitySlider.value = String(value);
-    state.intensitySlider.dispatchEvent(new Event("input"));
-  };
+  stopRandomCycle();
 
   const clearButton = document.createElement("button");
   clearButton.type = "button";
   clearButton.className = "preset-btn";
-  clearButton.textContent = "Neutral";
+  clearButton.textContent = "Reset";
   clearButton.addEventListener("click", () => {
-    for (const [name, slider] of Object.entries(state.sliders)) {
-      slider.value = String(name === "neutral" ? 0.5 : 0);
-      slider.dispatchEvent(new Event("input"));
-    }
-    setIntensity(0.5);
+    stopRandomCycle();
+    applyEmotionPreset("", { emotionLevel: 0, intensity: 0.5 });
   });
   presetContainer.appendChild(clearButton);
 
   for (const emotion of emotions) {
-    if (String(emotion).toLowerCase() === "neutral") {
-      continue;
-    }
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "preset-btn";
     btn.textContent = emotion;
     btn.addEventListener("click", () => {
-      for (const [name, slider] of Object.entries(state.sliders)) {
-        if (name === "neutral") {
-          slider.value = "0.5";
-        } else if (name === emotion) {
-          slider.value = "0.5";
-        } else {
-          slider.value = "0";
-        }
-        slider.dispatchEvent(new Event("input"));
-      }
-      setIntensity(0.5);
+      stopRandomCycle();
+      applyEmotionPreset(emotion, { emotionLevel: 0.5, intensity: 0.5 });
     });
     presetContainer.appendChild(btn);
   }
+
+  const randomCycleButton = document.createElement("button");
+  randomCycleButton.type = "button";
+  randomCycleButton.className = "preset-btn";
+  randomCycleButton.textContent = "Start Random Cycle";
+  randomCycleButton.addEventListener("click", () => {
+    if (state.randomCycleEnabled) {
+      stopRandomCycle({ resetStatus: true });
+      return;
+    }
+    startRandomCycle(emotions, randomCycleButton);
+  });
+  presetContainer.appendChild(randomCycleButton);
+  state.randomCycleButton = randomCycleButton;
 }
 
 function onResize() {
@@ -671,6 +1063,7 @@ async function bootstrap() {
       state.onnxProfile = await loadJsonIfExists(ONNX_PROFILE_PATH);
       state.useOnnx = true;
       emotionNames = state.onnxController.getEmotionNames();
+      state.onnxInputEmotionNames = emotionNames.slice();
       state.onnxIntensityInputName =
         emotionNames.find((name) => String(name || "").trim().toLowerCase() === "intensity") || null;
       console.info("ONNX input emotion order:", emotionNames);
@@ -679,6 +1072,18 @@ async function bootstrap() {
       }
       if (state.onnxProfile?.mesh_object_name) {
         console.info("ONNX profile mesh:", state.onnxProfile.mesh_object_name);
+      }
+      if (state.onnxProfile?.export_timestamp_utc) {
+        console.info("ONNX profile export timestamp (UTC):", state.onnxProfile.export_timestamp_utc);
+      }
+      if (state.onnxProfile?.profile_fingerprint) {
+        console.info("ONNX profile fingerprint:", state.onnxProfile.profile_fingerprint);
+      }
+      if (state.onnxProfile?.discovery_mode) {
+        console.info("ONNX discovery mode:", state.onnxProfile.discovery_mode);
+      }
+      if (state.onnxProfile?.discovery_weights) {
+        console.info("ONNX discovery weights:", state.onnxProfile.discovery_weights);
       }
       if (shouldDebugOnnx()) {
         const probe = await state.onnxController.probeEmotionBasis();
@@ -691,6 +1096,7 @@ async function bootstrap() {
       state.onnxController = null;
       state.onnxProfile = null;
       state.onnxIntensityInputName = null;
+      state.onnxInputEmotionNames = [];
       if (shouldRequireOnnx()) {
         throw new Error(`ONNX required but failed: ${formatErrorMessage(error)}`);
       }
@@ -699,7 +1105,10 @@ async function bootstrap() {
   }
 
   const uiEmotionNames = emotionNames.filter(
-    (name) => String(name || "").trim().toLowerCase() !== "intensity"
+    (name) => {
+      const lower = String(name || "").trim().toLowerCase();
+      return lower !== "intensity" && lower !== "neutral";
+    }
   );
   buildEmotionUI(uiEmotionNames);
   installPresets(uiEmotionNames);
@@ -735,6 +1144,22 @@ async function bootstrap() {
     `Driving morph meshes (${runtimeMeshes.length}):`,
     runtimeMeshNames
   );
+
+  state.textureTargetMeshes = shouldApplyTextureToAllMeshes() ? morphMeshes : [morphMesh];
+  const texturePath = getRequestedTexturePath();
+  if (texturePath) {
+    try {
+      await applyTextureFromUrl(THREE, texturePath, { label: texturePath });
+      console.info(
+        `Applied texture to ${state.textureTargetMeshes.length} mesh(es):`,
+        texturePath
+      );
+    } catch (error) {
+      console.warn("Auto texture apply failed:", error);
+      setStatus(`Texture load failed: ${formatErrorMessage(error)}`);
+    }
+  }
+
   const profileMissing = Array.isArray(state.onnxProfile?.missing_coefficients)
     ? state.onnxProfile.missing_coefficients
     : [];
@@ -770,34 +1195,32 @@ async function bootstrap() {
   function frame() {
     const dt = clock.getDelta();
     if (state.runtime) {
+      updateRandomCycle();
       const levels = collectEmotionLevels();
       const intensity = Number(state.intensitySlider.value);
 
       if (state.useOnnx && state.onnxController) {
-        const onnxLevels = { ...levels };
-        if (state.onnxIntensityInputName) {
-          const emotionMagnitude = computeEmotionMagnitude(levels);
-          onnxLevels[state.onnxIntensityInputName] = intensity * emotionMagnitude;
-        }
-
-        const signature = Object.values(onnxLevels)
-          .map((v) => Number(v || 0).toFixed(3))
-          .join("|");
+        const onnxLevels = buildNeutralSpectrumInputs(
+          levels,
+          intensity,
+          state.onnxInputEmotionNames,
+          state.onnxIntensityInputName
+        );
+        const signature = buildInputSignature(onnxLevels, state.onnxInputEmotionNames);
         if (signature !== state.lastEmotionSignature) {
           state.lastEmotionSignature = signature;
           state.onnxController.updateInput(onnxLevels);
         }
 
-        const runtimeIntensity = state.onnxIntensityInputName ? 1 : intensity;
-
         state.runtime.updateFromCoefficientMap(
           state.onnxController.getLatestCoefficients(),
-          runtimeIntensity,
+          1,
           dt,
           false
         );
       } else {
-        state.runtime.update(levels, intensity, dt);
+        const { runtimeLevels, runtimeIntensity } = buildRuntimeSpectrumInputs(levels, intensity);
+        state.runtime.update(runtimeLevels, runtimeIntensity, dt);
       }
     }
     state.orbitControls.update();

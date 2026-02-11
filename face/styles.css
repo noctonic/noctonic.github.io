@@ -79,6 +79,12 @@ body {
   border-color: var(--accent);
 }
 
+.preset-btn.preset-btn-active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
 .sliders {
   display: grid;
   gap: 7px;
@@ -141,4 +147,3 @@ input[type="range"] {
     min-height: 52vh;
   }
 }
-
